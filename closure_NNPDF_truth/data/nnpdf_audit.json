@@ -1,0 +1,231 @@
+{
+  "artifact_provenance": {
+    "bibliography": "data_reference.bib",
+    "bibliography_sha256": "61a182094bb947d85038dc7ac3db6fb7c7e710a6801c37f2857fb9391589a545",
+    "observable_contracts": "observable_contracts.yaml",
+    "observable_contracts_sha256": "67dc8a1013882fb333e4e7f180e753e8c12a6a9c94f20d6b2531ce9a7713c1ee"
+  },
+  "classification_counts": {
+    "reader_only": 6
+  },
+  "kind": "nnpdf_commondata",
+  "likelihood_group_count": 0,
+  "records": [
+    {
+      "additive_covariance_rank": 6,
+      "citation_keys": [
+        "SeaQuest:2021zxb"
+      ],
+      "classification": "reader_only",
+      "commondata_name": "DYE906_Z0_120GEV_DW_PDXSECRATIO",
+      "contract_id": "dy.e906_ratio",
+      "drop_reason": "conditional: exact COM aggregation, deuteron, row evolution, positive denominator, covariance-rank, and direct-sampler gates",
+      "e906_com": {
+        "aggregation_sha256": "3c8d01be707c6a5dda7db3662da0d08a5123537e423b817d5c1002b1b55eb33e",
+        "nonzero_slots": [
+          5,
+          7,
+          9,
+          9,
+          10,
+          10
+        ],
+        "primitive_rows_per_side": 60,
+        "published_rows": 6,
+        "slots_per_row": 10
+      },
+      "exists": true,
+      "full_covariance_min_eigenvalue": 0.0006620040893202091,
+      "full_covariance_positive_definite": true,
+      "full_covariance_rank": 6,
+      "gate_passed": false,
+      "has_preserved_edges": false,
+      "kinematic_keys": [
+        "M2",
+        "rapidity",
+        "sqrts"
+      ],
+      "likelihood_group": null,
+      "loaded_rows": 6,
+      "n_additive_sources": 107,
+      "n_multiplicative_sources": 0,
+      "operator": "drell_yan_ratio",
+      "row_count_matches_contract": true,
+      "selected_rows": 0,
+      "source_id": "DYE906_Z0_120GEV_DW_PDXSECRATIO",
+      "source_locator": "DYE906_Z0_120GEV_DW",
+      "source_rows": 6,
+      "source_sha256": "3fd55c3d5db3c7ddd206be9dea1f46c8333ed2e18b6a062cf953c74f2ea784e9",
+      "variant": null
+    },
+    {
+      "additive_covariance_rank": 103,
+      "citation_keys": [
+        "Moreno:1990sf"
+      ],
+      "classification": "reader_only",
+      "commondata_name": "DYE605_Z0_38P8GEV_DW_PXSEC",
+      "contract_id": "dy.e605_copper",
+      "drop_reason": "no approved copper nuclear law; optional deterministic 40-row subset remains gated",
+      "exists": true,
+      "full_covariance_min_eigenvalue": 0.010639097677419712,
+      "full_covariance_positive_definite": true,
+      "full_covariance_rank": 119,
+      "gate_passed": false,
+      "has_preserved_edges": false,
+      "kinematic_keys": [
+        "M2",
+        "rapidity",
+        "sqrts"
+      ],
+      "likelihood_group": null,
+      "loaded_rows": 119,
+      "n_additive_sources": 999,
+      "n_multiplicative_sources": 1,
+      "operator": "unimplemented nuclear Drell-Yan",
+      "row_count_matches_contract": true,
+      "selected_rows": 0,
+      "source_id": "DYE605_Z0_38P8GEV_DW_PXSEC",
+      "source_locator": "DYE605_Z0_38P8GEV_DW",
+      "source_rows": 119,
+      "source_sha256": "6dbc22f959926b0bbead6c841bb5211ea6a5b1491c98c13258c4cc3b0281b414",
+      "variant": null
+    },
+    {
+      "additive_covariance_rank": 13,
+      "citation_keys": [
+        "CHORUS:2005cpn"
+      ],
+      "classification": "reader_only",
+      "commondata_name": "CHORUS_CC_NOTFIXED_PB_NB-SIGMARED",
+      "contract_id": "dis.chorus_nb",
+      "drop_reason": "inclusive antineutrino CC F2/FL/xF3 and lead nuclear operator unimplemented",
+      "exists": true,
+      "full_covariance_min_eigenvalue": 9.628292140677712e-06,
+      "full_covariance_positive_definite": true,
+      "full_covariance_rank": 607,
+      "gate_passed": false,
+      "has_preserved_edges": false,
+      "kinematic_keys": [
+        "Q2",
+        "x",
+        "y"
+      ],
+      "likelihood_group": null,
+      "loaded_rows": 607,
+      "n_additive_sources": 13,
+      "n_multiplicative_sources": 2,
+      "operator": "unimplemented CC F2/FL/xF3",
+      "row_count_matches_contract": true,
+      "selected_rows": 0,
+      "source_id": "CHORUS_CC_NOTFIXED_PB_NB-SIGMARED",
+      "source_locator": "CHORUS_CC_NOTFIXED_PB",
+      "source_rows": 607,
+      "source_sha256": "1c7663f49987ddd30030d9f11c54eb7e9faacfe47456f03bbc667766e6a78ba6",
+      "variant": "legacy"
+    },
+    {
+      "additive_covariance_rank": 11,
+      "citation_keys": [
+        "CHORUS:2005cpn"
+      ],
+      "classification": "reader_only",
+      "commondata_name": "CHORUS_CC_NOTFIXED_PB_NU-SIGMARED",
+      "contract_id": "dis.chorus_nu",
+      "drop_reason": "inclusive neutrino CC F2/FL/xF3 and lead nuclear operator unimplemented",
+      "exists": true,
+      "full_covariance_min_eigenvalue": 6.001446099927982e-05,
+      "full_covariance_positive_definite": true,
+      "full_covariance_rank": 607,
+      "gate_passed": false,
+      "has_preserved_edges": false,
+      "kinematic_keys": [
+        "Q2",
+        "x",
+        "y"
+      ],
+      "likelihood_group": null,
+      "loaded_rows": 607,
+      "n_additive_sources": 13,
+      "n_multiplicative_sources": 2,
+      "operator": "unimplemented CC F2/FL/xF3",
+      "row_count_matches_contract": true,
+      "selected_rows": 0,
+      "source_id": "CHORUS_CC_NOTFIXED_PB_NU-SIGMARED",
+      "source_locator": "CHORUS_CC_NOTFIXED_PB",
+      "source_rows": 607,
+      "source_sha256": "1c7663f49987ddd30030d9f11c54eb7e9faacfe47456f03bbc667766e6a78ba6",
+      "variant": "legacy"
+    },
+    {
+      "additive_covariance_rank": 0,
+      "citation_keys": [
+        "Mason:2006qa"
+      ],
+      "classification": "reader_only",
+      "commondata_name": "NUTEV_CC_NOTFIXED_FE_NB-SIGMARED",
+      "contract_id": "dis.nutev_nb",
+      "drop_reason": "charged-current dimuon charm, branching/acceptance, and iron nuclear operator unimplemented",
+      "exists": true,
+      "full_covariance_min_eigenvalue": 0.3472719955722165,
+      "full_covariance_positive_definite": true,
+      "full_covariance_rank": 45,
+      "gate_passed": false,
+      "has_preserved_edges": false,
+      "kinematic_keys": [
+        "Q2",
+        "x",
+        "y"
+      ],
+      "likelihood_group": null,
+      "loaded_rows": 45,
+      "n_additive_sources": 0,
+      "n_multiplicative_sources": 1,
+      "operator": "unimplemented heavy-flavour CC dimuon",
+      "row_count_matches_contract": true,
+      "selected_rows": 0,
+      "source_id": "NUTEV_CC_NOTFIXED_FE_NB-SIGMARED",
+      "source_locator": "NUTEV_CC_NOTFIXED_FE",
+      "source_rows": 45,
+      "source_sha256": "6ced62901612a511f99b60b06cb7f3f80ccc557d24e47e5e77f226f90a02a906",
+      "variant": "legacy"
+    },
+    {
+      "additive_covariance_rank": 0,
+      "citation_keys": [
+        "Mason:2006qa"
+      ],
+      "classification": "reader_only",
+      "commondata_name": "NUTEV_CC_NOTFIXED_FE_NU-SIGMARED",
+      "contract_id": "dis.nutev_nu",
+      "drop_reason": "charged-current dimuon charm, branching/acceptance, and iron nuclear operator unimplemented",
+      "exists": true,
+      "full_covariance_min_eigenvalue": 0.28908451083259307,
+      "full_covariance_positive_definite": true,
+      "full_covariance_rank": 45,
+      "gate_passed": false,
+      "has_preserved_edges": false,
+      "kinematic_keys": [
+        "Q2",
+        "x",
+        "y"
+      ],
+      "likelihood_group": null,
+      "loaded_rows": 45,
+      "n_additive_sources": 0,
+      "n_multiplicative_sources": 1,
+      "operator": "unimplemented heavy-flavour CC dimuon",
+      "row_count_matches_contract": true,
+      "selected_rows": 0,
+      "source_id": "NUTEV_CC_NOTFIXED_FE_NU-SIGMARED",
+      "source_locator": "NUTEV_CC_NOTFIXED_FE",
+      "source_rows": 45,
+      "source_sha256": "6ced62901612a511f99b60b06cb7f3f80ccc557d24e47e5e77f226f90a02a906",
+      "variant": "legacy"
+    }
+  ],
+  "schema_version": 1,
+  "selected_row_count": 0,
+  "selected_source_count": 0,
+  "source_table_count": 6
+}
