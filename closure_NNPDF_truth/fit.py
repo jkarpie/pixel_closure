@@ -185,8 +185,56 @@ def _gp_prior(field: str):
     )
     return priors.GaussianProcess(
         mean=priors.Const(N=value),
-        cov=priors.LogRBF(sigma=amplitude, length=cfg.GP_LENGTH_LOG),
+        # Read the SAME jitter knob the envelope prior reads.  Until 2026-08-16
+        # this call passed no jitter at all and silently took LogRBF's class
+        # default of 1e-10, so `cfg.GP_JITTER` did not reach this prior: a
+        # 36-cell scan that varied it produced bit-identical results because
+        # nothing was changing.  A knob that is not wired reads exactly like a
+        # knob that does not matter.
+        cov=priors.LogRBF(sigma=amplitude, length=cfg.GP_LENGTH_LOG,
+                          jitter=getattr(cfg, "GP_JITTER", 1.0e-10)),
     )
+
+
+def _envelope_prior(field: str):
+    """Zero mean under a ``x^alpha (1-x)^beta`` envelope; see cfg.GP_ENVELOPE.
+
+    Nothing is tied here and nothing can be: the mean is identically zero, so it
+    carries no ``N`` leaf.  That is the point of this form rather than an
+    oversight -- it is what lets the width stay wide where the data is absent
+    without the mean asserting a matching non-zero value there.
+    """
+    env = cfg.gp_envelope(field)
+    return priors.GaussianProcess(
+        mean=priors.Zero(),
+        cov=priors.BetaTaperedLogRBF(
+            sigma=env["sigma"], length=cfg.GP_LENGTH_LOG,
+            alpha=env["alpha"], beta=env["beta"],
+            # jitter=0: the SVD rcond cut regularises the singular directions,
+            # and a jitter here is a SECOND knob doing the same job -- with the
+            # wrong one winning.  Measured 2026-08-16 on the closure grid: the
+            # rcond cut sits at 4.40e-15 of the preconditioned spectrum while a
+            # 1e-10 jitter contributes 2.5e-11 to 1.0e-10 relative, i.e. 1.4e3 to
+            # 2.3e4 times ABOVE the cut.  It lifted all 128 eigenvalues over the
+            # cut, so nothing was ever truncated, the Cholesky fast path was
+            # taken, and the ~35 genuinely unresolvable directions were solved
+            # rather than dropped.  With jitter=0, svd_factor keeps 93/128 and
+            # the truncation does its job.
+            #
+            # It is also a physical falsehood here: a jitter floor asserts
+            # sd(x=1) = 1e-5 of prior uncertainty where beta says exactly zero.
+            jitter=getattr(cfg, "GP_ENVELOPE_JITTER", 1.0e-2),
+        ),
+    )
+
+
+def gp_prior(field: str):
+    """Dispatch on :data:`cfg.PRIOR_FORM`."""
+    if cfg.PRIOR_FORM == "beta_envelope":
+        return _envelope_prior(field)
+    if cfg.PRIOR_FORM != "const_logrbf":
+        raise ValueError(f"unknown PRIOR_FORM {cfg.PRIOR_FORM!r}")
+    return _gp_prior(field)
 
 
 def _nuisance_prior():
@@ -232,7 +280,7 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     for name in cfg.ALL_FIELDS:
         fields[name] = analysis.field(
             name, grid=cfg.make_grid(), element_type=cfg.ELEMENT_TYPE,
-            prior=_gp_prior(name),
+            prior=gp_prior(name),
         )
     nuisance_names = []
     if include_lattice:
@@ -278,7 +326,12 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         # is a +- a by construction rather than by two constants agreeing.  The
         # target is frozen out of the free vector by the tie itself, which is
         # why mean.N is not in `frozen` below.
-        analysis.tie(params.mean.N, to=params.cov.sigma)
+        #
+        # The envelope form has a Zero mean, which carries no `N` leaf at all --
+        # there is nothing to tie, and asking for one raises rather than silently
+        # doing nothing.  Its exponents are frozen by the covariance itself.
+        if cfg.PRIOR_FORM != "beta_envelope":
+            analysis.tie(params.mean.N, to=params.cov.sigma)
         for attr in cfg.FROZEN_COV_PARAMS:
             # The amplitude is the one cov parameter that may be floated; it
             # carries its own frozen flag from _gp_prior, so re-freezing it here
@@ -794,16 +847,73 @@ def _pull_stats(x, mean, std, tcurve, *, x_lo, x_hi):
 
 
 def coverage_report(marginal, truth, *, x_lo=0.01, x_hi=0.9):
-    """Per-field bulk pull chi2 and finite-point counts vs NNPDF truth."""
+    """Pointwise standardized residuals; fit-grid nodes are correlated."""
     xn = np.asarray(truth["x_nodes"])
     report = {}
-    for name in cfg.ALL_FIELDS:
-        if name not in marginal:
-            continue
-        x, mean, std = marginal[name]
+    for name, (x, mean, std) in marginal.items():
         tcurve = np.interp(x, xn, np.asarray(truth["curves"][name]))
-        report[name] = _pull_stats(x, mean, std, tcurve, x_lo=x_lo, x_hi=x_hi)
+        bulk = (x >= x_lo) & (x <= x_hi)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            signed_pulls = ((mean - tcurve) / std)[bulk]
+        finite = np.isfinite(signed_pulls)
+        # Mask x identically, so `signed_pull_bins` can align each pull with the
+        # node it came from.  Dropping only the pulls would silently offset them.
+        x_bulk_finite = np.asarray(x)[bulk][finite]
+        signed_pulls = signed_pulls[finite]
+        abs_pulls = np.abs(signed_pulls)
+        n_points = int(abs_pulls.size)
+        n_le_1 = int(np.sum(abs_pulls <= 1.0))
+        n_le_2 = int(np.sum(abs_pulls <= 2.0))
+        pull_chi2 = float(np.sum(signed_pulls * signed_pulls)) if n_points else None
+        report[name] = {
+            "n_points": n_points,
+            "pull_chi2": pull_chi2,
+            "pull_chi2_per_point": pull_chi2 / n_points if n_points else None,
+            "mean_squared_standardized_residual":
+                pull_chi2 / n_points if n_points else None,
+            "points_are_correlated": True,
+            "n_pull_le_1": n_le_1,
+            "n_pull_le_2": n_le_2,
+            "frac_pull_le_1": n_le_1 / n_points if n_points else None,
+            "frac_pull_le_2": n_le_2 / n_points if n_points else None,
+            "mean_abs_pull": float(np.mean(abs_pulls)) if n_points else None,
+            # The DIRECTION of a miss.  Everything above is unsigned, so a
+            # systematic over-estimate and a symmetric band that is merely too
+            # narrow produce the identical `pull_chi2_per_point` -- the two were
+            # indistinguishable from stored artifacts until 2026-08-16, and
+            # telling them apart needed a bespoke probe outside the suite.
+            #
+            # It is the statistic that settled the `t3` question: over 24 noise
+            # replicas `t3` averaged +0.04 +- 0.09 (consistent with zero, a draw
+            # artifact) while `v15` sat at -0.545 with a scatter of only 0.060
+            # across the same replicas -- a deterministic offset.  Same
+            # `mean_abs_pull` story for both; opposite conclusions.
+            "mean_signed_pull": float(np.mean(signed_pulls)) if n_points else None,
+            # Per-x-bin signed means, so a sign FLIP in x is visible too: a field
+            # can average to zero while being high at small x and low at large x,
+            # which is what the GP correlation length does to a local pull.
+            "signed_pull_bins": _signed_pull_bins(x_bulk_finite, signed_pulls),
+        }
     return report
+
+
+#: Bin edges for `signed_pull_bins`, inside the coverage bulk.
+SIGNED_PULL_BIN_EDGES = (0.01, 0.05, 0.1, 0.2, 0.35, 0.5, 0.9)
+
+
+def _signed_pull_bins(x_bulk, signed_pulls) -> dict:
+    """Mean signed pull per x bin; ``None`` where a bin holds no node."""
+    x_bulk = np.asarray(x_bulk, dtype=float)
+    signed = np.asarray(signed_pulls, dtype=float)
+    if x_bulk.size != signed.size:          # the finite-mask dropped nodes
+        return {}
+    out = {}
+    edges = SIGNED_PULL_BIN_EDGES
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        m = (x_bulk >= lo) & (x_bulk < hi)
+        key = f"{lo:g}-{hi:g}"
+        out[key] = float(np.mean(signed[m])) if m.any() else None
+    return out
 
 
 def nuisance_coverage_report(marginal, truth, *, x_lo=0.05, x_hi=0.9):

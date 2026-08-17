@@ -1,0 +1,51 @@
+# -- LHAPDF grid sets --------------------------------------------------------
+# The vendored grids are large (NNPDF4.0 ~1.5 GB extracted per suite, JAM ~253 MB)
+# and are *inputs*, reproducible by download, so they stay out of git history.
+#
+# The suites tolerate their absence: config.py's `_read_set_info` looks in the
+# extraction root, then the LHAPDF install, then falls back to reading the
+# `.info` member straight out of the tarball, and returns `{}` if none is found
+# -- callers skip rather than crash.  So a fresh clone without the grids still
+# imports; only *generation* needs them.
+*.tar.gz
+*.tgz
+lhapdf/
+
+# -- caches ------------------------------------------------------------------
+# Fingerprint-validated and rebuilt on demand.  A threaded BLAS reassociates
+# contractions inside a single call, so a cache file is not even bitwise
+# reproducible across machines -- committing one would be committing noise.
+# (17 MB per small suite.)
+_kernel_cache/
+_inference_cache/
+.matplotlib/
+
+# -- python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+venv/
+.venv/
+
+
+# ============================================================================
+# DELIBERATELY TRACKED, 2026-08-16
+# ============================================================================
+# `data/`, `results/`, `closure_logs/`, `campaign/` and the figures used to be
+# ignored here as "reproducible artifacts".  They are now tracked ON PURPOSE.
+#
+# Reproducing them is not cheap.  The 144-cell campaign under `campaign/` took
+# ~80 minutes at 3 concurrent fits on a 36 GB machine, and regenerating the
+# `data/truthQ_*` members needs the 3.5 GB of LHAPDF grids that this file still
+# (correctly) excludes.  Without the results committed, a fresh clone cannot
+# check a single number in README.md.
+#
+# The cost stays bounded because the two genuinely large things remain ignored:
+# `lhapdf/` (3.5 GB) and `_kernel_cache/` (17 MB per small suite).  What is
+# tracked is ~40 MB -- truth curves, DIS systematics, per-run summaries, the
+# campaign's 144 JSON rows, and the figures.
+#
+# Figures are tracked too.  Per each package's CLAUDE.md the plots ARE the
+# deliverable here, and a figure that only ever existed in a transcript is a
+# result that did not land.

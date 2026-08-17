@@ -1,0 +1,10 @@
+== fit  Q=2.0 (truthQ_2)  mode=synthetic_z_plumbing ==
+   [time] build+kernels 0.55s  mcmc 2m 15s  marginal 0.00s  chi2 0.27s  fit total 2m 16s
+   [time] fit 2m 16s  summary 0.66s  pdf-plot 0.97s  data-plot 0.13s  run total 2m 18s
+   chi2/n=0.0983  n=15  components={'linear': 6.19440758665597e-11, 'bilinear': 1.4741221100614856}  mean pull^2={'t3': 0.217, 't8': 0.561, 'sigma': 0.152, 't15': 0.077, 'g': 0.107, 'v3': 0.75, 'v8': 5.724, 'v': 0.991, 'v15': 0.991}  |pull|<=2={'t3': '69/69', 't8': '69/69', 'sigma': '69/69', 't15': '69/69', 'g': '69/69', 'v3': '69/69', 'v8': '37/69', 'v': '69/69', 'v15': '69/69'}
+== fit  Q=3.0 (truthQ_3)  mode=synthetic_z_plumbing ==
+   [time] build+kernels 0.30s  mcmc 1m 52s  marginal 0.01s  chi2 0.21s  fit total 1m 52s
+   [time] fit 1m 52s  summary 0.49s  pdf-plot 0.94s  data-plot 0.20s  run total 1m 54s
+   chi2/n=0.174  n=15  components={'linear': 6.175235958188986e-11, 'bilinear': 2.609407886848162}  mean pull^2={'t3': 0.157, 't8': 0.456, 'sigma': 0.14, 't15': 0.092, 'g': 0.1, 'v3': 0.617, 'v8': 4.824, 'v': 0.831, 'v15': 0.832}  |pull|<=2={'t3': '69/69', 't8': '69/69', 'sigma': '69/69', 't15': '69/69', 'g': '69/69', 'v3': '69/69', 'v8': '41/69', 'v': '69/69', 'v15': '69/69'}
+
+Done.  2 fits in 4m 13s (mean 2m 06s per fit).  Results under /Users/jkarpie-admin/work/building/pixel/closure_JAM_truth_small/results

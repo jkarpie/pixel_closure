@@ -1,0 +1,7 @@
+== fit  Q=2.0 (truthQ_2)  mode=dis ==
+   [time] build+kernels 8.47s  mcmc 12.6s  marginal 1m 04s  chi2 0.06s  fit total 1m 25s
+   [time] fit 1m 25s  summary 1.79s  pdf-plot 1.64s  data-plot 2.83s  run total 1m 31s
+   chi2/n=0.819  n=158  components={'linear': 129.37344595410406, 'bilinear': 0.0}  mean pull^2={'t3': 1.397, 't8': 0.41, 'sigma': 2.533, 't15': 0.948, 'g': 0.535, 'v3': 0.068, 'v8': 3.932, 'v': 2.086, 'v15': 3.214}  |pull|<=2={'t3': '69/69', 't8': '69/69', 'sigma': '53/69', 't15': '67/69', 'g': '69/69', 'v3': '69/69', 'v8': '41/69', 'v': '56/69', 'v15': '45/69'}
+   DIS norms (fitted): 5 tables, worst slac_d_f2 beta_true=-0.80 got=+0.061 (z_cond=+1.0)
+   DIS correlated systematics: 697 sources over 7 tables, pull chi2/src=1.86, |pull|<=2sigma=92%
+== fit  Q=3.0 (truthQ_3)  mode=dis ==

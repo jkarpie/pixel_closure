@@ -1,0 +1,10 @@
+== fit  Q=2.0 (truthQ_2)  mode=lattice ==
+   [time] build+kernels 0.57s  mcmc 1.24s  marginal 0.00s  chi2 0.06s  fit total 1.86s
+   [time] fit 2.20s  summary 0.04s  pdf-plot 1.20s  data-plot 1.52s  run total 4.95s
+   chi2/n=0.317  n=86  components={'linear': 27.281201339463486, 'bilinear': 0.0}  mean pull^2={'t3': 0.301, 't8': 0.061, 'sigma': 0.133, 't15': 0.114, 'g': 0.17, 'v3': 0.012, 'v8': 0.579, 'v': 0.082, 'v15': 0.064}  |pull|<=2={'t3': '69/69', 't8': '69/69', 'sigma': '69/69', 't15': '69/69', 'g': '69/69', 'v3': '69/69', 'v8': '69/69', 'v': '69/69', 'v15': '69/69'}
+== fit  Q=3.0 (truthQ_3)  mode=lattice ==
+   [time] build+kernels 0.40s  mcmc 0.48s  marginal 0.01s  chi2 0.03s  fit total 0.92s
+   [time] fit 0.96s  summary 0.06s  pdf-plot 1.06s  data-plot 2.60s  run total 4.67s
+   chi2/n=0.683  n=86  components={'linear': 58.774742393627264, 'bilinear': 0.0}  mean pull^2={'t3': 0.219, 't8': 0.082, 'sigma': 0.216, 't15': 0.099, 'g': 0.069, 'v3': 0.007, 'v8': 0.06, 'v': 0.339, 'v15': 0.07}  |pull|<=2={'t3': '69/69', 't8': '69/69', 'sigma': '69/69', 't15': '69/69', 'g': '69/69', 'v3': '69/69', 'v8': '69/69', 'v': '69/69', 'v15': '69/69'}
+
+Done.  2 fits in 12.1s (mean 6.06s per fit).  Results under /Users/jkarpie-admin/work/building/pixel/closure_JAM_truth_small/results

@@ -1,0 +1,18 @@
+[
+  {
+    "q_key": "2",
+    "mode": "both",
+    "exception": "RuntimeError",
+    "message": "small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.001 < 0.1; signed outer ESS fraction 0.001 < 0.05; median inner ESS fraction 0.001 < 0.1",
+    "runtime_seconds": 215.7052698749976,
+    "traceback": "Traceback (most recent call last):\n  File \"/Users/jkarpie-admin/work/building/pixel/closure_JAM_truth_small/run_closure.py\", line 365, in main\n    s = run_one(\n        ^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel/closure_JAM_truth_small/run_closure.py\", line 255, in run_one\n    result = fitmod.run_fit(q_key, mode)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel/closure_JAM_truth_small/fit.py\", line 408, in run_fit\n    raise RuntimeError(\nRuntimeError: small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.001 < 0.1; signed outer ESS fraction 0.001 < 0.05; median inner ESS fraction 0.001 < 0.1\n"
+  },
+  {
+    "q_key": "3",
+    "mode": "both",
+    "exception": "RuntimeError",
+    "message": "small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.001 < 0.1; signed outer ESS fraction 0.001 < 0.05; median inner ESS fraction 0.001 < 0.1",
+    "runtime_seconds": 152.81579979100206,
+    "traceback": "Traceback (most recent call last):\n  File \"/Users/jkarpie-admin/work/building/pixel/closure_JAM_truth_small/run_closure.py\", line 365, in main\n    s = run_one(\n        ^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel/closure_JAM_truth_small/run_closure.py\", line 255, in run_one\n    result = fitmod.run_fit(q_key, mode)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel/closure_JAM_truth_small/fit.py\", line 408, in run_fit\n    raise RuntimeError(\nRuntimeError: small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.001 < 0.1; signed outer ESS fraction 0.001 < 0.05; median inner ESS fraction 0.001 < 0.1\n"
+  }
+]

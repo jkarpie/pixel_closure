@@ -1007,7 +1007,130 @@ def gp_sigma(field: str) -> float:
     return gp_amplitude(field)
 
 
-GP_LENGTH_LOG = 0.6931471805599453                # log(2); fixed length (log-x)
+
+# -- alternative prior: zero mean under a x^alpha (1-x)^beta envelope ---------
+
+#: Which prior form ``fit._gp_prior`` builds.  Two choices, and the difference is
+#: structural rather than a retune:
+#:
+#: ``"const_logrbf"``
+#:     The original.  ``Const(N=a)`` mean **tied** to ``LogRBF(sigma=a)``, so the
+#:     prior is ``a +- a`` and one number sets both the mean and the width.
+#:
+#: ``"beta_envelope"``
+#:     ``Zero()`` mean under :class:`pixel.priors.BetaTaperedLogRBF`,
+#:     ``k = sigma^2 (x x')^alpha ((1-x)(1-x'))^beta * logRBF``.  The mean is zero,
+#:     so there is nothing to tie and the envelope alone says where the field is
+#:     allowed to be large.
+#:
+#: Why the alternative exists, measured 2026-08-16 on this suite at Q=2: the
+#: constant mean asserts ``int x (Sigma + g) dx = 10.0`` against
+#: ``cons_momentum``'s ``1.0 +- 1e-4``, an ~9e6-sigma conflict, because ``a = 5``
+#: for both fields while the sum rule permits 0.601 and 0.399.  Setting ``a`` to
+#: those values does not fix it -- the tie then drops the prior WIDTH to 0.60
+#: where the truth singlet reaches 6.3 at ``x = 1e-6``, understating the error
+#: exactly where the data is weakest.  A zero mean removes the conflict outright:
+#: the prior no longer asserts any integral.
+PRIOR_FORM = "const_logrbf"
+
+#: Envelope exponents and amplitude per field, **derived, not guessed**.
+#:
+#: The criterion is a **minimax**: among all (alpha, beta) whose envelope bounds
+#: every truth at every node -- both truth packages, all six Q members -- take the
+#: one whose *slack* is smallest, where slack is the factor by which the envelope
+#: over-states the error at its loosest point.  That keeps the owner's rule (the
+#: prior is never more convergent than the truth, so it never understates) without
+#: paying for it in dynamic range.
+#:
+#: The first derivation did NOT do this and it is instructive.  It took each
+#: exponent from the worst pointwise secant anywhere in a window and applied it
+#: globally, then verified only ``max |truth| / envelope <= 1`` -- the tight side.
+#: The loose side went unmeasured and was where the damage was: the envelope ran
+#: 1.9e+05 at ``x = 1e-6`` where the truth singlet is 6.3, over-wide by ~3e+04.
+#: That dynamic range, not any exponent, is what made the covariance unfactorable
+#: and killed 10/10 Drell-Yan fits.  **Check both sides of a bound.**
+#:
+#: ``sigma`` is fixed by requiring the truth inside ONE prior standard deviation at
+#: every node of every member, times a factor 2 margin, then rounded UP to the next
+#: integer (owner's call, 2026-08-16).  Every rounding widens the prior, so the
+#: bound can only improve.  Slack and the pre-rounding sigma are quoted per row.
+GP_ENVELOPE = {
+    "t3": {"alpha": 0.25, "beta": 2.1, "sigma": 3},   # slack 14.2x
+    "t8": {"alpha": 0.0, "beta": 1.35, "sigma": 139},   # slack 2481.3x
+    "sigma": {"alpha": 0.0, "beta": 1.95, "sigma": 53},   # slack 108.6x
+    "t15": {"alpha": 0.0, "beta": 1.95, "sigma": 49},   # slack 118.5x
+    "g": {"alpha": 0.0, "beta": 1.95, "sigma": 8},   # slack 95.4x
+    "v3": {"alpha": 0.5, "beta": 2.05, "sigma": 3},   # slack 17.3x
+    "v8": {"alpha": 0.4, "beta": 2.15, "sigma": 7},   # slack 21.6x
+    "v": {"alpha": 0.4, "beta": 2.15, "sigma": 7},   # slack 22.1x
+    "v15": {"alpha": 0.4, "beta": 2.15, "sigma": 7},   # slack 22.1x
+}
+
+
+#: Diagonal jitter for the envelope covariance.  **0 by design.**
+#:
+#: Regularisation belongs to the data covariance and the SVD rcond cut, not to a
+#: second additive term that changes the prior.  Measured 2026-08-16: a 1e-10
+#: jitter contributes 2.5e-11 to 1.0e-10 of the preconditioned spectrum while the
+#: rcond cut sits at 4.40e-15 -- 1.4e3 to 2.3e4 times *above* it -- so it lifts
+#: every eigenvalue over the cut and the truncation never fires at all.  Two
+#: knobs for one job, with the wrong one winning.
+#:
+#:
+#: **1e-10, not 0 — corrected 2026-08-16 after measuring.**  "Regularisation
+#: belongs to the SVD cut, so set the jitter to zero" is wrong here, and the
+#: measurement is unambiguous: the log-RBF correlation `R` is *itself* indefinite
+#: on this grid (min eig -3.4e-15 at the shipped length, and still -6.7e-16 at
+#: length 0.10, so shortening it does not help).  The constant prior is positive
+#: definite ONLY because the jitter lifts it -- its `min eig K` is 9.99e-11, i.e.
+#: the jitter itself.
+#:
+#: The jitter and the rcond cut are **not** two knobs for one job; they act on
+#: different matrices.  `rcond` cuts `W = C + B K B^T` and conditions the saddle
+#: contour.  The jitter enters `K`, and `H = K - K B^T W^-1 B K` is built from `K`
+#: and inverted with a bare `jnp.linalg.inv` (`core/evidence.py:675`) -- no cutoff
+#: on that path at all.  Measured on `both` with the envelope prior: 9/9 fail
+#: across rcond 1e-10 to 1e-6 at jitter <= 1e-10, including at rcond 1e-6 where the
+#: cut discards more than half the modes (rank 74/158, 94/230).  Truncating `W`
+#: cannot make `H` definite.
+#:
+#: Required jitter scales with system size: `dy` (n=14) runs at 1e-10, while
+#: `exp`/`both` (n=158/230) need 1e-4 for the envelope prior.
+GP_JITTER = 1.0e-10
+
+
+#: Jitter for the ENVELOPE prior, which needs far more than the constant one.
+#:
+#: Measured on `both` at Q=2, constraints 1e-4, rcond 1e-12: the envelope fails
+#: (saddle below 1e-6, ESS from 1e-6 to 1e-4) and runs from 1e-3 upward, with a
+#: flat plateau -- 1.355e-05 / 1.342e-05 / 1.263e-05 at 1e-3 / 1e-2 / 1e-1.  The
+#: constant prior over the same range runs from 1e-10 at a steady 1.780e-05.
+#:
+#: The gap is arithmetic, not a second pathology.  The jitter enters as
+#: ``R + lambda I`` where ``R`` already carries ``sigma^2``, so the *relative*
+#: floor is ``lambda / sigma^2``.  Enforcing ``alpha >= 0`` forced flat envelopes
+#: that must clear the small-x peak, raising ``sigma`` from 3 to 139 for ``t8``
+#: and 3 to 53 for ``sigma`` -- roughly 300x in ``sigma^2`` -- so the same
+#: ``lambda`` is a ~300x smaller relative floor.
+#:
+#: 1e-2 is the plateau centre.  At these amplitudes it is a relative floor of
+#: ~1e-6 (t8) to ~1e-3 (t3, v3).
+GP_ENVELOPE_JITTER = 1.0e-2
+
+def gp_envelope(field: str) -> dict:
+    """Envelope ``{alpha, beta, sigma}`` for one field; see :data:`GP_ENVELOPE`."""
+    return GP_ENVELOPE[field]
+
+GP_LENGTH_LOG = 0.6931471805599453           # ln(2)
+# ln(10) was tried on 2026-08-16 and REVERTED, for robustness rather than
+# accuracy.  At its working point ln(10) is more accurate -- the constant prior
+# reached 9.90e-06 against ln(2)'s 1.78e-05, and the envelope 1.33e-05 against
+# 2.92e-05 -- but it demands ~1e3x more jitter (const boundary 1e-10 -> 1e-4,
+# envelope 1e-5 -> 1e-2) because the log-RBF correlation matrix becomes more
+# indefinite (min eig -3.4e-15 -> -1.25e-14), and it survived in only the top
+# cell or two of the scanned range instead of ln(2)'s 4-6 order plateau.  It
+# also halves n_eff over the coverage bulk, 2.65 -> 1.38, widening the pull^2
+# sampling band from +-0.87 to +-1.21.
 FROZEN_COV_PARAMS = ("sigma", "length", "x_reg")  # all frozen
 # Matches pixel.util.linalg.DEFAULT_RCOND.  svd_factor preconditions W to unit
 # diagonal before applying this cutoff, so it is a cut on the *correlation*
@@ -1061,21 +1184,34 @@ TEST_MODES = ("lattice", "dis", "dy", "exp", "both")
 #    int V3 = 1, int V8 = 3, int V = 3, int V15 = 3.
 
 ENDPOINT_X = 1.0
-#: Tightened 1e-4/1e-3 -> 1e-8 on 2026-08-15, together with the _small suites, because
-#: tests/test_closure_constraints.py enforces that all four packages share these values
-#: and the argument applies equally: these are the ``lambda`` of gp_paper.tex
-#: Eq.(constraints), and "in the limit that these lambda parameters go to 0, their
-#: respective pieces of prior information are constrained exactly".  Verified to bind:
-#: the posterior reproduces the represented momentum target to 5e-12, so RCOND = 1e-16
-#: is not truncating the constraint row despite its 1e-16 variance.
-CONSTRAINT_ENDPOINT_SIGMA = 1.0e-8                # ~hard: f(x=1)=0
-CONSTRAINT_NORM_SIGMA = 1.0e-8                    # ~hard: valence integrals
-CONSTRAINT_ORIGIN_SIGMA = 1.0e-8                  # ~hard: x*f(x=0)=0
+#: **1e-4, raised from 1e-6 on 2026-08-16.**  T1 was finally run on `exp` -- the mode
+#: that exercises DIS + DY + the gluon coefficient function together -- instead of on
+#: `dy`, which has no gluon channel and is structurally blind here.  One fit per row,
+#: closure_NNPDF_truth_small at Q=2:
+#:
+#:     sigma    abs ESS   signed   inner    result
+#:     1e-6     0.001     0.001    0.001    FAIL (172 s)
+#:     1e-5     0.980     0.980    0.971    PASS (96 s)
+#:     1e-4     0.989     0.989    0.984    PASS (135 s)
+#:
+#: A cliff, not a gradient, and 0.001 is exactly 1/MCMC_SAMPLES -- one effective
+#: sample, a saturated floor.  Ruled out as causes in the same session: the momentum
+#: row (dropped at 1e-6, still 0.001) and the GP amplitudes (sigma/g set to their
+#: sum-rule values, and all nine fields set to theirs, both still 0.001 -- unchanged
+#: to three digits under a 13x amplitude change).
+#:
+#: The earlier "1e-6 is the tightest value that works everywhere" was measured on
+#: `dy` alone and is superseded.  The 1e-5/1e-4 pull tables agree to three decimals,
+#: so nothing is bought by the extra decade; 1e-4 is taken for margin.
+#: Do not tighten without re-running `exp`.
+CONSTRAINT_ENDPOINT_SIGMA = 1.0e-4                # ~hard: f(x=1)=0
+CONSTRAINT_NORM_SIGMA = 1.0e-4                    # ~hard: valence integrals
+CONSTRAINT_ORIGIN_SIGMA = 1.0e-4                  # ~hard: x*f(x=0)=0
 #: ~hard: <x^1>, the momentum sum rule int x (Sigma + g) dx = 1.  Added 2026-08-15
 #: alongside the same constraint in the _small suites; `sigma` and `g` previously
 #: carried no integral constraint at all.  The target is the *represented* truth,
 #: not the nominal 1.0 -- see `constraint_datasets.represented_sum_target`.
-CONSTRAINT_MOMENTUM_SIGMA = 1.0e-8
+CONSTRAINT_MOMENTUM_SIGMA = 1.0e-4
 VALENCE_NORMS = {"v3": 1.0, "v8": 3.0, "v": 3.0, "v15": 3.0}
 
 # -- per-member paths --------------------------------------------------------

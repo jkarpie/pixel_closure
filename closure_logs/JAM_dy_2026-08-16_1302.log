@@ -1,0 +1,14 @@
+== fit  Q=2.0 (truthQ_2)  mode=dy ==
+   [time] build+kernels 1.58s  mcmc 1m 38s  marginal 0.00s  chi2 0.29s  fit total 1m 40s
+   [time] fit 1m 40s  summary 0.69s  pdf-plot 0.86s  data-plot 0.19s  run total 1m 42s
+   chi2/n=0.361  n=26  components={'linear': 6.151101385035748e-11, 'bilinear': 9.390309234265882}  mean pull^2={'t3': 0.217, 't8': 0.561, 'sigma': 0.152, 't15': 0.077, 'g': 0.107, 'v3': 0.75, 'v8': 5.724, 'v': 0.991, 'v15': 0.991}  |pull|<=2={'t3': '69/69', 't8': '69/69', 'sigma': '69/69', 't15': '69/69', 'g': '69/69', 'v3': '69/69', 'v8': '37/69', 'v': '69/69', 'v15': '69/69'}
+   DY norm dy_e866_pp (fitted): beta_true=+1.00 got=+0.041+-1.010 (expect +1.000, -0.9 sigma)
+   DY norm dy_e866_pd (fitted): beta_true=-0.60 got=-0.103+-0.924 (expect -0.600, +0.5 sigma)
+== fit  Q=3.0 (truthQ_3)  mode=dy ==
+   [time] build+kernels 1.43s  mcmc 1m 39s  marginal 0.00s  chi2 0.01s  fit total 1m 40s
+   [time] fit 1m 40s  summary 0.52s  pdf-plot 0.52s  data-plot 0.18s  run total 1m 42s
+   chi2/n=0.399  n=26  components={'linear': 6.150821876123496e-11, 'bilinear': 10.38497536630384}  mean pull^2={'t3': 0.157, 't8': 0.456, 'sigma': 0.14, 't15': 0.092, 'g': 0.1, 'v3': 0.617, 'v8': 4.825, 'v': 0.832, 'v15': 0.832}  |pull|<=2={'t3': '69/69', 't8': '69/69', 'sigma': '69/69', 't15': '69/69', 'g': '69/69', 'v3': '69/69', 'v8': '41/69', 'v': '69/69', 'v15': '69/69'}
+   DY norm dy_e866_pp (fitted): beta_true=+1.00 got=-0.013+-1.064 (expect +1.000, -1.0 sigma)
+   DY norm dy_e866_pd (fitted): beta_true=-0.60 got=-0.057+-1.001 (expect -0.600, +0.5 sigma)
+
+Done.  2 fits in 3m 25s (mean 1m 42s per fit).  Results under /Users/jkarpie-admin/work/building/pixel/closure_JAM_truth_small/results
