@@ -1208,7 +1208,19 @@ def test_origin_constraint_switches_on_for_the_vanishing_fields(suite):
         # 1e-8 in q units since 2026-08-15 (was 1e-4), still stated here rather
         # than read back from CONSTRAINT_ORIGIN_SIGMA: reading the same constant on
         # both sides could not catch it being loosened, which is the whole claim.
-        assert dataset.cov[0, 0] == pytest.approx(1.0e-8 ** 2, rel=1e-12, abs=0.0)
+        # An UPPER BOUND, not equality.  The intent is right -- a literal, so a
+        # loosening cannot be silently mirrored by reading
+        # ``CONSTRAINT_ORIGIN_SIGMA`` on both sides -- but equality also fires on
+        # *tightening*, which is not a regression, and it pinned 1e-8 through two
+        # subsequent retunes (1e-8 -> 1e-6 -> 1e-4, each with its own measurement
+        # in config.py).  The claim this test defends is "near-hard", so the bar
+        # is that the variance is no looser than the loosest value ever measured
+        # to work: SD 1e-4, from the 2026-08-16 exp scan (1e-6 FAIL, 1e-5 PASS,
+        # 1e-4 PASS).
+        assert dataset.cov[0, 0] <= 1.0e-4 ** 2, (
+            f"origin constraint looser than the measured feasible bound: "
+            f"variance {dataset.cov[0, 0]:.3e} > {1.0e-4 ** 2:.3e}"
+        )
         # The Delta row must actually select the origin node, or the constraint
         # is the silent zero row this test exists to rule out.
         # cons_momentum spans Sigma + g jointly and cannot be unpacked as a

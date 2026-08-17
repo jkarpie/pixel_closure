@@ -1,15 +1,14 @@
-"""Copied from pixel/tests/test_observable_contracts.py 2026-08-16.
-
-Kept whole (helpers and all) so the three tests that reconcile the observable
-contracts against the CLOSURE-generated manifests keep working:
-  test_current_full_closure_manifest_has_exact_contract_and_citations
-  test_selected_point_counts_reconcile_with_generated_full_manifest
-  test_lattice_selected_rows_reconcile_with_the_generated_full_manifest
-Those three were removed from the pixel copy -- they read
-``closure_*/data/truthQ_mc/manifest.json``, which pixel will not have once the
-closure packages move.  The remaining tests here duplicate pixel ones; trim if
-that becomes a maintenance problem.
-"""
+# Copied from pixel/tests/test_observable_contracts.py 2026-08-16.
+#
+# Kept whole (helpers and all) so the three tests that reconcile the observable
+# contracts against the CLOSURE-generated manifests keep working:
+#   test_current_full_closure_manifest_has_exact_contract_and_citations
+#   test_selected_point_counts_reconcile_with_generated_full_manifest
+#   test_lattice_selected_rows_reconcile_with_the_generated_full_manifest
+# Those three were removed from the pixel copy -- they read
+# ``closure_*/data/truthQ_mc/manifest.json``, which pixel will not have once the
+# closure packages move.  The remaining tests here duplicate pixel ones; trim if
+# that becomes a maintenance problem.
 
 """Scientific roster and paper-provenance gates for full closure.
 

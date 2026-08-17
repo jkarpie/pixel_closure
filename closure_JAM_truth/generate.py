@@ -597,7 +597,19 @@ def exp_layout():
             "label": tab["label"], "idx": tab["idx"], "file": f"exp/{tab['label']}.dat",
             "rel_stat": rel_stat.tolist(), "_leading": (x, q2),
         }
-        if tab["kind"] == "sigma_r_cc":
+        # Both reduced-cross-section kinds need the beam charge, not just the
+        # charged-current one.  ``build_sigma_r`` passes ``beam_charge=rec["beam"]``
+        # for the NEUTRAL-current case too (datasets.py), because the beam charge
+        # sets the sign of the gamma-Z interference term -- and this manifest's own
+        # HERA NC tables really do carry both signs (idx 10030 is ``e_minus``, the
+        # rest ``e_plus``).
+        #
+        # Writing it only for ``sigma_r_cc`` left ``build_sigma_r`` reading a key
+        # its own generator never wrote: ``KeyError: 'beam'``, which aborted
+        # full-suite generation entirely (measured 2026-08-16, both truths).  The
+        # audit manifest carries ``beam`` for every table, so nothing else is
+        # needed to supply it.
+        if tab["kind"] in ("sigma_r", "sigma_r_cc"):
             rec["beam"] = tab["beam"]
         # Real experimental nuisances: the overall normalization (a scalar) and
         # the correlated systematic sources (a relative matrix in an .npz

@@ -162,14 +162,26 @@ def test_one_amplitude_drives_both_mean_and_sigma(suite):
         # matters is that it covers exactly the nine fields with no field
         # silently falling back to a default.
         assert set(cfg.GP_AMPLITUDES) == set(cfg.ALL_FIELDS)
-        # The table carries the original tier values; a per-field retune was
-        # measured and reverted (see the config note).  Pin the *structure* --
-        # every field named, no silent default -- rather than the numbers, which
-        # are a prior-width design choice this file deliberately does not judge.
-        assert set(cfg.GP_AMPLITUDES.values()) <= {1.0, 5.0}
-        assert {n for n in cfg.ALL_FIELDS if cfg.gp_amplitude(n) == 5.0} == {
-            "sigma", "g", "t15"
-        }
+        # The comment this replaced said the table "carries the original tier
+        # values" and pinned ``<= {1.0, 5.0}``.  That went stale when the retune
+        # it describes as "reverted" was in fact kept: the shipped table is
+        # per-field (0.2 .. 5.0), so the assertion failed on the very design it
+        # was meant to permit.
+        #
+        # Pin the *structure*, which is what this file actually claims to judge:
+        # every field named, no silent default, every amplitude positive and
+        # finite.  The numbers are a prior-width design choice guarded elsewhere
+        # -- ``test_closure_envelope_config.py`` for the envelope form, and the
+        # measured feasibility limits in ``config.py``'s own comments.
+        assert all(v > 0 and math.isfinite(v) for v in cfg.GP_AMPLITUDES.values()), (
+            f"non-positive or non-finite amplitude in {cfg.GP_AMPLITUDES}"
+        )
+        # The singlet/gluon/charm group is still the widest, whatever the
+        # individual numbers are -- that ordering IS physics (Pomeron-driven
+        # fields carry the most prior freedom), unlike the values themselves.
+        widest = max(cfg.GP_AMPLITUDES.values())
+        assert {n for n in cfg.ALL_FIELDS
+                if cfg.gp_amplitude(n) == widest} <= {"sigma", "g", "t15"}
     else:
         assert cfg.GP_AMPLITUDE_HIGH == 5.0  # singlet / gluon / charm
         assert cfg.GP_AMPLITUDE_LOW == 1.0  # non-singlets and valence; width kept
