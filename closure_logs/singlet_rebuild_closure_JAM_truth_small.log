@@ -1,0 +1,42 @@
+### STAGE 1: regenerate truth (all Q)
+== generating truth member Q=1.28 (truthQ_mc), input Q0=mc, 791 JAM replicas ==
+   saved -> /Users/jkarpie-admin/work/building/pixel_closure/closure_JAM_truth_small/data/truthQ_mc  (2m 15s)
+== generating truth member Q=1.0 (truthQ_1), input Q0=mc, 791 JAM replicas ==
+   saved -> /Users/jkarpie-admin/work/building/pixel_closure/closure_JAM_truth_small/data/truthQ_1  (28.4s)
+== generating truth member Q=2.0 (truthQ_2), input Q0=mc, 791 JAM replicas ==
+   saved -> /Users/jkarpie-admin/work/building/pixel_closure/closure_JAM_truth_small/data/truthQ_2  (27.6s)
+== generating truth member Q=3.0 (truthQ_3), input Q0=mc, 791 JAM replicas ==
+   saved -> /Users/jkarpie-admin/work/building/pixel_closure/closure_JAM_truth_small/data/truthQ_3  (25.7s)
+== generating truth member Q=4.0 (truthQ_4), input Q0=mc, 791 JAM replicas ==
+   saved -> /Users/jkarpie-admin/work/building/pixel_closure/closure_JAM_truth_small/data/truthQ_4  (23.1s)
+== generating truth member Q=5.0 (truthQ_5), input Q0=mc, 791 JAM replicas ==
+   saved -> /Users/jkarpie-admin/work/building/pixel_closure/closure_JAM_truth_small/data/truthQ_5  (25.2s)
+### STAGE 2: campaign
+[campaign] RCOND override: 1e-16 -> 1e-12
+[campaign] closure_JAM_truth_small: 60 cells (2 priors x 6 Q x 5 modes)
+[1/60] closure_JAM_truth_small Q=mc mode=lattice prior=const_logrbf
+   [time] build+kernels 0.75s  mcmc 1.10s  marginal 0.00s  chi2 0.05s  fit total 1.90s
+Matplotlib is building the font cache; this may take a moment.
+   [time] fit 2.18s  summary 0.04s  pdf-plot 8.70s  data-plot 1.34s  run total 12.3s
+[2/60] closure_JAM_truth_small Q=mc mode=dis prior=const_logrbf
+   [time] build+kernels 3.54s  mcmc 4.36s  marginal 26.2s  chi2 0.02s  fit total 34.1s
+   [time] fit 34.1s  summary 0.35s  pdf-plot 0.57s  data-plot 0.69s  run total 35.7s
+[3/60] closure_JAM_truth_small Q=mc mode=dy prior=const_logrbf
+   [time] build+kernels 17.0s  mcmc 1m 43s  marginal 0.00s  chi2 0.26s  fit total 2m 00s
+   [time] fit 2m 00s  summary 0.44s  pdf-plot 0.56s  data-plot 0.18s  run total 2m 01s
+[4/60] closure_JAM_truth_small Q=mc mode=exp prior=const_logrbf
+   [time] build+kernels 5.81s  mcmc 2m 23s  marginal 0.00s  chi2 0.06s  fit total 2m 29s
+   [time] fit 2m 29s  summary 0.51s  pdf-plot 0.52s  data-plot 0.84s  run total 2m 30s
+[5/60] closure_JAM_truth_small Q=mc mode=both prior=const_logrbf
+   [time] build+kernels 6.31s  mcmc 3m 35s  marginal 0.01s  chi2 0.69s  fit total 3m 42s
+   [time] fit 3m 42s  summary 1.09s  pdf-plot 1.67s  data-plot 3.83s  run total 3m 49s
+[6/60] closure_JAM_truth_small Q=1 mode=lattice prior=const_logrbf
+   [time] build+kernels 0.97s  mcmc 0.51s  marginal 0.01s  chi2 0.02s  fit total 1.51s
+   [time] fit 1.56s  summary 0.05s  pdf-plot 0.73s  data-plot 1.40s  run total 3.74s
+[7/60] closure_JAM_truth_small Q=1 mode=dis prior=const_logrbf
+   [time] build+kernels 5.96s  mcmc 6.40s  marginal 34.8s  chi2 0.03s  fit total 47.2s
+   [time] fit 47.2s  summary 0.12s  pdf-plot 0.84s  data-plot 1.15s  run total 49.3s
+[8/60] closure_JAM_truth_small Q=1 mode=dy prior=const_logrbf
+   [time] build+kernels 2.00s  mcmc 2m 21s  marginal 0.00s  chi2 0.58s  fit total 2m 24s
+   [time] fit 2m 24s  summary 0.92s  pdf-plot 1.24s  data-plot 0.78s  run total 2m 26s
+[9/60] closure_JAM_truth_small Q=1 mode=exp prior=const_logrbf

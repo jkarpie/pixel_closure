@@ -1,0 +1,44 @@
+### STAGE 1: regenerate truth (all Q)
+== generating truth member Q=1.28 (truthQ_mc), input Q0=mc, 1000 NNPDF replicas ==
+   saved -> /Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_mc  (2m 15s)
+== generating truth member Q=1.0 (truthQ_1), input Q0=mc, 1000 NNPDF replicas ==
+   saved -> /Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_1  (24.6s)
+== generating truth member Q=2.0 (truthQ_2), input Q0=mc, 1000 NNPDF replicas ==
+   saved -> /Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2  (27.1s)
+== generating truth member Q=3.0 (truthQ_3), input Q0=mc, 1000 NNPDF replicas ==
+   saved -> /Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_3  (22.6s)
+== generating truth member Q=4.0 (truthQ_4), input Q0=mc, 1000 NNPDF replicas ==
+   saved -> /Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_4  (23.6s)
+== generating truth member Q=5.0 (truthQ_5), input Q0=mc, 1000 NNPDF replicas ==
+   saved -> /Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_5  (23.2s)
+### STAGE 2: campaign
+[campaign] RCOND override: 1e-16 -> 1e-12
+[campaign] closure_NNPDF_truth_small: 60 cells (2 priors x 6 Q x 5 modes)
+[1/60] closure_NNPDF_truth_small Q=mc mode=lattice prior=const_logrbf
+   [time] build+kernels 0.80s  mcmc 1.22s  marginal 0.00s  chi2 0.05s  fit total 2.07s
+Matplotlib is building the font cache; this may take a moment.
+   [time] fit 2.39s  summary 0.04s  pdf-plot 9.15s  data-plot 1.19s  run total 12.8s
+[2/60] closure_NNPDF_truth_small Q=mc mode=dis prior=const_logrbf
+   [time] build+kernels 4.18s  mcmc 4.17s  marginal 27.0s  chi2 0.02s  fit total 35.4s
+   [time] fit 35.4s  summary 0.32s  pdf-plot 0.50s  data-plot 0.74s  run total 37.0s
+[3/60] closure_NNPDF_truth_small Q=mc mode=dy prior=const_logrbf
+   [time] build+kernels 16.1s  mcmc 1m 41s  marginal 0.00s  chi2 0.30s  fit total 1m 58s
+   [time] fit 1m 58s  summary 0.68s  pdf-plot 0.51s  data-plot 0.19s  run total 1m 59s
+[4/60] closure_NNPDF_truth_small Q=mc mode=exp prior=const_logrbf
+   [time] build+kernels 7.24s  mcmc 2m 26s  marginal 0.00s  chi2 0.06s  fit total 2m 34s
+   [time] fit 2m 34s  summary 0.77s  pdf-plot 0.68s  data-plot 0.91s  run total 2m 36s
+[5/60] closure_NNPDF_truth_small Q=mc mode=both prior=const_logrbf
+/Users/jkarpie-admin/work/building/pixel/src/pixel/infer/nested_vegas.py:1692: RuntimeWarning: overflow encountered in exp
+  np.exp(production_shift)
+   [time] build+kernels 7.09s  mcmc 3m 49s  marginal 0.01s  chi2 0.80s  fit total 3m 57s
+   [time] fit 3m 57s  summary 0.96s  pdf-plot 1.45s  data-plot 2.78s  run total 4m 03s
+[6/60] closure_NNPDF_truth_small Q=1 mode=lattice prior=const_logrbf
+   [time] build+kernels 0.26s  mcmc 0.75s  marginal 0.01s  chi2 0.02s  fit total 1.05s
+   [time] fit 1.09s  summary 0.04s  pdf-plot 0.89s  data-plot 2.09s  run total 4.11s
+[7/60] closure_NNPDF_truth_small Q=1 mode=dis prior=const_logrbf
+   [time] build+kernels 7.06s  mcmc 6.64s  marginal 33.5s  chi2 0.04s  fit total 47.3s
+   [time] fit 47.3s  summary 0.14s  pdf-plot 0.72s  data-plot 1.21s  run total 49.3s
+[8/60] closure_NNPDF_truth_small Q=1 mode=dy prior=const_logrbf
+   [time] build+kernels 1.88s  mcmc 2m 24s  marginal 0.00s  chi2 0.48s  fit total 2m 26s
+   [time] fit 2m 26s  summary 0.62s  pdf-plot 0.84s  data-plot 0.48s  run total 2m 28s
+[9/60] closure_NNPDF_truth_small Q=1 mode=exp prior=const_logrbf

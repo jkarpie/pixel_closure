@@ -1,0 +1,327 @@
+schema_version: 1
+
+# This is the sole paper-to-dataset crosswalk.  BibTeX itself stays verbatim
+# from INSPIRE; control numbers live here so refreshes and duplicate checks do
+# not depend on publisher-specific BibTeX fields.
+bibliography:
+  path: data_reference.bib
+  provider: INSPIRE
+  papers:
+    - {citation_key: "Yoo:2026uul", inspire_id: 3108533, arxiv: "2601.10857"}
+    - {citation_key: "Whitlow:1991uw", inspire_id: 319089, doi: "10.1016/0370-2693(92)90672-Q"}
+    - {citation_key: "BCDMS:1989qop", inspire_id: 276661, doi: "10.1016/0370-2693(89)91637-7"}
+    - {citation_key: "BCDMS:1989ggw", inspire_id: 285497, doi: "10.1016/0370-2693(90)91231-Y"}
+    - {citation_key: "NewMuon:1996fwh", inspire_id: 424154, arxiv: "hep-ph/9610231"}
+    - {citation_key: "NewMuon:1996uwk", inspire_id: 426595, arxiv: "hep-ex/9611022"}
+    - {citation_key: "HERMES:2011yno", inspire_id: 894309, arxiv: "1103.5704"}
+    - {citation_key: "JeffersonLabE00-115:2009jll", inspire_id: 820503, arxiv: "0905.2374"}
+    - {citation_key: "H1:2015ubc", inspire_id: 1377206, arxiv: "1506.06042"}
+    - {citation_key: "NuSea:2003qoe", inspire_id: 613362, arxiv: "hep-ex/0302019"}
+    - {citation_key: "CDF:2010vek", inspire_id: 856131, arxiv: "0908.3914"}
+    - {citation_key: "STAR:2020vuq", inspire_id: 1829350, arxiv: "2011.04708"}
+    - {citation_key: "ATLAS:2016nqi", inspire_id: 1502620, arxiv: "1612.03016"}
+    - {citation_key: "LHCb:2015okr", inspire_id: 1373300, arxiv: "1505.07024"}
+    - {citation_key: "LHCb:2015mad", inspire_id: 1406555, arxiv: "1511.08039"}
+    - {citation_key: "CDF:2009cjw", inspire_id: 811060, arxiv: "0901.2169"}
+    - {citation_key: "D0:2013lql", inspire_id: 1268647, arxiv: "1312.2895"}
+    - {citation_key: "SeaQuest:2021zxb", inspire_id: 1849683, arxiv: "2103.04024"}
+    - {citation_key: "Moreno:1990sf", inspire_id: 302822, doi: "10.1103/PhysRevD.43.2815"}
+    - {citation_key: "CHORUS:2005cpn", inspire_id: 699123, doi: "10.1016/j.physletb.2005.10.062"}
+    - {citation_key: "Mason:2006qa", inspire_id: 712244, doi: "10.2172/879078"}
+    - {citation_key: "D0:2007djv", inspire_id: 744624, arxiv: "hep-ex/0702025"}
+    - {citation_key: "ATLAS:2011qdp", inspire_id: 928289, arxiv: "1109.5141"}
+    - {citation_key: "LHCb:2012lki", inspire_id: 1107729, arxiv: "1204.1620"}
+    - {citation_key: "LHCb:2012gii", inspire_id: 1208102, arxiv: "1212.4620"}
+    # Additional papers used by the literal NNPDF4.0 DIS/DY roster.  Dataset
+    # membership and per-record keys live in nnpdf40_dis_dy_roster.yaml.
+    - {citation_key: "H1:2018flt", inspire_id: 1665693, arxiv: "1804.01019"}
+    - {citation_key: "NuSea:2001idv", inspire_id: 554316, arxiv: "hep-ex/0103030"}
+    - {citation_key: "D0:2013xqc", inspire_id: 1253555, arxiv: "1309.2591"}
+    - {citation_key: "ATLAS:2013xny", inspire_id: 1234228, arxiv: "1305.4192"}
+    - {citation_key: "ATLAS:2014ape", inspire_id: 1288706, arxiv: "1404.1212"}
+    - {citation_key: "ATLAS:2016gic", inspire_id: 1467454, arxiv: "1606.01736"}
+    - {citation_key: "ATLAS:2017rue", inspire_id: 1630886, arxiv: "1710.05167"}
+    - {citation_key: "ATLAS:2016fij", inspire_id: 1436497, arxiv: "1603.09222"}
+    - {citation_key: "CMS:2012ivw", inspire_id: 1118047, arxiv: "1206.2598"}
+    - {citation_key: "CMS:2013pzl", inspire_id: 1273570, arxiv: "1312.6283"}
+    - {citation_key: "CMS:2013zfg", inspire_id: 1262319, arxiv: "1310.7291"}
+    - {citation_key: "CMS:2016qqr", inspire_id: 1426517, arxiv: "1603.01803"}
+    - {citation_key: "LHCb:2015kwa", inspire_id: 1347133, arxiv: "1503.00963"}
+    - {citation_key: "LHCb:2016fbk", inspire_id: 1477581, arxiv: "1607.06495"}
+
+# A closure campaign is generated from one representable PDF, not from an
+# ensemble second moment.  L1 universes below vary noise only.
+truth_laws:
+  jam_full:
+    kind: fixed_lhapdf_member
+    campaign_identifier: jam_full_member_1_v1
+    set: JAM24_PDF_proton_nlo
+    member: 1
+    seed: null
+    noise_universes_vary: experimental_and_systematic_noise_only
+  nnpdf_full:
+    kind: fixed_lhapdf_member
+    campaign_identifier: nnpdf_full_member_1_v1
+    set: NNPDF40_nnlo_as_01180_1000
+    member: 1
+    seed: null
+    noise_universes_vary: experimental_and_systematic_noise_only
+
+# These lists are expanded and checked against manifests; no config.py list is
+# authoritative.  Reader-only candidates are intentionally absent.
+full_closure_modes:
+  jam_full:
+    classifications: [physics, legacy_compatibility, synthetic_proxy]
+    dataset_ids: &current_full_ids
+      - lattice.a117m310
+      - lattice.a087m290
+      - lattice.a087m290l
+      - lattice.a087m230
+      - lattice.a087m230x
+      - lattice.a086m180
+      - lattice.a086m180l
+      - lattice.a068m290
+      - lattice.a068m230
+      - lattice.a068m175
+      - lattice.a067m135
+      - lattice.a053m295
+      - lattice.a053m230
+      - dis.slac_p_10010
+      - dis.bcdms_p_10016
+      - dis.nmc_p_10020
+      - dis.slac_d_10011
+      - dis.bcdms_d_10017
+      - dis.hermes_p_10007
+      - dis.hera_ep_10026
+      - dis.hera_ep_10027
+      - dis.hera_ep_10028
+      - dis.hera_ep_10029
+      - dis.hera_em_10030
+      - dis.hera_cc_ep_10031
+      - dis.hera_cc_em_10032
+      - dy.e866_pp_10001
+      - dy.e866_pd_10002
+  nnpdf_full:
+    classifications: [physics, legacy_compatibility, synthetic_proxy]
+    dataset_ids: *current_full_ids
+
+datasets:
+  # Each ensemble selector covers its 18 pseudo-ITD/Mellin likelihood records.
+  - id: lattice.a117m310
+    selector: {section: lattice, name_regex: "^a117m310_"}
+    source: "NME ensemble a117m310, Table I"
+    source_rows: 18
+    selected_rows: 18
+    likelihood_group: lattice.a117m310
+    classification: physics
+    selectable: true
+    citation_keys: ["Yoo:2026uul"]
+    inspire_ids: [3108533]
+    covariance_scope: per generated pseudo-ITD or Mellin record, with named shared lattice nuisances
+    drop_reason: null
+    observable: &lattice_observable {quantity: "renormalized reduced pseudo-ITD or Mellin moment", units: dimensionless, reaction: "Euclidean proton matrix element", beam: "boosted proton state", target: proton, binning: "discrete Wilson-line separation/momentum or moment order exactly as generated", mass_integration: null, rapidity_integration: null, decay_channel: null, fiducial: "NME ensemble geometry and momenta; no detector acceptance", qed_fsr: not_applicable}
+    operator: &lattice_operator {kind: "pseudoitd.file or mellin.file matching convolution", perturbative_order: NLO, scale: "record-specific z and Q0^2=mc^2", flavour_scheme: "Nf=4 matching basis", nuclear: none, returns: "dimensionless point prediction"}
+    evidence: &lattice_evidence {local: ["examples/closure_test_nme.py:140", "closure_JAM_truth/config.py:303"], paper: "Yoo:2026uul Table I", gate_evidence: ["13 ensemble names and geometry cross-checked against the paper table"]}
+  - {id: lattice.a087m290, selector: {section: lattice, name_regex: "^a087m290_"}, source: "NME ensemble a087m290, Table I", source_rows: 18, selected_rows: 18, likelihood_group: lattice.a087m290, classification: physics, selectable: true, citation_keys: ["Yoo:2026uul"], inspire_ids: [3108533], covariance_scope: "per record plus named shared lattice nuisances", drop_reason: null, observable: *lattice_observable, operator: *lattice_operator, evidence: *lattice_evidence}
+  - {id: lattice.a087m290l, selector: {section: lattice, name_regex: "^a087m290L_"}, source: "NME ensemble a087m290L, Table I", source_rows: 18, selected_rows: 18, likelihood_group: lattice.a087m290L, classification: physics, selectable: true, citation_keys: ["Yoo:2026uul"], inspire_ids: [3108533], covariance_scope: "per record plus named shared lattice nuisances", drop_reason: null, observable: *lattice_observable, operator: *lattice_operator, evidence: *lattice_evidence}
+  - {id: lattice.a087m230, selector: {section: lattice, name_regex: "^a087m230_"}, source: "NME ensemble a087m230, Table I", source_rows: 18, selected_rows: 18, likelihood_group: lattice.a087m230, classification: physics, selectable: true, citation_keys: ["Yoo:2026uul"], inspire_ids: [3108533], covariance_scope: "per record plus named shared lattice nuisances", drop_reason: null, observable: *lattice_observable, operator: *lattice_operator, evidence: *lattice_evidence}
+  - {id: lattice.a087m230x, selector: {section: lattice, name_regex: "^a087m230X_"}, source: "NME ensemble a087m230X, Table I", source_rows: 18, selected_rows: 18, likelihood_group: lattice.a087m230X, classification: physics, selectable: true, citation_keys: ["Yoo:2026uul"], inspire_ids: [3108533], covariance_scope: "per record plus named shared lattice nuisances", drop_reason: null, observable: *lattice_observable, operator: *lattice_operator, evidence: *lattice_evidence}
+  - {id: lattice.a086m180, selector: {section: lattice, name_regex: "^a086m180_"}, source: "NME ensemble a086m180, Table I", source_rows: 18, selected_rows: 18, likelihood_group: lattice.a086m180, classification: physics, selectable: true, citation_keys: ["Yoo:2026uul"], inspire_ids: [3108533], covariance_scope: "per record plus named shared lattice nuisances", drop_reason: null, observable: *lattice_observable, operator: *lattice_operator, evidence: *lattice_evidence}
+  - {id: lattice.a086m180l, selector: {section: lattice, name_regex: "^a086m180L_"}, source: "NME ensemble a086m180L, Table I", source_rows: 18, selected_rows: 18, likelihood_group: lattice.a086m180L, classification: physics, selectable: true, citation_keys: ["Yoo:2026uul"], inspire_ids: [3108533], covariance_scope: "per record plus named shared lattice nuisances", drop_reason: null, observable: *lattice_observable, operator: *lattice_operator, evidence: *lattice_evidence}
+  - {id: lattice.a068m290, selector: {section: lattice, name_regex: "^a068m290_"}, source: "NME ensemble a068m290, Table I", source_rows: 18, selected_rows: 18, likelihood_group: lattice.a068m290, classification: physics, selectable: true, citation_keys: ["Yoo:2026uul"], inspire_ids: [3108533], covariance_scope: "per record plus named shared lattice nuisances", drop_reason: null, observable: *lattice_observable, operator: *lattice_operator, evidence: *lattice_evidence}
+  - {id: lattice.a068m230, selector: {section: lattice, name_regex: "^a068m230_"}, source: "NME ensemble a068m230, Table I", source_rows: 18, selected_rows: 18, likelihood_group: lattice.a068m230, classification: physics, selectable: true, citation_keys: ["Yoo:2026uul"], inspire_ids: [3108533], covariance_scope: "per record plus named shared lattice nuisances", drop_reason: null, observable: *lattice_observable, operator: *lattice_operator, evidence: *lattice_evidence}
+  - {id: lattice.a068m175, selector: {section: lattice, name_regex: "^a068m175_"}, source: "NME ensemble a068m175, Table I", source_rows: 18, selected_rows: 18, likelihood_group: lattice.a068m175, classification: physics, selectable: true, citation_keys: ["Yoo:2026uul"], inspire_ids: [3108533], covariance_scope: "per record plus named shared lattice nuisances", drop_reason: null, observable: *lattice_observable, operator: *lattice_operator, evidence: *lattice_evidence}
+  - {id: lattice.a067m135, selector: {section: lattice, name_regex: "^a067m135_"}, source: "NME ensemble a067m135, Table I", source_rows: 18, selected_rows: 18, likelihood_group: lattice.a067m135, classification: physics, selectable: true, citation_keys: ["Yoo:2026uul"], inspire_ids: [3108533], covariance_scope: "per record plus named shared lattice nuisances", drop_reason: null, observable: *lattice_observable, operator: *lattice_operator, evidence: *lattice_evidence}
+  - {id: lattice.a053m295, selector: {section: lattice, name_regex: "^a053m295_"}, source: "NME ensemble a053m295, Table I", source_rows: 18, selected_rows: 18, likelihood_group: lattice.a053m295, classification: physics, selectable: true, citation_keys: ["Yoo:2026uul"], inspire_ids: [3108533], covariance_scope: "per record plus named shared lattice nuisances", drop_reason: null, observable: *lattice_observable, operator: *lattice_operator, evidence: *lattice_evidence}
+  - {id: lattice.a053m230, selector: {section: lattice, name_regex: "^a053m230_"}, source: "NME ensemble a053m230, Table I", source_rows: 18, selected_rows: 18, likelihood_group: lattice.a053m230, classification: physics, selectable: true, citation_keys: ["Yoo:2026uul"], inspire_ids: [3108533], covariance_scope: "per record plus named shared lattice nuisances", drop_reason: null, observable: *lattice_observable, operator: *lattice_operator, evidence: *lattice_evidence}
+
+  # Existing inclusive DIS.  The point selections are the committed cut result,
+  # so source_rows = selected_rows + rows rejected by the closure cuts.
+  - id: dis.slac_p_10010
+    selector: {section: exp, table_id: 10010}
+    source: fitpack_legacy/database/idis/expdata/10010.xlsx
+    source_rows: 661
+    selected_rows: 222
+    likelihood_group: dis.slac_p
+    classification: physics
+    selectable: true
+    citation_keys: ["Whitlow:1991uw"]
+    inspire_ids: [319089]
+    covariance_scope: "table-local relative statistical errors; normalization nuisance as configured"
+    drop_reason: "439 rows fail Q2/W2 closure cuts"
+    observable: &f2_observable {quantity: "inclusive electromagnetic F2(x,Q2)", units: dimensionless, reaction: "charged-lepton neutral-current DIS", beam: electron_or_muon, target: proton_or_deuteron, binning: "published pointwise x,Q2 values after explicit Q2/W2 cuts", mass_integration: null, rapidity_integration: null, decay_channel: null, fiducial: "inclusive published radiatively corrected DIS table", qed_fsr: "source-publication radiative correction retained"}
+    operator: &f2_operator {kind: f2.file, perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: "matched VFNS from Q0^2=mc^2", nuclear: "proton or isoscalar deuteron map stated per record", returns: "dimensionless F2 point value"}
+    evidence: {local: ["../fitpack_legacy/database/idis/README.md", "closure_JAM_truth/data/dis_manifest.json"], paper: "Whitlow:1991uw", gate_evidence: ["table index, target, raw and retained row counts reconciled"]}
+  - {id: dis.bcdms_p_10016, selector: {section: exp, table_id: 10016}, source: fitpack_legacy/database/idis/expdata/10016.xlsx, source_rows: 351, selected_rows: 348, likelihood_group: dis.bcdms_p, classification: physics, selectable: true, citation_keys: ["BCDMS:1989qop"], inspire_ids: [276661], covariance_scope: "table-local relative statistical errors; normalization nuisance as configured", drop_reason: "3 rows fail Q2/W2 closure cuts", observable: *f2_observable, operator: *f2_operator, evidence: {local: ["../fitpack_legacy/database/idis/README.md", "closure_JAM_truth/data/dis_manifest.json"], paper: "BCDMS:1989qop", gate_evidence: ["proton table and row counts reconciled"]}}
+  - {id: dis.nmc_p_10020, selector: {section: exp, table_id: 10020}, source: fitpack_legacy/database/idis/expdata/10020.xlsx, source_rows: 292, selected_rows: 273, likelihood_group: dis.nmc_p, classification: physics, selectable: true, citation_keys: ["NewMuon:1996fwh"], inspire_ids: [424154], covariance_scope: "table-local relative statistical errors; normalization nuisance as configured", drop_reason: "19 rows fail Q2/W2 closure cuts", observable: *f2_observable, operator: *f2_operator, evidence: {local: ["../fitpack_legacy/database/idis/README.md", "closure_JAM_truth/data/dis_manifest.json"], paper: "NewMuon:1996fwh", gate_evidence: ["proton table and row counts reconciled"]}}
+  - {id: dis.slac_d_10011, selector: {section: exp, table_id: 10011}, source: fitpack_legacy/database/idis/expdata/10011.xlsx, source_rows: 692, selected_rows: 231, likelihood_group: dis.slac_d, classification: physics, selectable: true, citation_keys: ["Whitlow:1991uw"], inspire_ids: [319089], covariance_scope: "table-local relative statistical errors; normalization nuisance as configured", drop_reason: "461 rows fail Q2/W2 closure cuts", observable: *f2_observable, operator: *f2_operator, evidence: {local: ["../fitpack_legacy/database/idis/README.md", "closure_JAM_truth/data/dis_manifest.json"], paper: "Whitlow:1991uw", gate_evidence: ["deuteron table and row counts reconciled"]}}
+  - {id: dis.bcdms_d_10017, selector: {section: exp, table_id: 10017}, source: fitpack_legacy/database/idis/expdata/10017.xlsx, source_rows: 254, selected_rows: 254, likelihood_group: dis.bcdms_d, classification: physics, selectable: true, citation_keys: ["BCDMS:1989ggw"], inspire_ids: [285497], covariance_scope: "table-local relative statistical errors; normalization nuisance as configured", drop_reason: null, observable: *f2_observable, operator: *f2_operator, evidence: {local: ["../fitpack_legacy/database/idis/README.md", "closure_JAM_truth/data/dis_manifest.json"], paper: "BCDMS:1989ggw", gate_evidence: ["deuteron table and row counts reconciled"]}}
+  - {id: dis.jlab_p_10003, selector: {section: exp, table_id: 10003}, source: fitpack_legacy/database/idis/expdata/10003.xlsx, source_rows: 265, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["JeffersonLabE00-115:2009jll"], inspire_ids: [820503], covariance_scope: "not assembled", drop_reason: "all rows fail current Q2/W2 full-closure cuts", observable: {quantity: "inclusive reduced DIS cross section", units: dimensionless, reaction: "electron-proton neutral-current DIS", beam: electron, target: proton, binning: "published pointwise x,Q2", mass_integration: null, rapidity_integration: null, decay_channel: null, fiducial: "inclusive source table", qed_fsr: "source-publication policy"}, operator: {kind: sigma_r.file, perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: VFNS, nuclear: none, returns: "dimensionless reduced cross section"}, evidence: {local: ["../fitpack_legacy/database/idis/README.md", "closure_JAM_truth/data/dis_manifest.json"], paper: "JeffersonLabE00-115:2009jll", gate_evidence: ["zero retained rows recorded"]}}
+  - {id: dis.hermes_p_10007, selector: {section: exp, table_id: 10007}, source: fitpack_legacy/database/idis/expdata/10007.xlsx, source_rows: 81, selected_rows: 34, likelihood_group: dis.hermes_p, classification: physics, selectable: true, citation_keys: ["HERMES:2011yno"], inspire_ids: [894309], covariance_scope: "table-local relative statistical errors; normalization nuisance as configured", drop_reason: "47 rows fail Q2/W2 closure cuts", observable: {quantity: "inclusive neutral-current reduced DIS cross section", units: dimensionless, reaction: "electron/positron-proton DIS", beam: electron_or_positron, target: proton, binning: "published pointwise x,Q2,y", mass_integration: null, rapidity_integration: null, decay_channel: null, fiducial: "inclusive source table", qed_fsr: "source-publication radiative correction retained"}, operator: {kind: sigma_r.file, perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: "matched VFNS", nuclear: none, returns: "dimensionless reduced cross section"}, evidence: {local: ["../fitpack_legacy/database/idis/README.md", "closure_JAM_truth/data/dis_manifest.json"], paper: "HERMES:2011yno", gate_evidence: ["table and retained row count reconciled"]}}
+  - id: dis.hera_ep_10026
+    selector: {section: exp, table_id: 10026}
+    source: fitpack_legacy/database/idis/expdata/10026.xlsx
+    source_rows: 485
+    selected_rows: 402
+    likelihood_group: dis.hera_nc_ep_318_1
+    classification: legacy_compatibility
+    selectable: true
+    citation_keys: ["H1:2015ubc"]
+    inspire_ids: [1377206]
+    covariance_scope: "table-local source systematics and full generated covariance"
+    drop_reason: "83 rows fail Q2/W2 closure cuts; legacy until generalized NC terms land"
+    observable: &hera_nc_observable {quantity: "inclusive NC reduced cross section", units: dimensionless, reaction: "e+/- proton neutral-current DIS", beam: "record-specific e+ or e-", target: proton, binning: "published pointwise x,Q2,y at record-specific sqrt(s)", mass_integration: null, rapidity_integration: null, decay_channel: null, fiducial: "inclusive HERA combination", qed_fsr: "combined Born-level convention from source"}
+    operator: &hera_nc_operator {kind: sigma_r.file, perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: "matched VFNS", nuclear: none, returns: "dimensionless reduced cross section; generalized F2/FL/xF3 required for physics classification"}
+    evidence: &hera_evidence {local: ["../fitpack_legacy/database/idis/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/HERA_NC_318GEV/metadata.yaml", "closure_JAM_truth/data/dis_manifest.json"], paper: "H1:2015ubc", gate_evidence: ["HERA combined paper and source energies cross-checked"]}
+  - {id: dis.hera_ep_10027, selector: {section: exp, table_id: 10027}, source: fitpack_legacy/database/idis/expdata/10027.xlsx, source_rows: 112, selected_rows: 75, likelihood_group: dis.hera_nc_ep_300, classification: legacy_compatibility, selectable: true, citation_keys: ["H1:2015ubc"], inspire_ids: [1377206], covariance_scope: "table-local source systematics and full generated covariance", drop_reason: "37 rows fail cuts; legacy until generalized NC terms land", observable: *hera_nc_observable, operator: *hera_nc_operator, evidence: *hera_evidence}
+  - {id: dis.hera_ep_10028, selector: {section: exp, table_id: 10028}, source: fitpack_legacy/database/idis/expdata/10028.xlsx, source_rows: 260, selected_rows: 259, likelihood_group: dis.hera_nc_ep_251, classification: legacy_compatibility, selectable: true, citation_keys: ["H1:2015ubc"], inspire_ids: [1377206], covariance_scope: "table-local source systematics and full generated covariance", drop_reason: "1 row fails cuts; legacy until generalized NC terms land", observable: *hera_nc_observable, operator: *hera_nc_operator, evidence: *hera_evidence}
+  - {id: dis.hera_ep_10029, selector: {section: exp, table_id: 10029}, source: fitpack_legacy/database/idis/expdata/10029.xlsx, source_rows: 209, selected_rows: 209, likelihood_group: dis.hera_nc_ep_225, classification: legacy_compatibility, selectable: true, citation_keys: ["H1:2015ubc"], inspire_ids: [1377206], covariance_scope: "table-local source systematics and full generated covariance", drop_reason: "legacy until generalized NC terms land", observable: *hera_nc_observable, operator: *hera_nc_operator, evidence: *hera_evidence}
+  - {id: dis.hera_em_10030, selector: {section: exp, table_id: 10030}, source: fitpack_legacy/database/idis/expdata/10030.xlsx, source_rows: 159, selected_rows: 159, likelihood_group: dis.hera_nc_em_318, classification: legacy_compatibility, selectable: true, citation_keys: ["H1:2015ubc"], inspire_ids: [1377206], covariance_scope: "table-local source systematics and full generated covariance", drop_reason: "legacy until generalized NC terms land", observable: *hera_nc_observable, operator: *hera_nc_operator, evidence: *hera_evidence}
+  - {id: dis.hera_cc_ep_10031, selector: {section: exp, table_id: 10031}, source: fitpack_legacy/database/idis/expdata/10031.xlsx, source_rows: 39, selected_rows: 39, likelihood_group: dis.hera_cc_ep_318, classification: legacy_compatibility, selectable: true, citation_keys: ["H1:2015ubc"], inspire_ids: [1377206], covariance_scope: "table-local source systematics and full generated covariance", drop_reason: "massless NLO VFNS closure operator is Fitpack-validated but is not yet canonical NNPDF theory-200 NNLO FONLL-C/TMC", observable: {quantity: "inclusive charged-current reduced DIS cross section", units: dimensionless, reaction: "e+ p charged-current DIS", beam: positron, target: proton, binning: "published pointwise CC x,Q2,y", mass_integration: null, rapidity_integration: null, decay_channel: null, fiducial: "inclusive HERA combination", qed_fsr: "combined Born-level convention from source"}, operator: {kind: sigma_r.cc.file, perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: "massless matched VFNS", nuclear: none, returns: "dimensionless reduced cross section from W2, WL, and xW3"}, evidence: *hera_evidence}
+  - {id: dis.hera_cc_em_10032, selector: {section: exp, table_id: 10032}, source: fitpack_legacy/database/idis/expdata/10032.xlsx, source_rows: 42, selected_rows: 42, likelihood_group: dis.hera_cc_em_318, classification: legacy_compatibility, selectable: true, citation_keys: ["H1:2015ubc"], inspire_ids: [1377206], covariance_scope: "table-local source systematics and full generated covariance", drop_reason: "massless NLO VFNS closure operator is Fitpack-validated but is not yet canonical NNPDF theory-200 NNLO FONLL-C/TMC", observable: {quantity: "inclusive charged-current reduced DIS cross section", units: dimensionless, reaction: "e- p charged-current DIS", beam: electron, target: proton, binning: "published pointwise CC x,Q2,y", mass_integration: null, rapidity_integration: null, decay_channel: null, fiducial: "inclusive HERA combination", qed_fsr: "combined Born-level convention from source"}, operator: {kind: sigma_r.cc.file, perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: "massless matched VFNS", nuclear: none, returns: "dimensionless reduced cross section from W2, WL, and xW3"}, evidence: *hera_evidence}
+  - {id: dis.nmc_dp_10021, selector: {section: exp, table_id: 10021}, source: fitpack_legacy/database/idis/expdata/10021.xlsx, source_rows: 260, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["NewMuon:1996uwk"], inspire_ids: [426595], covariance_scope: "not assembled", drop_reason: "ratio observable has no approved exact operator in the existing closure", observable: {quantity: "F2d/F2p ratio", units: dimensionless, reaction: "muon deuteron/proton DIS ratio", beam: muon, target: deuteron_over_proton, binning: "published pointwise x,Q2", mass_integration: null, rapidity_integration: null, decay_channel: null, fiducial: inclusive, qed_fsr: "source-publication policy"}, operator: {kind: unimplemented_linear_ratio, perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: VFNS, nuclear: deuteron_required, returns: "dimensionless ratio"}, evidence: {local: ["../fitpack_legacy/database/idis/README.md", "closure_JAM_truth/data/dis_manifest.json"], paper: "NewMuon:1996uwk", gate_evidence: ["reader/drop status and zero selected rows recorded"]}}
+
+  # Existing E866 rows are retained as a named compatibility mode until their
+  # row-specific Q0-to-Q evolution is composed into the fit operator.
+  - id: dy.e866_pp_10001
+    selector: {section: dy, table_id: 10001}
+    source: fitpack_legacy/database/dy/expdata/10001.xlsx
+    source_rows: 179
+    selected_rows: 179
+    likelihood_group: dy.e866_pp
+    classification: legacy_compatibility
+    selectable: true
+    citation_keys: ["NuSea:2003qoe"]
+    inspire_ids: [613362]
+    covariance_scope: "table-local point errors plus configured normalization"
+    drop_reason: "legacy fixed-Q0 operator until row-specific evolution lands"
+    observable: &e866_observable {quantity: "fixed-target dimuon Drell-Yan differential cross section", units: "fitpack published cross-section units", reaction: "800 GeV proton on proton/deuteron", beam: proton, target: "record-specific proton or deuteron", binning: "published mass and xF/rapidity point approximation", mass_integration: "fitpack_legacy_fixed_scale compatibility prescription", rapidity_integration: "fitpack point prescription", decay_channel: dimuon, fiducial: "source acceptance as encoded by fitpack compatibility table", qed_fsr: "source convention"}
+    operator: &e866_operator {kind: drell_yan, perturbative_order: LO, scale: "legacy Q0^2=mc^2 without row evolution", flavour_scheme: "Nf=4 compatibility", nuclear: "proton or isoscalar deuteron map", returns: "pointwise differential cross section with legacy normalization"}
+    evidence: &e866_evidence {local: ["../fitpack_legacy/database/dy/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/DYE866_Z0_800GEV/metadata.yaml", "closure_JAM_truth/data/truthQ_mc/manifest.json"], paper: "NuSea:2003qoe", gate_evidence: ["184-row absolute-cross-section table identity and point count reconciled with NNPDF commondata and the absolute-cross-section paper"]}
+  - {id: dy.e866_pd_10002, selector: {section: dy, table_id: 10002}, source: fitpack_legacy/database/dy/expdata/10002.xlsx, source_rows: 183, selected_rows: 183, likelihood_group: dy.e866_pd, classification: legacy_compatibility, selectable: true, citation_keys: ["NuSea:2003qoe"], inspire_ids: [613362], covariance_scope: "table-local point errors plus configured normalization", drop_reason: "legacy fixed-Q0 operator until row-specific evolution lands", observable: *e866_observable, operator: *e866_operator, evidence: *e866_evidence}
+
+  # Electroweak and NNPDF commondata candidates.  They remain reader-only and
+  # non-selectable until the exact operator, covariance, support, and cost
+  # gates recorded here pass.  Reading a table never promotes it to physics.
+  - id: z.cdf_1000
+    selector: {section: datasets, commondata_name: "fitpack:zrap/1000"}
+    source: fitpack_legacy/database/zrap/expdata/1000.xlsx
+    source_rows: 28
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys: ["CDF:2010vek"]
+    inspire_ids: [856131]
+    covariance_scope: "pending raw covariance audit"
+    drop_reason: "conditional: acceptance/unfolding, bin edges, covariance, NLO full-bin, and evolution gates unresolved"
+    observable: &z_boson_candidate {quantity: "differential Z/gamma* cross section in boson rapidity", units: "published cross-section per rapidity", reaction: "hadron-hadron neutral-current Drell-Yan", beam: "record-specific pp or ppbar", target: "record-specific proton or antiproton", binning: "mass and rapidity bin edges required from source/HEPData", mass_integration: "full published mass window", rapidity_integration: "full published rapidity bin", decay_channel: "record-specific dilepton channel", fiducial: "unknown until source qualifiers prove inclusive/unfolded or a differential decay operator is available", qed_fsr: "unknown until source audit"}
+    operator: &z_full_bin_operator {kind: "bin_integrated gamma*/Z Drell-Yan", perturbative_order: NLO, scale: "muF^2=muR^2=Q2 at every mass node", flavour_scheme: "Nf=4 to 5 VFNS with generated b,bbar", nuclear: none, returns: "bin-integrated or explicitly declared bin-average cross section"}
+    evidence: {local: ["../fitpack_legacy/database/zrap/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/CDF_Z0_1P96TEV/metadata.yaml"], paper: "CDF:2010vek", gate_evidence: ["table-to-paper identity and 28 rows established; raw observable audit pending"]}
+  - {id: z.star_1020, selector: {section: datasets, commondata_name: "fitpack:zrap/1020"}, source: fitpack_legacy/database/zrap/expdata/1020.xlsx, source_rows: 5, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["STAR:2020vuq"], inspire_ids: [1829350], covariance_scope: "pending source covariance audit", drop_reason: "published rapidity bin edges and fiducial/unfolding contract unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md"], paper: "STAR:2020vuq", gate_evidence: ["paper identity and 5 centers established; edges absent from workbook"]}}
+  - {id: z.atlas7c_low, selector: {section: datasets, commondata_name: "fitpack:wzhep/ATLAS7C_Z_low"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7C_Z_low.xlsx, source_rows: 6, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "shared ATLAS central/forward and mass-region covariance must be retained", drop_reason: "fiducial decay/acceptance operator and legal covariance merge unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: &atlas_z_evidence {local: ["../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_WPWM_7TEV_46FB/metadata.yaml", "../fitpack_legacy/database/zrap/README.md"], paper: "ATLAS:2016nqi", gate_evidence: ["paper and source family established; fiducial qualifiers remain blocking"]}}
+  - {id: z.atlas7c_peak, selector: {section: datasets, commondata_name: "fitpack:wzhep/ATLAS7C_Z"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7C_Z.xlsx, source_rows: 12, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "shared ATLAS central/forward and mass-region covariance must be retained", drop_reason: "fiducial decay/acceptance operator and legal covariance merge unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
+  - {id: z.atlas7c_high, selector: {section: datasets, commondata_name: "fitpack:wzhep/ATLAS7C_Z_high"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7C_Z_high.xlsx, source_rows: 6, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "shared ATLAS central/forward and mass-region covariance must be retained", drop_reason: "fiducial decay/acceptance operator and legal covariance merge unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
+  - {id: z.atlas7f_peak, selector: {section: datasets, commondata_name: "fitpack:wzhep/ATLAS7F_Z_peak"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7F_Z_peak.xlsx, source_rows: 9, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "shared ATLAS central/forward and mass-region covariance must be retained", drop_reason: "fiducial decay/acceptance operator and legal covariance merge unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
+  - {id: z.atlas7f_high, selector: {section: datasets, commondata_name: "fitpack:wzhep/ATLAS7F_Z_high"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7F_Z_high.xlsx, source_rows: 6, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "shared ATLAS central/forward and mass-region covariance must be retained", drop_reason: "fiducial decay/acceptance operator and legal covariance merge unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
+  - {id: z.lhcb7_1032, selector: {section: datasets, commondata_name: "fitpack:zrap/1032"}, source: fitpack_legacy/database/zrap/expdata/1032.xlsx, source_rows: 17, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["LHCb:2015okr"], inspire_ids: [1373300], covariance_scope: "LHCb 7 TeV measurement covariance; never merge coarser duplicate binnings", drop_reason: "fiducial muon cuts require differential decay/acceptance operator; workbook cms sequence is untrusted", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_Z0_7TEV_MUON/metadata.yaml"], paper: "LHCb:2015okr", gate_evidence: ["17-row finest 7 TeV binning retained as candidate; nominal sqrt(s) must override corrupted row sequence"]}}
+  - {id: z.lhcb8_1033, selector: {section: datasets, commondata_name: "fitpack:zrap/1033"}, source: fitpack_legacy/database/zrap/expdata/1033.xlsx, source_rows: 18, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["LHCb:2015mad"], inspire_ids: [1406555], covariance_scope: "LHCb 8 TeV measurement covariance", drop_reason: "fiducial muon cuts require differential decay/acceptance operator; workbook cms sequence is untrusted", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_Z0_8TEV_MUON/metadata.yaml"], paper: "LHCb:2015mad", gate_evidence: ["18-row 8 TeV table established; nominal sqrt(s) must override corrupted row sequence"]}}
+  - {id: z.atlas_duplicate_1011, selector: {section: datasets, commondata_name: "fitpack:zrap/1011"}, source: fitpack_legacy/database/zrap/expdata/1011.xlsx, source_rows: 12, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "duplicate of retained ATLAS source", drop_reason: "byte-equivalent kinematics/values to wzhep/ATLAS7C_Z after pb-to-fb conversion", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
+  - {id: z.lhcb7_coarse_1030, selector: {section: datasets, commondata_name: "fitpack:zrap/1030"}, source: fitpack_legacy/database/zrap/expdata/1030.xlsx, source_rows: 5, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["LHCb:2012lki"], inspire_ids: [1107729], covariance_scope: "same 7 TeV event sample; correlated with finer successors", drop_reason: "coarser earlier LHCb 7 TeV measurement excluded from joint candidate roster", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md"], paper: "LHCb:2012lki", gate_evidence: ["same-measurement overlap recorded"]}}
+  - {id: z.lhcb7_coarse_1031, selector: {section: datasets, commondata_name: "fitpack:zrap/1031"}, source: fitpack_legacy/database/zrap/expdata/1031.xlsx, source_rows: 9, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["LHCb:2012gii"], inspire_ids: [1208102], covariance_scope: "same 7 TeV measurement family; correlated with finer successor", drop_reason: "coarser/electron-channel 7 TeV source excluded pending exact overlap and channel audit", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md"], paper: "LHCb:2012gii", gate_evidence: ["overlap and channel difference recorded; cannot be counted independently without covariance"]}}
+  - {id: z.atlas_old_1010, selector: {section: datasets, commondata_name: "fitpack:zrap/1010"}, source: fitpack_legacy/database/zrap/expdata/1010.xlsx, source_rows: 8, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2011qdp"], inspire_ids: [928289], covariance_scope: "overlap with later ATLAS sample must be established", drop_reason: "provisional drop: supersession/event-sample/covariance relation unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md"], paper: "ATLAS:2011qdp", gate_evidence: ["older paper identified; duplicate status deliberately not asserted"]}}
+  - id: z.d0_normalized_1001
+    selector: {section: datasets, commondata_name: "fitpack:zrap/1001"}
+    source: fitpack_legacy/database/zrap/expdata/1001.xlsx
+    source_rows: 28
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys: ["D0:2007djv"]
+    inspire_ids: [744624]
+    covariance_scope: "normalized-distribution covariance; support/rank measure unresolved"
+    drop_reason: "requires exact shared-denominator bilinear ratio and singular-covariance support audit"
+    observable: {quantity: "normalized Z/gamma* boson-rapidity distribution", units: "inverse rapidity", reaction: "ppbar neutral-current Drell-Yan", beam: proton, target: antiproton, binning: "71--111 GeV and published rapidity bins", mass_integration: "full 71--111 GeV window", rapidity_integration: "published bins", decay_channel: dielectron, fiducial: "normalized unfolded distribution; exact source qualifiers required", qed_fsr: "source convention"}
+    operator: {kind: drell_yan_ratio, perturbative_order: NLO, scale: "muF^2=muR^2=Q2 per mass node", flavour_scheme: "Nf=4 to 5 VFNS", nuclear: none, returns: "bin cross section divided by common integrated normalization"}
+    evidence: {local: ["../fitpack_legacy/database/zrap/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/D0_Z0_1P96TEV/metadata.yaml"], paper: "D0:2007djv", gate_evidence: ["NNPDF metadata operation=RATIO and two FK tables; covariance support remains blocking"]}
+
+  - id: w.cdf_1000
+    selector: {section: datasets, commondata_name: "fitpack:wasym/1000"}
+    source: fitpack_legacy/database/wasym/expdata/1000.xlsx
+    source_rows: 13
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys: ["CDF:2009cjw"]
+    inspire_ids: [811060]
+    covariance_scope: "table covariance/systematics must be preserved in the direct target"
+    drop_reason: "conditional: exact W bilinear ratio, ppbar/CKM/Nf=5 evolution, denominator support, covariance-rank, and direct-sampler gates"
+    observable: &w_asym_observable {quantity: "[d sigma(W+)/dy - d sigma(W-)/dy] / [d sigma(W+)/dy + d sigma(W-)/dy]", units: dimensionless, reaction: "ppbar charged-current Drell-Yan", beam: proton, target: antiproton, binning: "published true boson-rapidity bins", mass_integration: "on-shell W prescription from source", rapidity_integration: "full published boson-rapidity bin", decay_channel: "unfolded from W decay by experiment", fiducial: "true boson-rapidity observable; source unfolding/cuts retained", qed_fsr: "source convention"}
+    operator: &w_ratio_operator {kind: drell_yan_ratio, perturbative_order: NLO, scale: "muF^2=muR^2=Q2 per bin node", flavour_scheme: "Nf=5 VFNS with full active CKM pairs", nuclear: none, returns: "exact ratio of bilinear W+/- cross sections"}
+    evidence: {local: ["../fitpack_legacy/database/wasym/README.md"], paper: "CDF:2009cjw", gate_evidence: ["true W rapidity and 13 rows established; README denominator typo rejected in favor of paper definition"]}
+  - {id: w.d0_1001, selector: {section: datasets, commondata_name: "fitpack:wasym/1001"}, source: fitpack_legacy/database/wasym/expdata/1001.xlsx, source_rows: 14, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["D0:2013lql"], inspire_ids: [1268647], covariance_scope: "table covariance/systematics must be preserved in the direct target", drop_reason: "conditional: exact W bilinear ratio, ppbar/CKM/Nf=5 evolution, denominator support, covariance-rank, and direct-sampler gates", observable: *w_asym_observable, operator: *w_ratio_operator, evidence: {local: ["../fitpack_legacy/database/wasym/README.md"], paper: "D0:2013lql", gate_evidence: ["true W rapidity and 14 rows established; not the lepton-asymmetry dataset INSPIRE 1253555"]}}
+
+  - id: dy.e906_ratio
+    selector: {section: datasets, commondata_name: DYE906_Z0_120GEV_DW_PDXSECRATIO}
+    source: nnpdf_data/commondata/DYE906_Z0_120GEV_DW
+    source_rows: 6
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys: ["SeaQuest:2021zxb"]
+    inspire_ids: [1849683]
+    covariance_scope: "six-row commondata covariance; ten numerator and ten denominator FK sub-bins per row"
+    drop_reason: "conditional: exact COM aggregation, deuteron, row evolution, positive denominator, covariance-rank, and direct-sampler gates"
+    observable: {quantity: "sigma(p+d) / sigma(p+p) Drell-Yan ratio", units: dimensionless, reaction: "120 GeV proton on deuterium/hydrogen", beam: proton, target: deuteron_over_proton, binning: "six measured rows, each COM sum of 10 deuteron sub-bins divided by 10 proton sub-bins", mass_integration: "exact commondata primitive-bin aggregation", rapidity_integration: "exact commondata primitive-bin aggregation", decay_channel: dimuon, fiducial: "SeaQuest acceptance represented by commondata primitive bins", qed_fsr: "source convention"}
+    operator: {kind: drell_yan_ratio, perturbative_order: NLO, scale: "row/sub-bin Q2 with row-specific evolution", flavour_scheme: "Nf=4 VFNS at fixed-target scales", nuclear: "explicit isoscalar deuteron map", returns: "exact ratio of two sums of ten bilinear cross sections"}
+    evidence: {local: ["../nnpdf/nnpdf_data/nnpdf_data/commondata/DYE906_Z0_120GEV_DW/metadata.yaml", "../nnpdf/nnpdf_data/nnpdf_data/commondata/DYE906_Z0_120GEV_DW/kinematics.yaml"], paper: "SeaQuest:2021zxb", gate_evidence: ["NNPDF operation COM and 10+10 FK table aggregation verified"]}
+  - id: dy.e605_copper
+    selector: {section: datasets, commondata_name: DYE605_Z0_38P8GEV_DW_PXSEC}
+    source: nnpdf_data/commondata/DYE605_Z0_38P8GEV_DW
+    source_rows: 119
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys: ["Moreno:1990sf"]
+    inspire_ids: [302822]
+    covariance_scope: "commondata table covariance; subset eigenspectrum must be audited"
+    drop_reason: "no approved copper nuclear law; optional deterministic 40-row subset remains gated"
+    observable: {quantity: "proton-copper fixed-target dimuon Drell-Yan cross section", units: "published cross-section units", reaction: "800 GeV proton on copper", beam: proton, target: copper, binning: "published mass/xF bins", mass_integration: "full published bins", rapidity_integration: "full published bins", decay_channel: dimuon, fiducial: "source acceptance/corrections", qed_fsr: "source convention"}
+    operator: {kind: "unimplemented nuclear Drell-Yan", perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: VFNS, nuclear: "explicit copper model required; proton proxy forbidden unless separately approved/labeled", returns: "bin-integrated cross section"}
+    evidence: {local: ["../nnpdf/nnpdf_data/nnpdf_data/commondata/DYE605_Z0_38P8GEV_DW/metadata.yaml"], paper: "Moreno:1990sf", gate_evidence: ["119 source rows and copper target established"]}
+  - id: dis.chorus_nb
+    selector: {section: datasets, commondata_name: CHORUS_CC_NOTFIXED_PB_NB-SIGMARED}
+    source: nnpdf_data/commondata/CHORUS_CC_NOTFIXED_PB
+    source_rows: 607
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys: ["CHORUS:2005cpn"]
+    inspire_ids: [699123]
+    covariance_scope: "NNPDF ordinary sources distinct; scoped special sources shared only as declared"
+    drop_reason: "inclusive antineutrino CC F2/FL/xF3 and lead nuclear operator unimplemented"
+    observable: &chorus_observable {quantity: "inclusive charged-current reduced cross section", units: dimensionless, reaction: "neutrino/antineutrino DIS on lead", beam: "record-specific neutrino or antineutrino", target: lead, binning: "published x,Q2,y points and variants", mass_integration: null, rapidity_integration: null, decay_channel: null, fiducial: inclusive, qed_fsr: not_applicable}
+    operator: &chorus_operator {kind: "unimplemented CC F2/FL/xF3", perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: "heavy-flavour VFNS required", nuclear: "lead nuclear model required", returns: "dimensionless reduced cross section"}
+    evidence: &chorus_evidence {local: ["../nnpdf/nnpdf_data/nnpdf_data/commondata/CHORUS_CC_NOTFIXED_PB/metadata.yaml"], paper: "CHORUS:2005cpn", gate_evidence: ["607 rows per beam sign and lead target established"]}
+  - {id: dis.chorus_nu, selector: {section: datasets, commondata_name: CHORUS_CC_NOTFIXED_PB_NU-SIGMARED}, source: nnpdf_data/commondata/CHORUS_CC_NOTFIXED_PB, source_rows: 607, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["CHORUS:2005cpn"], inspire_ids: [699123], covariance_scope: "NNPDF ordinary sources distinct; scoped special sources shared only as declared", drop_reason: "inclusive neutrino CC F2/FL/xF3 and lead nuclear operator unimplemented", observable: *chorus_observable, operator: *chorus_operator, evidence: *chorus_evidence}
+  - id: dis.nutev_nb
+    selector: {section: datasets, commondata_name: NUTEV_CC_NOTFIXED_FE_NB-SIGMARED}
+    source: nnpdf_data/commondata/NUTEV_CC_NOTFIXED_FE
+    source_rows: 45
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys: ["Mason:2006qa"]
+    inspire_ids: [712244]
+    covariance_scope: "NNPDF dimuon commondata covariance and branching-ratio variants"
+    drop_reason: "charged-current dimuon charm, branching/acceptance, and iron nuclear operator unimplemented"
+    observable: &nutev_observable {quantity: "charm dimuon charged-current reduced cross section", units: dimensionless, reaction: "neutrino/antineutrino DIS on iron", beam: "record-specific neutrino or antineutrino", target: iron, binning: "published x,Q2,y points", mass_integration: null, rapidity_integration: null, decay_channel: dimuon_from_charm, fiducial: "NuTeV charm acceptance and branching convention", qed_fsr: not_applicable}
+    operator: &nutev_operator {kind: "unimplemented heavy-flavour CC dimuon", perturbative_order: NLO, scale: "heavy-flavour scale prescription required", flavour_scheme: "massive charm CC scheme required", nuclear: "iron nuclear model required", returns: "dimensionless dimuon reduced cross section"}
+    evidence: &nutev_evidence {local: ["../nnpdf/nnpdf_data/nnpdf_data/commondata/NUTEV_CC_NOTFIXED_FE/metadata.yaml"], paper: "Mason:2006qa", gate_evidence: ["45 rows per beam sign and thesis provenance established"]}
+  - {id: dis.nutev_nu, selector: {section: datasets, commondata_name: NUTEV_CC_NOTFIXED_FE_NU-SIGMARED}, source: nnpdf_data/commondata/NUTEV_CC_NOTFIXED_FE, source_rows: 45, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["Mason:2006qa"], inspire_ids: [712244], covariance_scope: "NNPDF dimuon commondata covariance and branching-ratio variants", drop_reason: "charged-current dimuon charm, branching/acceptance, and iron nuclear operator unimplemented", observable: *nutev_observable, operator: *nutev_operator, evidence: *nutev_evidence}

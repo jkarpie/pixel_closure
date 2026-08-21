@@ -1,0 +1,117 @@
+{
+  "suite": "closure_JAM_truth_small",
+  "priors": [
+    "const_logrbf",
+    "beta_envelope"
+  ],
+  "q_keys": [
+    "mc",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5"
+  ],
+  "modes": [
+    "lattice",
+    "dis",
+    "dy",
+    "exp",
+    "both"
+  ],
+  "rcond_override": 1e-12,
+  "config": {
+    "PRIOR_FORM": "const_logrbf",
+    "RCOND": 1e-12,
+    "GP_JITTER": 1e-10,
+    "GP_ENVELOPE_JITTER": 0.01,
+    "GP_LENGTH_LOG": 0.6931471805599453,
+    "CONSTRAINT_ENDPOINT_SIGMA": 0.0001,
+    "CONSTRAINT_NORM_SIGMA": 0.0001,
+    "CONSTRAINT_ORIGIN_SIGMA": 0.0001,
+    "CONSTRAINT_MOMENTUM_SIGMA": 0.0001,
+    "GRID_N": 128,
+    "GRID_SPACING": "log-linear",
+    "X_MIN": 1e-06,
+    "ELEMENT_TYPE": "cubic_spline",
+    "ENDPOINT_X": 1.0,
+    "MCMC_SAMPLES": 1000,
+    "MCMC_SEED": 0,
+    "SYNTHETIC_Z_MCMC_SAMPLES": 512,
+    "GP_AMPLITUDE_FREE": false,
+    "GP_AMPLITUDE_FLOOR": 0.198,
+    "GP_AMPLITUDE_PRIOR_SIGMA": 0.5,
+    "T0_TOLERANCE": 0.0001,
+    "T0_MAX_ITERATIONS": 12,
+    "N_HYPERPARAMS": 0,
+    "Q0": 1.28,
+    "NF": 4,
+    "ORDER": "NLO",
+    "ALPHAS_MZ": 0.118,
+    "VALENCE_NORMS": {
+      "v3": 1.0,
+      "v8": 3.0,
+      "v": 3.0,
+      "v15": 3.0
+    },
+    "GP_AMPLITUDES": {
+      "t3": 0.25,
+      "t8": 0.5,
+      "sigma": 5.0,
+      "t15": 2.0,
+      "g": 5.0,
+      "v3": 0.25,
+      "v8": 0.2,
+      "v": 0.5,
+      "v15": 0.5
+    },
+    "GP_ENVELOPE": {
+      "t3": {
+        "alpha": 0.25,
+        "beta": 2.1,
+        "sigma": 3
+      },
+      "t8": {
+        "alpha": 0.0,
+        "beta": 1.35,
+        "sigma": 139
+      },
+      "sigma": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 53
+      },
+      "t15": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 49
+      },
+      "g": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 8
+      },
+      "v3": {
+        "alpha": 0.5,
+        "beta": 2.05,
+        "sigma": 3
+      },
+      "v8": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7
+      },
+      "v": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7
+      },
+      "v15": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7
+      }
+    },
+    "LOW_X_LINEAR_POWER": 1.0
+  }
+}
