@@ -1,18 +1,10 @@
 [
   {
     "q_key": "2",
-    "mode": "both",
+    "mode": "dis",
     "exception": "RuntimeError",
-    "message": "small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.001 < 0.1; signed outer ESS fraction 0.001 < 0.05; median inner ESS fraction 0.001 < 0.1",
-    "runtime_seconds": 205.82076483299898,
-    "traceback": "Traceback (most recent call last):\n  File \"/Users/jkarpie-admin/work/building/pixel/closure_NNPDF_truth_small/run_closure.py\", line 365, in main\n    s = run_one(\n        ^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel/closure_NNPDF_truth_small/run_closure.py\", line 255, in run_one\n    result = fitmod.run_fit(q_key, mode)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel/closure_NNPDF_truth_small/fit.py\", line 408, in run_fit\n    raise RuntimeError(\nRuntimeError: small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.001 < 0.1; signed outer ESS fraction 0.001 < 0.05; median inner ESS fraction 0.001 < 0.1\n"
-  },
-  {
-    "q_key": "3",
-    "mode": "both",
-    "exception": "RuntimeError",
-    "message": "small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.001 < 0.1; signed outer ESS fraction 0.001 < 0.05; median inner ESS fraction 0.001 < 0.1",
-    "runtime_seconds": 141.1167496249982,
-    "traceback": "Traceback (most recent call last):\n  File \"/Users/jkarpie-admin/work/building/pixel/closure_NNPDF_truth_small/run_closure.py\", line 365, in main\n    s = run_one(\n        ^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel/closure_NNPDF_truth_small/run_closure.py\", line 255, in run_one\n    result = fitmod.run_fit(q_key, mode)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel/closure_NNPDF_truth_small/fit.py\", line 408, in run_fit\n    raise RuntimeError(\nRuntimeError: small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.001 < 0.1; signed outer ESS fraction 0.001 < 0.05; median inner ESS fraction 0.001 < 0.1\n"
+    "message": "small-closure VEGAS ESS fraction 0.00961 is below 0.1; refusing an unreliable fit",
+    "runtime_seconds": 9.332738083001459,
+    "traceback": "Traceback (most recent call last):\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/run_closure.py\", line 394, in main\n    s = run_one(\n        ^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/run_closure.py\", line 284, in run_one\n    result = fitmod.run_fit(q_key, mode)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/fit.py\", line 426, in run_fit\n    raise RuntimeError(\nRuntimeError: small-closure VEGAS ESS fraction 0.00961 is below 0.1; refusing an unreliable fit\n"
   }
 ]

@@ -94,12 +94,14 @@ TRUTH_SCALE_CASES = (
         "mc",
     ),
 )
-# The ``_small`` suites are absent from this list as of 2026-08-15: their
-# ``TRUTH_Q_CHOICES`` was reduced to {2, 3}, and **both sit above every set's
-# QMin** (NNPDF 1.65, JAM 1.14), so they no longer have a below-QMin member to
-# exercise.  ``mc`` and ``1`` were dropped precisely because LHAPDF extrapolates
-# there -- measured, NNPDF at mc violates the momentum sum rule by 18%.  The
-# full suites still carry those members and keep the coverage.
+# The ``_small`` suites were dropped from this list on 2026-08-15, when their
+# ``TRUTH_Q_CHOICES`` was reduced to {2, 3} and neither member sat below any set's
+# QMin (NNPDF 1.65, JAM 1.14).  **That reduction was reverted on 2026-08-16** --
+# all six members are back, so the ``_small`` suites once again have below-QMin
+# members (``mc`` = 1.28 and ``1`` for NNPDF; ``1`` for JAM) and the note below no
+# longer holds.  They are still absent from this parametrization, so the
+# below-QMin path is exercised only through the full suites; adding the two
+# ``_small`` cases would close that gap (open coverage item, 2026-08-17).
 
 
 @pytest.mark.parametrize(
@@ -341,8 +343,9 @@ def test_ensemble_cache_rejects_old_clamped_scale(
     """
     monkeypatch.setattr(cfg, "REFERENCE_DIR", tmp_path)
     nodes = np.array([0.1, 0.2])
-    # Not a literal: the _small suites dropped "1" on 2026-08-15, and this test
-    # is parametrized over all four packages.  Any member exercises the cache.
+    # Not a literal: the member tables differ per suite and have moved ("1" was
+    # dropped from the _small pair on 2026-08-15 and restored on 2026-08-16).  Any
+    # member exercises the cache.
     q_first = next(iter(cfg.TRUTH_Q_CHOICES))
     requested_q = float(cfg.TRUTH_Q_CHOICES[q_first])
     # Stand-in for the pre-6c5857b `clamp_scale(q)` output: the set's QMin, not the
@@ -431,8 +434,9 @@ def test_ensemble_cache_accepts_a_matching_scale_and_migrates_legacy_meta(
     """
     monkeypatch.setattr(cfg, "REFERENCE_DIR", tmp_path)
     nodes = np.array([0.1, 0.2])
-    # Not a literal: the _small suites dropped "1" on 2026-08-15, and this test
-    # is parametrized over all four packages.  Any member exercises the cache.
+    # Not a literal: the member tables differ per suite and have moved ("1" was
+    # dropped from the _small pair on 2026-08-15 and restored on 2026-08-16).  Any
+    # member exercises the cache.
     q_first = next(iter(cfg.TRUTH_Q_CHOICES))
     requested_q = float(cfg.TRUTH_Q_CHOICES[q_first])
     # A cache written by an older build: right scale, but the pre-rename meta key.

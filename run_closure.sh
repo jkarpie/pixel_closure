@@ -16,6 +16,12 @@ Options:
                            full+JAM -> closure_JAM_truth; small+JAM -> closure_JAM_truth_small.
   --Q Q                    Truth member to run: mc, 1, 2, 3, 4, 5. Also accepts Q2/truthQ_2.
                            Defaults to 2.
+  --prior FORM             Prior form: const_logrbf (Const mean tied to LogRBF sigma,
+                           an ``a +- a`` prior) or beta_envelope (Zero mean under a
+                           x^alpha (1-x)^beta tapered LogRBF).  Exported as
+                           PIXEL_CLOSURE_PRIOR_FORM.  Defaults to the package's own
+                           config.py value.  This drives THIS suite only; a real
+                           analysis builds the prior it wants directly.
   --all                    Run every configured truth member.
   --modes MODE[,MODE...]   Modes to fit: lattice (lattice only), dis (DIS only),
                            dy (Drell-Yan only), exp (all experiment = DIS+DY),
@@ -53,6 +59,7 @@ Examples:
   ./run_closure.sh --truth JAM --Q 2 --modes both --plots-only
   ./run_closure.sh --Q 2 --remake-data --remake-kernels
   ./run_closure.sh --Q 2 --modes both --keep-results
+  ./run_closure.sh --Q 2 --modes both --prior beta_envelope
 USAGE
 }
 
@@ -195,7 +202,7 @@ add_modes() {
     IFS=,
     for part in $value; do
         case "$part" in
-            lattice|dis|dy|exp|both) modes+=("$part") ;;
+            lattice|dis|dy|exp|both|synthetic_z_plumbing) modes+=("$part") ;;
             *) die "unknown mode '$part' (expected lattice, dis, dy, exp, or both)" ;;
         esac
     done
@@ -277,6 +284,14 @@ while [[ $# -gt 0 ]]; do
         --scale)
             [[ $# -ge 2 ]] || die "$1 requires a value"
             set_scale "$2"
+            shift 2
+            ;;
+        --prior|--prior-form)
+            [[ $# -ge 2 ]] || die "$1 requires a value"
+            case "$2" in
+                const_logrbf|beta_envelope) export PIXEL_CLOSURE_PRIOR_FORM="$2" ;;
+                *) die "unknown prior '$2' (expected const_logrbf or beta_envelope)" ;;
+            esac
             shift 2
             ;;
         --Q|--q|-Q)

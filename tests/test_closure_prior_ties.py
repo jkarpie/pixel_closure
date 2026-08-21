@@ -370,6 +370,35 @@ def test_gp_prior_starts_at_a_plus_minus_a(suite):
 _TIE_REBUILD_SUITES = (full_nnpdf, small_jam, small_nnpdf)
 
 
+def _require_generated_truth(suite):
+    """Skip when this suite's default truth member is not generated in the checkout.
+
+    The three tests below are the only ones in this file that call
+    ``build_analysis``, i.e. that assemble a real ``Model`` from on-disk data.
+    ``datasets.load_manifest`` (``datasets.py:360``) reads
+    ``truth_dir(q)/manifest.json`` with no guard, so an absent member surfaces as a
+    bare ``FileNotFoundError`` from ``pathlib`` several frames down, naming the file
+    but not the reason.
+
+    This matters for the *full* suites specifically: their ``data/truthQ_*`` is
+    generated, not committed, so a fresh checkout has none of it and these three
+    tests fail for a missing input rather than a wiring defect -- which is what they
+    exist to detect. Same idiom as ``test_closure_pseudoitd_matching.py:762``.
+    """
+    # The member the three callers actually build with is
+    # ``next(iter(TRUTH_Q_CHOICES))`` -- deliberately not ``DEFAULT_TRUTH_Q``, which
+    # is "2" for the full suites while the tests build "mc". Reading the same
+    # expression here keeps the guard pinned to what is really loaded.
+    q_key = next(iter(suite.cfg.TRUTH_Q_CHOICES))
+    manifest = suite.cfg.truth_dir(q_key) / "manifest.json"
+    if not manifest.exists():
+        pytest.skip(
+            f"{suite.__name__}: truth member {suite.cfg.truth_label(q_key)} is not "
+            f"generated in this checkout (no {manifest}); run "
+            f"`python -m {suite.__name__.rsplit('.', 1)[0]}.generate --Q {q_key}`"
+        )
+
+
 @pytest.mark.parametrize("suite", _TIE_REBUILD_SUITES)
 def test_build_ties_mean_to_sigma(suite):
     """The decisive check (A3, self-consistency): after
@@ -385,13 +414,14 @@ def test_build_ties_mean_to_sigma(suite):
     declared to the wrong source, or ``apply_ties`` failing to propagate a
     moved value through a full model rebuild.
     """
+    _require_generated_truth(suite)
     # The decisive check: build the real analysis and *move* the amplitude.  If
     # the tie were dropped, mean.N would stay at its declared value while sigma
     # moved, and the prior would silently stop being a +- a.
     cfg = suite.cfg
-    # Not a literal: the _small suites reduced TRUTH_Q_CHOICES to {2, 3} on
-    # 2026-08-15, and this test is parametrized across suites with different
-    # member tables.  Any member builds the same prior wiring.
+    # Not a literal: the member tables differ per suite and have moved (the _small
+    # pair was cut to {2, 3} on 2026-08-15 and restored to all six on 2026-08-16).
+    # Any member builds the same prior wiring, so read the table rather than pin it.
     analysis, _ = suite.build_analysis(
         next(iter(suite.cfg.TRUTH_Q_CHOICES)), "lattice"
     )
@@ -464,12 +494,13 @@ def test_nuisance_fields_are_not_tied(suite):
     suite silently losing its nuisance registration (which would make the loop
     below vacuous while the test still reported a pass), now fails here.
     """
+    _require_generated_truth(suite)
     # A lattice-systematic nuisance is zero-mean by design; tying it would give
     # it a non-zero prior mean equal to its amplitude.
     cfg = suite.cfg
-    # Not a literal: the _small suites reduced TRUTH_Q_CHOICES to {2, 3} on
-    # 2026-08-15, and this test is parametrized across suites with different
-    # member tables.  Any member builds the same prior wiring.
+    # Not a literal: the member tables differ per suite and have moved (the _small
+    # pair was cut to {2, 3} on 2026-08-15 and restored to all six on 2026-08-16).
+    # Any member builds the same prior wiring, so read the table rather than pin it.
     analysis, _ = suite.build_analysis(
         next(iter(suite.cfg.TRUTH_Q_CHOICES)), "lattice"
     )
@@ -612,11 +643,12 @@ def test_floating_the_amplitude_reaches_the_compiled_model(suite, monkeypatch):
     """
     import jax
 
+    _require_generated_truth(suite)
     cfg = suite.cfg
     monkeypatch.setattr(cfg, "GP_AMPLITUDE_FREE", True)
-    # Not a literal: the _small suites reduced TRUTH_Q_CHOICES to {2, 3} on
-    # 2026-08-15, and this test is parametrized across suites with different
-    # member tables.  Any member builds the same prior wiring.
+    # Not a literal: the member tables differ per suite and have moved (the _small
+    # pair was cut to {2, 3} on 2026-08-15 and restored to all six on 2026-08-16).
+    # Any member builds the same prior wiring, so read the table rather than pin it.
     analysis, _ = suite.build_analysis(
         next(iter(suite.cfg.TRUTH_Q_CHOICES)), "lattice"
     )

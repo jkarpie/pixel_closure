@@ -235,7 +235,7 @@ def test_the_four_plot_reproduction_copies_differ_only_by_their_suite_name():
 
 
 @pytest.mark.parametrize("runner", RUNNERS)
-def test_reproduction_ylim_contains_both_bands_above_point_two(runner):
+def test_reproduction_ylim_shows_all_truth_and_clips_the_posterior(runner):
     """``reproduction_ylim`` keeps the x >= 0.2 one-sigma bands on-panel with headroom.
 
     Run once per closure package (``jam_full``, ``jam_small``, ``nnpdf_full``,
@@ -288,22 +288,23 @@ def test_reproduction_ylim_contains_both_bands_above_point_two(runner):
     # max=1.6; span=1.6, pad=0.12*1.6=0.192.  Agreement measured at 0.0
     # relative difference in both components.
     np.testing.assert_allclose(
-        (ymin, ymax), (-0.192, 1.792), rtol=1e-12, atol=0.0
+        (ymin, ymax), (-18.0, 168.0), rtol=1e-12, atol=0.0
     )
 
     # True value -0.192 (see docstring); this bound only requires the sign, so a
     # pad as small as 1e-9 would pass exactly as readily as the real
     # pad_fraction=0.12 -- see the docstring for what that misses.
     assert ymin < -0.0
-    # True value 1.792; 1.6 is the un-padded posterior upper edge (1.2 + 0.4) at
-    # x=0.2, so this line mainly checks pad > 0 together with the x >= 0.2 cutoff.
-    assert ymax > 1.6
+    # True value 168.0.  150 is the un-padded TRUTH upper edge (100 + 50) at
+    # x=0.01 -- a point the old x >= focus_x rule excluded entirely, which is
+    # precisely the bug this contract change fixes.
+    assert ymax > 150.0
     # Loose ceiling (true value -0.192): only rules out a grossly oversized pad
     # (pad_fraction gtrsim 6.25, vs. the real 0.12).
-    assert ymin > -10.0
+    assert ymin > -20.0
     # Loose ceiling (true value 1.792): only rules out a grossly oversized pad
     # (pad_fraction gtrsim 5.25, vs. the real 0.12).
-    assert ymax < 10.0
+    assert ymax < 200.0
 
 
 @pytest.mark.parametrize("runner", RUNNERS)
@@ -338,7 +339,10 @@ def test_reproduction_ylim_has_stable_fallback_for_missing_focus_data(runner):
     below: there the focus mask *does* select points, they are simply all zero,
     which reaches the ``span > 0.0`` fallback instead of this one.
     """
-    x = np.array([0.01, 0.1])
+    # Below ``truth_x_floor=1e-4`` as well as ``focus_x=0.2``.  Since 2026-08-17
+    # the truth leg has its own, much lower floor, so the old (0.01, 0.1) fixture
+    # selected truth points and never reached the branch this test names.
+    x = np.array([1.0e-6, 1.0e-5])
     zeros = np.zeros_like(x)
     assert runner.reproduction_ylim(x, zeros, zeros, x, zeros, zeros) == (
         -0.08,
@@ -353,7 +357,7 @@ def test_reproduction_ylim_floor_comes_from_the_lower_band(runner):
     """A fixture where ``center - spread`` alone sets ``ymin``.
 
     Closes audit weakness ``test_closure_plot_scaling-01`` / missing item
-    ``-M03``.  ``test_reproduction_ylim_contains_both_bands_above_point_two``
+    ``-M03``.  ``test_reproduction_ylim_shows_all_truth_and_clips_the_posterior``
     cannot see the lower band being dropped, because its own minimum is an
     exact zero contributed by a point with ``std=0``.  Here nothing in the
     focus region is zero, and the unique extremes are
@@ -374,7 +378,7 @@ def test_reproduction_ylim_floor_comes_from_the_lower_band(runner):
     ``+0.37`` and the clamp pulls ``ymin`` to ``0.0``; a copy that appends only
     ``center - spread`` returns ``(-0.364, 0.814)``.  Both fail here.  The
     upper-only one, which is the mutant the audit found nothing could see,
-    **passes** ``test_reproduction_ylim_contains_both_bands_above_point_two``
+    **passes** ``test_reproduction_ylim_shows_all_truth_and_clips_the_posterior``
     -- that is the original finding, demonstrated.  (The lower-only mutant does
     fail that older test, because dropping the upper edge also lowers ``ymax``
     below its ``1.6`` bound; only the lower edge was invisible.)
@@ -392,7 +396,7 @@ def test_reproduction_ylim_floor_comes_from_the_lower_band(runner):
     # rtol=1e-12 with an explicit atol=0.0: a pure relative bar, over decimal
     # round-tripping only.  Measured this pass, both components agree with the
     # hand-derived value at 0.0 relative difference.
-    np.testing.assert_allclose(got, (-0.436, 1.486), rtol=1e-12, atol=0.0)
+    np.testing.assert_allclose(got, (-9.28, 84.03), rtol=1e-12, atol=0.0)
 
 
 @pytest.mark.parametrize("sign", (+1.0, -1.0))
@@ -490,25 +494,45 @@ def test_reproduction_ylim_honours_explicit_focus_x_and_pad_fraction(runner):
     # Control: the defaults, so a mutant that simply broke the function is not
     # mistaken for one that ignores its keywords.
     np.testing.assert_allclose(
-        runner.reproduction_ylim(*args), (-0.436, 1.486), rtol=1e-12, atol=0.0
+        runner.reproduction_ylim(*args), (-9.28, 84.03), rtol=1e-12, atol=0.0
     )
+    # ``truth_x_floor`` is the knob that changed on 2026-08-17, and setting it back
+    # to the old ``focus_x`` recovers the pre-change limits **exactly** -- proof
+    # that the contract change is the truth floor moving and nothing else.
     np.testing.assert_allclose(
-        runner.reproduction_ylim(*args, focus_x=0.6),
-        (-0.376, 0.926),
-        rtol=1e-12,
-        atol=0.0,
+        runner.reproduction_ylim(*args, truth_x_floor=0.2),
+        (-0.436, 1.486), rtol=1e-12, atol=0.0,
     )
     np.testing.assert_allclose(
         runner.reproduction_ylim(*args, pad_fraction=0.0),
-        (-0.25, 1.3),
+        (-0.25, 75.0),
         rtol=1e-12,
         atol=0.0,
     )
     np.testing.assert_allclose(
         runner.reproduction_ylim(*args, pad_fraction=0.25),
-        (-0.6375, 1.6875),
+        (-19.0625, 93.8125),
         rtol=1e-12,
         atol=0.0,
+    )
+
+    # ``focus_x`` needs its own fixture now.  On ``args`` above the truth owns both
+    # extremes once it is read over the full domain, so moving the POSTERIOR's floor
+    # changes nothing there and asserting it would be vacuous -- a mutant that
+    # ignored ``focus_x`` entirely would still pass.  Here the posterior owns the
+    # maximum (5.0 at x=0.3) and the truth is flat at 1.0, so raising ``focus_x``
+    # past 0.3 must drop the panel from 5.6 to 1.12.
+    fx = np.array([0.3, 0.6, 0.9])
+    flat_truth = np.ones(3)
+    no_spread = np.zeros(3)
+    peaked_posterior = np.array([5.0, 1.0, 1.0])
+    focus_args = (fx, flat_truth, no_spread, fx, peaked_posterior, no_spread)
+    np.testing.assert_allclose(
+        runner.reproduction_ylim(*focus_args), (-0.6, 5.6), rtol=1e-12, atol=0.0
+    )
+    np.testing.assert_allclose(
+        runner.reproduction_ylim(*focus_args, focus_x=0.6),
+        (-0.12, 1.12), rtol=1e-12, atol=0.0,
     )
 
 
@@ -602,7 +626,7 @@ def test_reproduction_ylim_drops_nonfinite_points_instead_of_propagating_them(ru
 
     np.testing.assert_allclose(
         runner.reproduction_ylim(x, truth, truth_std, x, posterior, posterior_std),
-        (-0.38, 1.48),
+        (-2.024, 16.824),
         rtol=1e-12,
         atol=0.0,
     )
@@ -716,7 +740,7 @@ def test_plot_reproduction_sets_each_panel_ylim_from_its_own_bands(runner, tmp_p
         captured["ylim"] = [tuple(ax.get_ylim()) for ax in fig.axes]
         return real_save(fig, path, **kwargs)
 
-    for with_std, expected_unit in ((True, (-0.32, 0.92)), (False, (-0.096, 0.896))):
+    for with_std, expected_unit in ((True, (-0.356, 1.256)), (False, (-0.108, 1.008))):
         truth, marginal = _reproduction_inputs(runner, with_truth_std=with_std)
         out = tmp_path / f"repro_{with_std}.png"
         monkey = pytest.MonkeyPatch()

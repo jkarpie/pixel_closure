@@ -122,24 +122,53 @@ def reproduction_ylim(
     *,
     focus_x=0.2,
     pad_fraction=0.12,
+    truth_x_floor=1.0e-4,
 ):
-    """Scale a reproduction panel to show both bands for ``x >= focus_x``.
+    """Scale a reproduction panel to show the whole truth, and the useful posterior.
 
-    Small-x closure posteriors can be effectively unconstrained and orders of
-    magnitude wider than the phenomenologically useful moderate/large-x region.
-    Those excursions should be visibly clipped rather than flattening every
-    curve.  The selected limits contain the complete truth and posterior
-    one-sigma bands in the focus region, plus zero and modest headroom.
+    The two curves are treated asymmetrically, on purpose, because they fail in
+    opposite ways:
+
+    * **The truth is always shown in full**, over the entire plotted domain
+      (``x >= truth_x_floor``, matching ``plot_reproduction``'s
+      ``hybrid_xscale(x_min=max(cfg.X_MIN, 1e-4))``).  It is a fixed, finite curve
+      and clipping it hides the physics the panel exists to show.
+    * **The posterior is only allowed to set the scale for ``x >= focus_x``.**
+      Small-x closure posteriors can be effectively unconstrained and orders of
+      magnitude wider than the truth; letting them drive the limits flattens every
+      curve into a line.  Their excursions are clipped rather than accommodated.
+
+    Until 2026-08-17 the *truth* was also restricted to ``x >= focus_x``, which was
+    wrong for exactly the fields the panel is most often read for.  ``sigma`` and
+    ``g`` peak at small ``x`` and fall steeply, so a limit derived from ``x >= 0.2``
+    put most of their truth curve off-panel; ``t8``'s large-``x`` tail is small
+    enough that the same rule zoomed the panel until its actual structure was
+    unreadable.  Both are fixed by taking the truth's range over the full domain.
+
+    Args:
+        x_truth: Truth grid.
+        y_truth: Truth momentum density on ``x_truth``.
+        truth_std: One-sigma truth spread on ``x_truth``.
+        x_posterior: Posterior grid.
+        posterior_mean: Posterior mean on ``x_posterior``.
+        posterior_std: Posterior one-sigma spread on ``x_posterior``.
+        focus_x: Lower ``x`` bound for the *posterior*'s contribution.
+        pad_fraction: Headroom added to the final span.
+        truth_x_floor: Lower ``x`` bound for the *truth*'s contribution; the
+            plotted domain, so the whole truth curve stays on-panel.
+
+    Returns:
+        tuple[float, float]: ``(ymin, ymax)`` containing zero and both selections.
     """
     values = []
-    for x, center, spread in (
-        (x_truth, y_truth, truth_std),
-        (x_posterior, posterior_mean, posterior_std),
+    for x, center, spread, lower_x in (
+        (x_truth, y_truth, truth_std, truth_x_floor),
+        (x_posterior, posterior_mean, posterior_std, focus_x),
     ):
         x = np.asarray(x, dtype=float).ravel()
         center = np.asarray(center, dtype=float).ravel()
         spread = np.asarray(spread, dtype=float).ravel()
-        mask = (x >= float(focus_x)) & np.isfinite(center) & np.isfinite(spread)
+        mask = (x >= float(lower_x)) & np.isfinite(center) & np.isfinite(spread)
         if np.any(mask):
             values.extend((center[mask] - spread[mask], center[mask] + spread[mask]))
     finite = np.concatenate(values) if values else np.array([], dtype=float)

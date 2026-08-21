@@ -17,6 +17,7 @@ the code works across inputs.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 # -- locations ---------------------------------------------------------------
@@ -811,7 +812,24 @@ def gp_sigma(field: str) -> float:
 #: where the truth singlet reaches 6.3 at ``x = 1e-6``, understating the error
 #: exactly where the data is weakest.  A zero mean removes the conflict outright:
 #: the prior no longer asserts any integral.
-PRIOR_FORM = "const_logrbf"
+#: **Environment override, for driving THIS suite only.**
+#: ``PIXEL_CLOSURE_PRIOR_FORM=beta_envelope`` selects the alternative form without
+#: editing this file, which is what makes a prior sweep possible from a campaign
+#: driver -- ``fit.gp_prior`` dispatches on a module constant, so before this the
+#: only way to cross the prior axis was to monkeypatch ``cfg.PRIOR_FORM`` in
+#: process, and a driver that did so was lost once and took the axis with it.
+#:
+#: It is deliberately NOT the intended user interface. A real analysis selects its
+#: prior by constructing the one it wants and handing it to ``analysis.gp_prior``
+#: (see ``guides/custom_prior_mean_covariance.md``); this variable exists to sweep
+#: the two forms these closure packages ship, nothing more. Anything outside this
+#: suite should ignore it.
+PRIOR_FORM = os.environ.get("PIXEL_CLOSURE_PRIOR_FORM", "const_logrbf")
+if PRIOR_FORM not in ("const_logrbf", "beta_envelope"):
+    raise ValueError(
+        f"PIXEL_CLOSURE_PRIOR_FORM={PRIOR_FORM!r} is not a known prior form; "
+        "expected 'const_logrbf' or 'beta_envelope'"
+    )
 
 #: Envelope exponents and amplitude per field, **derived, not guessed**.
 #:

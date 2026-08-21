@@ -77,8 +77,10 @@ def constraint_datasets(fields, truth=None):
 
         This matters concretely: measured on the stored truth, ``int x (Sigma+g) dx``
         is 1.0005 at Q=2 but was **0.821** for NNPDF at ``mc``, an 18% violation
-        caused by LHAPDF extrapolating below its 1.65 QMin.  (``mc`` has since been
-        dropped from TRUTH_Q_CHOICES for exactly that reason.)  A nominal 1.0 would
+        caused by LHAPDF extrapolating below its 1.65 QMin.  (``mc`` was dropped from
+        TRUTH_Q_CHOICES for that reason on 2026-08-15 and **restored on 2026-08-16**,
+        to compare the two prior forms across every scale; the 18% is recorded at
+        config.py's TRUTH_Q_CHOICES rather than avoided.)  A nominal 1.0 would
         have injected that 18% as a fresh bias.
         """
         if truth_x is None:
@@ -210,19 +212,22 @@ def _envelope_prior(field: str):
         cov=priors.BetaTaperedLogRBF(
             sigma=env["sigma"], length=cfg.GP_LENGTH_LOG,
             alpha=env["alpha"], beta=env["beta"],
-            # jitter=0: the SVD rcond cut regularises the singular directions,
-            # and a jitter here is a SECOND knob doing the same job -- with the
-            # wrong one winning.  Measured 2026-08-16 on the closure grid: the
-            # rcond cut sits at 4.40e-15 of the preconditioned spectrum while a
-            # 1e-10 jitter contributes 2.5e-11 to 1.0e-10 relative, i.e. 1.4e3 to
-            # 2.3e4 times ABOVE the cut.  It lifted all 128 eigenvalues over the
-            # cut, so nothing was ever truncated, the Cholesky fast path was
-            # taken, and the ~35 genuinely unresolvable directions were solved
-            # rather than dropped.  With jitter=0, svd_factor keeps 93/128 and
-            # the truncation does its job.
+            # NOT zero -- see cfg.GP_ENVELOPE_JITTER, which ships 1e-2.
             #
-            # It is also a physical falsehood here: a jitter floor asserts
-            # sd(x=1) = 1e-5 of prior uncertainty where beta says exactly zero.
+            # The argument this comment used to make ("the rcond cut already
+            # regularises, so a jitter here is a second knob doing the same job")
+            # is wrong, and the correction is recorded in
+            # guides/numerical_regularization.md: rcond and the jitter act on
+            # DIFFERENT matrices.  rcond cuts `W = C + B K B^T`; the jitter enters
+            # `K`, and `H = K - K B^T W^-1 B K` is built from `K` and inverted with
+            # a bare `jnp.linalg.inv` -- no cutoff on that path at all, so
+            # truncating `W` cannot make `H` definite.  Measured on `both` with
+            # this prior: 9/9 fits fail across rcond 1e-10..1e-6 at jitter <= 1e-10.
+            #
+            # The envelope needs far more than the constant prior (1e-2 vs 1e-10)
+            # because the jitter is a RELATIVE floor, lambda/sigma^2, and enforcing
+            # alpha >= 0 pushed sigma to 139 for t8.  That is arithmetic, not a
+            # second pathology.
             jitter=getattr(cfg, "GP_ENVELOPE_JITTER", 1.0e-2),
         ),
     )

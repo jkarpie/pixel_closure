@@ -1,22 +1,15 @@
 {
-  "requested": 2,
-  "succeeded": 0,
-  "failed": 2,
-  "runtime_seconds": 368.5376063329968,
+  "requested": 6,
+  "succeeded": 5,
+  "failed": 1,
+  "runtime_seconds": 429.49884845802444,
   "failures": [
     {
       "q_key": "2",
-      "mode": "both",
+      "mode": "dis",
       "exception": "RuntimeError",
-      "message": "small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.001 < 0.1; signed outer ESS fraction 0.001 < 0.05; median inner ESS fraction 0.001 < 0.1",
-      "runtime_seconds": 215.7052698749976
-    },
-    {
-      "q_key": "3",
-      "mode": "both",
-      "exception": "RuntimeError",
-      "message": "small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.001 < 0.1; signed outer ESS fraction 0.001 < 0.05; median inner ESS fraction 0.001 < 0.1",
-      "runtime_seconds": 152.81579979100206
+      "message": "small-closure VEGAS ESS fraction 0.0134 is below 0.1; refusing an unreliable fit",
+      "runtime_seconds": 8.794650750001892
     }
   ]
 }
