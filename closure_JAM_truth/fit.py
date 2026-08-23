@@ -18,6 +18,7 @@ import warnings
 import numpy as np
 
 import pixel
+from pixel.data import families
 import numpy as np
 from pixel import priors, kernels
 from pixel.core.model import Contribution, Dataset
@@ -277,9 +278,13 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     """
     if mode not in cfg.TEST_MODES:
         raise ValueError(f"unknown test mode {mode!r}")
-    include_lattice = mode in ("lattice", "both")
-    include_exp = mode in ("dis", "exp", "both")
-    include_dy = mode in ("dy", "exp", "both")     # Drell-Yan
+    # Derived from ``pixel.data.families``, not restated.  This chain was the fourth copy
+    # of one taxonomy (the others being cfg.TEST_MODES, run_closure.sh's case arm, and the
+    # registry itself), and a missed copy here does not fail -- it silently fits less data.
+    selected = families.mode_families(mode)
+    include_lattice = "lattice" in selected
+    include_exp = "dis" in selected
+    include_dy = "dy" in selected                  # Drell-Yan
     analysis = pixel.Analysis(f"closure_{cfg.truth_label(q_key)}_{mode}")
     fields = {}
     for name in cfg.ALL_FIELDS:

@@ -18,6 +18,7 @@ import warnings
 import numpy as np
 
 import pixel
+from pixel.data import families
 import numpy as np
 from pixel import priors, kernels
 from pixel.core.model import Contribution, Dataset
@@ -257,11 +258,19 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True, t0=N
             name, grid=cfg.make_grid(), element_type=cfg.ELEMENT_TYPE,
             prior=gp_prior(name),
         )
+    # Registry-derived, with one suite-local exception: the synthetic-Z plumbing
+    # mode is not a process family and selects none of them.  Asking the registry
+    # about it would raise, which is the right behaviour there and wrong here.
+    selected = (
+        frozenset()
+        if mode == cfg.TEST_MODE_SYNTHETIC_Z
+        else families.mode_families(mode)
+    )
     for ds in dsets.build_datasets(
         q_key, fields,
-        include_lattice=mode in ("lattice", "both"),
-        include_exp=mode in ("dis", "exp", "both"),
-        include_dy=mode in ("dy", "exp", "both"),
+        include_lattice="lattice" in selected,
+        include_exp="dis" in selected,
+        include_dy="dy" in selected,
         include_synthetic_z=mode == cfg.TEST_MODE_SYNTHETIC_Z,
         use_kernel_cache=use_kernel_cache,
         t0=t0,

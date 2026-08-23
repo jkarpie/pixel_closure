@@ -182,9 +182,19 @@ def test_target_labels_reaching_the_builders_agree_with_pixels_alias_table(suite
             assert flavor.normalize_target(target_map.get(raw, raw)) == canonical
     assert seen <= {"proton", "neutron", "deuteron"}
 
-    # Control: the normalizer is not a pass-through that accepts everything.
-    with pytest.raises(ValueError, match="proton, neutron, or deuteron"):
-        flavor.normalize_target("carbon")
+    # Control: the normalizer is not a pass-through that accepts everything.  The message
+    # widened on 2026-08-21 when ``NuclearTarget`` landed, so the regex tracks it.
+    with pytest.raises(ValueError, match="proton, neutron, deuteron"):
+        flavor.normalize_target("not-a-target")
+
+    # A bare element name now gets its OWN refusal, and that distinction is the point: a
+    # nucleus is not an unknown label, it is a known one that cannot be resolved without its
+    # mass and atomic numbers.  Silently mapping ``"lead"`` to an isoscalar average would be
+    # a wrong number rather than an error, and these suites are exactly where such a label
+    # could arrive from a manifest.
+    with pytest.raises(ValueError, match="mass and atomic numbers"):
+        flavor.normalize_target("lead")
+    assert flavor.normalize_target(flavor.NuclearTarget("lead", 207.2, 82.0)).name == "lead"
 
 
 @pytest.mark.parametrize("suite", SUITES)

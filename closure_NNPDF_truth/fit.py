@@ -18,6 +18,7 @@ import warnings
 import numpy as np
 
 import pixel
+from pixel.data import families
 import numpy as np
 from pixel import priors, kernels
 from pixel.core.model import Contribution, Dataset
@@ -277,9 +278,23 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     """
     if mode not in cfg.TEST_MODES:
         raise ValueError(f"unknown test mode {mode!r}")
-    include_lattice = mode in ("lattice", "both")
-    include_exp = mode in ("dis", "exp", "both")
-    include_dy = mode in ("dy", "exp", "both")     # Drell-Yan
+    # Derived from ``pixel.data.families``, not restated.  This chain was the fourth copy
+    # of one taxonomy (the others being cfg.TEST_MODES, run_closure.sh's case arm, and the
+    # registry itself), and a missed copy here does not fail -- it silently fits less data.
+    selected = families.mode_families(mode)
+    include_lattice = "lattice" in selected
+    include_exp = "dis" in selected
+    include_dy = "dy" in selected                  # Drell-Yan
+    # The generic ``datasets`` section is *derived*, not aliased.  It used to read
+    # ``include_nnpdf = include_exp`` -- right only because every record in it happens to
+    # be DIS (CHORUS neutrino CC on lead) today.  ``generic_section_family`` reads each
+    # record's ``contract_id`` and routes it through the same registry, so a DY or
+    # lattice record landing in that section follows *its* gate instead of the DIS one,
+    # and a section spanning two families raises rather than picking a side.
+    # ``build_datasets`` still defaults the flag to False on purpose: a flag defaulting
+    # to True would enter these rows into a ``lattice``-only fit.
+    generic_family = dsets.generic_section_family(q_key)
+    include_nnpdf = generic_family is not None and generic_family in selected
     analysis = pixel.Analysis(f"closure_{cfg.truth_label(q_key)}_{mode}")
     fields = {}
     for name in cfg.ALL_FIELDS:
@@ -311,6 +326,7 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         include_lattice=include_lattice,
         include_exp=include_exp,
         include_dy=include_dy,
+        include_nnpdf=include_nnpdf,
         use_kernel_cache=use_kernel_cache,
         with_systematics=include_lattice,
         t0=t0,

@@ -101,6 +101,11 @@ full_closure_modes:
       - dis.hera_cc_em_10032
       - dy.e866_pp_10001
       - dy.e866_pd_10002
+      # Promoted 2026-08-21: the neutrino CC beam and the nuclear target landed, and the
+      # operator is FK-validated on the nu/nubar asymmetry -- 100% sign agreement on the
+      # resolved rows, r = +0.99, and 0% under a deliberate xW3 sign flip.
+      - dis.chorus_nu
+      - dis.chorus_nb
   nnpdf_full:
     classifications: [physics, legacy_compatibility, synthetic_proxy]
     dataset_ids: *current_full_ids
@@ -297,18 +302,32 @@ datasets:
     selector: {section: datasets, commondata_name: CHORUS_CC_NOTFIXED_PB_NB-SIGMARED}
     source: nnpdf_data/commondata/CHORUS_CC_NOTFIXED_PB
     source_rows: 607
-    selected_rows: 0
-    likelihood_group: null
-    classification: reader_only
-    selectable: false
+    selected_rows: 520
+    likelihood_group: dis.chorus_nb
+    classification: physics
+    selectable: true
     citation_keys: ["CHORUS:2005cpn"]
     inspire_ids: [699123]
     covariance_scope: "NNPDF ordinary sources distinct; scoped special sources shared only as declared"
-    drop_reason: "inclusive antineutrino CC F2/FL/xF3 and lead nuclear operator unimplemented"
+    # 87 of 607 rows sit below the closure's own DIS cuts, so ``selected_rows`` is the
+    # retained count, exactly as it is for every other DIS record here.  Measured
+    # 2026-08-22 with the generator's own rule: Q2 >= DIS_Q2_MIN = Q0^2 = mc^2 = 1.6384
+    # (67 rows fail, CHORUS reaching down to Q2 = 0.263) and W2 > DIS_W2_MIN = 10
+    # (a further 20).  Note Q0^2 here is the *closure's* input scale, the charm mass --
+    # not NNPDF theory 200's 1.65^2; assuming the latter gave 470 and the generator's
+    # own count check rejected it.
+    drop_reason: "87 rows fail Q2/W2 closure cuts"
     observable: &chorus_observable {quantity: "inclusive charged-current reduced cross section", units: dimensionless, reaction: "neutrino/antineutrino DIS on lead", beam: "record-specific neutrino or antineutrino", target: lead, binning: "published x,Q2,y points and variants", mass_integration: null, rapidity_integration: null, decay_channel: null, fiducial: inclusive, qed_fsr: not_applicable}
-    operator: &chorus_operator {kind: "unimplemented CC F2/FL/xF3", perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: "heavy-flavour VFNS required", nuclear: "lead nuclear model required", returns: "dimensionless reduced cross section"}
-    evidence: &chorus_evidence {local: ["../nnpdf/nnpdf_data/nnpdf_data/commondata/CHORUS_CC_NOTFIXED_PB/metadata.yaml"], paper: "CHORUS:2005cpn", gate_evidence: ["607 rows per beam sign and lead target established"]}
-  - {id: dis.chorus_nu, selector: {section: datasets, commondata_name: CHORUS_CC_NOTFIXED_PB_NU-SIGMARED}, source: nnpdf_data/commondata/CHORUS_CC_NOTFIXED_PB, source_rows: 607, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["CHORUS:2005cpn"], inspire_ids: [699123], covariance_scope: "NNPDF ordinary sources distinct; scoped special sources shared only as declared", drop_reason: "inclusive neutrino CC F2/FL/xF3 and lead nuclear operator unimplemented", observable: *chorus_observable, operator: *chorus_operator, evidence: *chorus_evidence}
+    # ``nuclear`` names the convention rather than deferring it, which is the point of the
+    # field.  Measured 2026-08-21: the roster reads NNPDF's ``legacy_dw`` variant, which
+    # shares its ``data_central`` with the unvariant default and differs only in
+    # ``data_uncertainties`` -- the nuclear effect is a covariance model on unchanged central
+    # values, so what the theory owes is the target's isospin composition.  ``legacy_dw`` also
+    # drops the ``CHORUSISOTARGCOR`` isoscalar correction its ``legacy`` sibling applies,
+    # which is why the prediction must carry Pb's real Z/A and not an isoscalar average.
+    operator: &chorus_operator {kind: "sigma_r.cc.nuclear", perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: "massless matched VFNS", nuclear: "lead isospin composition A=207.2 Z=82 (natural); nuclear uncertainty carried by the legacy_dw covariance variant, not by a structure-function correction", returns: "dimensionless reduced cross section"}
+    evidence: &chorus_evidence {local: ["../nnpdf/nnpdf_data/nnpdf_data/commondata/CHORUS_CC_NOTFIXED_PB/metadata.yaml"], paper: "CHORUS:2005cpn", gate_evidence: ["607 rows per beam sign and lead target established", "520 retained per beam under Q2 >= Q0^2 = mc^2 = 1.6384 and W2 > 10; 67 below the input scale, 20 below the W2 cut"]}
+  - {id: dis.chorus_nu, selector: {section: datasets, commondata_name: CHORUS_CC_NOTFIXED_PB_NU-SIGMARED}, source: nnpdf_data/commondata/CHORUS_CC_NOTFIXED_PB, source_rows: 607, selected_rows: 520, likelihood_group: dis.chorus_nu, classification: physics, selectable: true, citation_keys: ["CHORUS:2005cpn"], inspire_ids: [699123], covariance_scope: "NNPDF ordinary sources distinct; scoped special sources shared only as declared", drop_reason: "87 rows fail Q2/W2 closure cuts", observable: *chorus_observable, operator: *chorus_operator, evidence: *chorus_evidence}
   - id: dis.nutev_nb
     selector: {section: datasets, commondata_name: NUTEV_CC_NOTFIXED_FE_NB-SIGMARED}
     source: nnpdf_data/commondata/NUTEV_CC_NOTFIXED_FE

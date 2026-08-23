@@ -45,6 +45,8 @@ from pixel.data.contracts import (
     closure_extension_roster,
     contract_artifact_provenance,
 )
+from pixel.data.closure_audit import read_nnpdf_source
+from pixel.data.experimental._dis_common import PROTON_MASS_GEV, dis_w2
 from pixel.kernels import LATTICE_SYSTEMATICS
 
 from . import config as cfg
@@ -635,6 +637,122 @@ def exp_layout():
     return out
 
 
+def nnpdf_layout():
+    """Records for the ``datasets`` manifest section, read from NNPDF commondata.
+
+    Walks the *contract selection* rather than a local list, so a dataset enters
+    generation exactly when its contract says it should.  ``cfg.NNPDF_DATASET_SPECS``
+    supplies only what the contract states as prose and the operator needs as numbers
+    (the beam label and the target's A/Z); an id selected with no spec is left out
+    here and caught by the coverage check in :func:`generate_member`.
+
+    **Rows are cut, and the cut is the generator's own.**  CHORUS reaches down to
+    ``Q2 = 0.263 GeV^2``, far below ``Q0_2 = 1.6384``, so evolving to it would mean
+    running backwards out of the perturbative region.  The mask is the same one
+    ``dis_audit.retained_rows`` applies to every other DIS table -- ``Q2 >= DIS_Q2_MIN``
+    and ``W2 > DIS_W2_MIN`` -- and the retained count is what the contract's
+    ``selected_rows`` records (**520 of 607 per beam**, 1,040 total).
+
+    **Do not restore the 470 this docstring claimed until 2026-08-22.**  That count came
+    from cutting at NNPDF's own ``Q0^2 = 1.65^2 = 2.7225`` instead of *this closure's*
+    ``DIS_Q2_MIN = Q0_2 = mc^2 = 1.6384`` (``config.MC = 1.28``).  The generator's own
+    coverage check rejected it and ``data/nnpdf_audit.json`` records 520; the prose
+    outlived the fix.  Re-derive from the audit rather than quoting either number.
+
+    **The uncertainty split is not the fitpack one and must not be forced into it.**
+    A fitpack table's correlated sources are ``%``-type, i.e. multiplicative, which is
+    why ``_exp_nuisance_kwargs`` passes them as ``multiplicative_systematics`` for t0
+    referencing.  NNPDF's are typed individually, and CHORUS carries **1013 (nu) /
+    113 (nb) additive** correlated sources plus exactly **one** multiplicative one.
+    Additive sources are absolute numbers that no t0 iteration rescales, so they belong
+    in the ``.dat`` covariance; only the genuine MULT source is handed to the nuisance
+    machinery.  Routing the additive ones through ``multiplicative_systematics`` would
+    silently rescale 75% of the nu variance by the theory prediction.
+
+    One approximation is taken knowingly and is recorded per record as
+    ``shared_multiplicative_sources``: ``global:CHORUSQEDRADCOR1`` is the *same* NNPDF
+    nuisance in both beam records (correlated at r = 0.998 across them), but the DIS
+    nuisance layer marginalizes each dataset's copy separately, so the cross-record
+    block is dropped.  It carries a median 3-4% of each row's variance.
+    """
+    roster = closure_extension_roster("nnpdf_full")
+    out = []
+    for entry in roster["selected"]:
+        spec = cfg.NNPDF_DATASET_SPECS.get(entry["id"])
+        if spec is None:
+            continue
+        common = read_nnpdf_source(cfg.NNPDF_COMMONDATA, spec["commondata_name"])
+        x = np.asarray(common.kinematics["x"], dtype=float)
+        q2 = np.asarray(common.kinematics["Q2"], dtype=float)
+        y = np.asarray(common.kinematics["y"], dtype=float)
+        value = np.asarray(common.value, dtype=float)
+        w2 = dis_w2(x, q2, m_h=PROTON_MASS_GEV)
+        keep = np.flatnonzero(
+            np.isfinite(x) & np.isfinite(q2) & np.isfinite(y) & np.isfinite(value)
+            & (x > 0.0) & (x < 1.0)
+            & (q2 >= cfg.DIS_Q2_MIN) & (w2 > cfg.DIS_W2_MIN)
+            & (value != 0.0)
+        )
+        if keep.size != int(entry["selected_rows"]):
+            raise RuntimeError(
+                f"{entry['id']}: the closure cut retains {keep.size} rows but the "
+                f"contract records selected_rows={entry['selected_rows']}; one of the "
+                "two has changed and generation must not paper over which"
+            )
+
+        # Additive sources: statistical (uncorrelated) plus correlated.  Both are
+        # absolute in the commondata and both are stored here **relative to the
+        # published central value**, because the closure's convention throughout is
+        # "published relative error, applied to the folded truth" -- the folded truth
+        # is not the published measurement and an absolute error bar carried over
+        # unchanged would sit at the wrong scale.  ``rel_stat`` already works this way
+        # for every fitpack table, so this keeps one convention rather than two.
+        published = np.abs(value[keep])
+        stat = np.sqrt(
+            sum(np.asarray(v, dtype=float)[keep] ** 2 for v in common.uncorrelated.values())
+        )
+        correlated = [
+            np.asarray(v, dtype=float)[keep] / published
+            for v in common.correlated.values()
+        ]
+        additive = (
+            np.stack(correlated, axis=1) if correlated
+            else np.zeros((keep.size, 0), dtype=float)
+        )
+        rec = {
+            "kind": spec["kind"],
+            "section": "datasets",
+            "label": spec["label"],
+            "name": spec["label"],
+            "contract_id": entry["id"],
+            "commondata_name": spec["commondata_name"],
+            "target": dict(spec["target"]),
+            "beam": spec["beam"],
+            "file": f"datasets/{spec['label']}.dat",
+            "y": y[keep].tolist(),
+            "source_rows": int(x.size),
+            "retained_rows": int(keep.size),
+            "rel_stat": (stat / published).tolist(),
+            "_leading": (x[keep], q2[keep]),
+            "_additive_rel": additive,
+        }
+        multiplicative = {
+            name: np.asarray(v, dtype=float)[keep]
+            for name, v in common.multiplicative.items()
+        }
+        if multiplicative:
+            rec["correlated_file"] = f"{spec['label']}.npz"
+            rec["correlated_names"] = sorted(multiplicative)
+            rec["_correlated_rel"] = np.stack(
+                [multiplicative[name] for name in rec["correlated_names"]], axis=0
+            )
+            rec["shared_multiplicative_sources"] = [
+                name for name in rec["correlated_names"] if name.startswith("global:")
+            ]
+        out.append(rec)
+    return out
+
+
 # -- one member --------------------------------------------------------------
 
 
@@ -648,6 +766,7 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
     truth_dir = cfg.truth_dir(q_key)
     (truth_dir / "lattice").mkdir(parents=True, exist_ok=True)
     (truth_dir / "exp").mkdir(parents=True, exist_ok=True)
+    (truth_dir / "datasets").mkdir(parents=True, exist_ok=True)
 
     if fields is None:
         fields = cfg.make_fields()
@@ -688,7 +807,10 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
         "reference_fits": ref_fits,
     }
 
-    records = lattice_layout() + exp_layout()
+    # Order is load-bearing: ``generate_member`` splits ``operators`` positionally and
+    # ``datasets.build_datasets`` emits lattice, then exp, then datasets.  The two
+    # orderings are the same list and must stay that way.
+    records = lattice_layout() + exp_layout() + nnpdf_layout()
 
     # (2) placeholder files so the PIXEL builders can read kinematics.
     for rec in records:
@@ -702,12 +824,36 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
         "closure_extension": closure_extension_roster("nnpdf_full"),
         "ensembles": [e.id for e in cfg.active_ensembles()],
         "lattice": [_public(r) for r in records if r["kind"] in ("pseudoitd", "mellin")],
-        "exp": [_public(r) for r in records if r["kind"] in EXP_KINDS],
+        "exp": [
+            _public(r) for r in records
+            if r["kind"] in EXP_KINDS and r.get("section", "exp") == "exp"
+        ],
+        "datasets": [
+            _public(r) for r in records if r.get("section") == "datasets"
+        ],
     }
-    if manifest["closure_extension"]["selected_source_count"]:
+    # The guard is a *coverage* check, not a refusal to have any selection at all.  It
+    # used to raise whenever the contracts selected anything, because nothing could be
+    # materialized; now it raises only when a selected id has no record, which is the
+    # failure it was always aiming at -- a contract promotion that generation quietly
+    # ignores.  Comparing sets rather than counts means a swap (one id gained, another
+    # lost) cannot cancel out.
+    selected_ids = {row["id"] for row in manifest["closure_extension"]["selected"]}
+    materialized_ids = {
+        r["contract_id"] for r in manifest["datasets"] if r.get("contract_id")
+    }
+    missing = selected_ids - materialized_ids
+    if missing:
         raise RuntimeError(
-            "observable contracts select new EW/NNPDF records, but this generator "
-            "has not materialized matching manifest datasets; refusing silent omission"
+            "observable contracts select records this generator has not materialized: "
+            f"{sorted(missing)}; add a cfg.NNPDF_DATASET_SPECS entry (and a builder arm) "
+            "or demote the contract -- refusing silent omission"
+        )
+    stray = materialized_ids - selected_ids
+    if stray:
+        raise RuntimeError(
+            f"generated records {sorted(stray)} are not contract-selected; a dataset must "
+            "not enter a closure fit without a contract authorizing it"
         )
     manifest = annotate_manifest(manifest)
     (truth_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
@@ -716,9 +862,19 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
     # then fold every replica.  Operators are Q-independent -> reused across Q.
     if operators is None:
         built = dsets.build_datasets(q_key, fields, use_kernel_cache=True,
+                                     include_nnpdf=True,
                                      with_systematics=False,
                                      with_exp_nuisances=False)
         operators = [assemble_operator(ds, fields) for ds in built]
+    # The split below is positional, so a records/operators length mismatch would pair
+    # every record after the first gap with the wrong operator and fold a real truth
+    # through it -- a wrong number, not a crash.  Cheap to rule out, so rule it out.
+    if len(operators) != len(records):
+        raise RuntimeError(
+            f"{len(operators)} operators for {len(records)} manifest records; the "
+            "positional split in this function assumes they correspond one to one, so "
+            "a mismatch would silently fold each record through the wrong operator"
+        )
     q_offset = list(cfg.TRUTH_Q_CHOICES).index(q_key)
     rng = np.random.default_rng(seed + q_offset)
 
@@ -813,10 +969,19 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
         central = central + shift
         rel = np.asarray(rec["rel_stat"], dtype=float)
         sigma = np.abs(rel) * np.abs(central) + cfg.EXP_ABS_FLOOR
-        # The .dat covariance is statistical only; the fit's builder re-adds the
-        # nuisance outer products from rel_norm + the saved sys vectors.
-        cov = np.diag(sigma * sigma)
-        measured = draw_diag(central, sigma, rng) if noise else central
+        # The .dat covariance is statistical only for a fitpack table; the fit's
+        # builder re-adds the nuisance outer products from rel_norm + the saved sys
+        # vectors.  An NNPDF record additionally carries *additive* correlated
+        # sources, which no t0 iteration rescales and which therefore belong here
+        # rather than in the multiplicative nuisance layer -- see ``nnpdf_layout``.
+        additive = rec.get("_additive_rel")
+        if additive is not None and np.asarray(additive).size:
+            vectors = np.asarray(additive, dtype=float) * np.abs(central)[:, None]
+            cov = np.diag(sigma * sigma) + vectors @ vectors.T
+            measured = draw_mvn(central, cov, rng) if noise else central
+        else:
+            cov = np.diag(sigma * sigma)
+            measured = draw_diag(central, sigma, rng) if noise else central
         write_dat(truth_dir / rec["file"], rec["_leading"], measured, cov)
     # truth.json was written above (before the lattice draw); rewrite it now that
     # the injected DIS nuisance realization is known, so the recovery report can

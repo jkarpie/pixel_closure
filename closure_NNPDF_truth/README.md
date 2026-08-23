@@ -10,7 +10,10 @@ Test modes (what each information source constrains):
 
 1. `lattice` — pseudo-ITD + Mellin moments over **all thirteen** NME ensembles
    (arXiv:2601.10857), with injected-and-recovered lattice systematics;
-2. `dis` — DIS structure functions at the **real analysis kinematic coverage**;
+2. `dis` — DIS structure functions at the **real analysis kinematic coverage**, which
+   since 2026-08-22 includes the NNPDF-commondata `datasets` section: CHORUS neutrino
+   and antineutrino charged-current reduced cross sections on lead, 520 retained rows
+   per beam (of 607 published; the rest fall below `Q0² = mc²` or `W² > 10`);
 3. `dy` — fixed-target Drell-Yan (E866 pp/pd) only;
 4. `exp` — **all experiment** (DIS + DY);
 5. `both` — everything (lattice + DIS + DY).
@@ -309,10 +312,11 @@ resource estimate before attempting a full fit.
 |---|---|
 | `config.py` | 13-ensemble table, kinematics rules, systematics, DIS/DY presets, priors |
 | `dis_audit.py` | scan every fitpack IDIS workbook; full-coverage analysis tables |
+| `nnpdf_audit.py` | contract-driven audit of the NNPDF commondata candidates → `data/nnpdf_audit.json` |
 | `dy_audit.py` | scan fitpack DY workbooks; E866 pp/pd kinematics → S/Q²/Y |
 | `pdf_guidance.py` | evaluate NNPDF (via `lhapdf_dump.cc`), project to 9 fields |
 | `truth.py` | assemble a truth member |
-| `datasets.py` | per-ensemble lattice + DIS + Drell-Yan builders, systematics wiring |
+| `datasets.py` | per-ensemble lattice + DIS + NNPDF-commondata + Drell-Yan builders, systematics wiring |
 | `generate.py` | fold every replica; full cov + 1% inflation; inject systematics |
 | `fit.py` | GP-prior analysis + shared nuisance fields; ordinary HMC or joint contour HMC over flowed Hubbard-Stratonovich coordinates; coverage + nuisance recovery |
 | `run_closure.py` | run modes per `Q`; reproduction/comparison plots |

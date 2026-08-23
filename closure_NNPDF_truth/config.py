@@ -93,6 +93,34 @@ NNPDF_ANALYSIS = tuple(
 )
 NNPDF_DY_MAX_ROWS = 40
 
+# -- NNPDF commondata datasets (the ``datasets`` manifest section) --------------
+#
+# One entry per *selected* NNPDF-commondata contract that this generator can
+# materialize.  ``generate.nnpdf_layout`` walks the contract selection, not this
+# table, and ``generate_member`` refuses to run when the selection names an id that
+# is missing here -- so promoting a contract without adding its build spec is an
+# error, never a silent omission.
+#
+# The nuclear composition is restated here because the operator needs numbers and the
+# contract states prose; ``tests/test_closure_nnpdf_datasets.py`` pins the two against
+# each other so they cannot drift.  A and Z are *natural* lead: NNPDF's CHORUS target
+# is the emulsion's natural isotopic mix, not Pb-208, and ``NuclearTarget`` refuses to
+# default either number precisely because the two differ.
+NNPDF_LEAD_TARGET = {"name": "lead", "mass_number": 207.2, "atomic_number": 82.0}
+
+NNPDF_DATASET_SPECS = {
+    "dis.chorus_nu": {
+        "label": "chorus_nu", "kind": "sigma_r_cc", "beam": "nu",
+        "commondata_name": "CHORUS_CC_NOTFIXED_PB_NU-SIGMARED",
+        "target": NNPDF_LEAD_TARGET,
+    },
+    "dis.chorus_nb": {
+        "label": "chorus_nb", "kind": "sigma_r_cc", "beam": "nubar",
+        "commondata_name": "CHORUS_CC_NOTFIXED_PB_NB-SIGMARED",
+        "target": NNPDF_LEAD_TARGET,
+    },
+}
+
 # -- LHAPDF / NNPDF truth ------------------------------------------------------
 
 #: Discover an LHAPDF source/install tree beside the PIXEL checkout, e.g.

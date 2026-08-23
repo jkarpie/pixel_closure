@@ -24,12 +24,15 @@ datasets and injects the matching systematic shifts separately.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 
 import numpy as np
 
 from pixel import data, kernels
+from pixel.data import families
 from pixel.core.model import Contribution
+from pixel.util.flavor import NuclearTarget
 
 from . import config as cfg
 
@@ -220,6 +223,25 @@ def build_sigma_r(rec, path, fields, cache, *, with_systematics=True,
     )
 
 
+def _record_target(rec):
+    """The record's target, reconstructing a nuclear one from its manifest mapping.
+
+    JSON cannot carry a ``NuclearTarget``, so a nuclear record stores ``{"name",
+    "mass_number", "atomic_number"}`` and it is rebuilt here.  The mapping form is what
+    keeps A and Z *visible in the manifest*: ``normalize_target`` refuses a bare
+    ``"Pb"`` precisely because natural lead and Pb-208 are different targets, and a
+    manifest that named only "lead" would put that choice back out of sight.
+    """
+    target = rec["target"]
+    if isinstance(target, Mapping):
+        return NuclearTarget(
+            str(target["name"]),
+            float(target["mass_number"]),
+            float(target["atomic_number"]),
+        )
+    return target
+
+
 def build_sigma_r_cc(rec, path, fields, cache, *, with_systematics=True,
                      with_exp_nuisances=True, t0=None):
     kwargs = dict(_exp_nuisance_kwargs(rec, path, enabled=with_exp_nuisances, t0=t0))
@@ -228,7 +250,7 @@ def build_sigma_r_cc(rec, path, fields, cache, *, with_systematics=True,
     elif "sqrt_s" in rec:
         kwargs["sqrt_s"] = float(rec["sqrt_s"])
     return data.ChargedCurrentSigmaR.from_file(
-        path, target=rec["target"], maps_to=_even_map(fields),
+        path, target=_record_target(rec), maps_to=_even_map(fields),
         valence_maps_to=_odd_map(fields), beam_charge=rec["beam"], nf=cfg.NF,
         Q20=cfg.Q0_2, order=cfg.ORDER, mode=cfg.MODE, mc=cfg.MC, mb=cfg.MB,
         momentum_density=True,
@@ -360,6 +382,43 @@ def load_manifest(q_key: str) -> dict:
     return json.loads((cfg.truth_dir(q_key) / "manifest.json").read_text())
 
 
+def generic_section_family(q_key: str) -> str | None:
+    """The family owning the generic ``datasets`` manifest section, from its records.
+
+    ``families.GENERIC_MANIFEST_SECTION`` exists precisely because these records name
+    their own builder instead of a family, and until this function nothing routed a
+    closure mode to it: ``fit.py`` aliased ``include_nnpdf = include_exp``.  That was
+    correct only by accident -- every record in the section happens to be DIS today --
+    and a DY or lattice record landing here would have been gated by the DIS flag with
+    nothing to notice.
+
+    Each record carries a ``contract_id``, and the registry already routes contract ids
+    to families, so the answer is derived rather than assumed.
+
+    Returns:
+        The owning family key, or ``None`` when the section is absent or empty.
+
+    Raises:
+        FamilyError: If a record's ``contract_id`` belongs to no family.
+        ValueError: If the section spans more than one family.  Generation splits its
+            operator list *positionally* against
+            ``lattice_layout() + exp_layout() + nnpdf_layout()``, so the section is
+            included or excluded as a unit; a mixed section has no correct gate, and
+            guessing one is the failure this function exists to prevent.
+    """
+    records = load_manifest(q_key).get(families.GENERIC_MANIFEST_SECTION, [])
+    keys = {families.family_for_contract_id(rec["contract_id"]) for rec in records}
+    if not keys:
+        return None
+    if len(keys) > 1:
+        raise ValueError(
+            f"the {families.GENERIC_MANIFEST_SECTION!r} manifest section spans families "
+            f"{sorted(keys)}; it is gated as a unit, so a mixed section cannot be routed. "
+            "Split it, or give the second family its own section."
+        )
+    return keys.pop()
+
+
 def _lattice_cache_stem(rec, path) -> str:
     """Kernel-cache stem for a lattice record (namespaced by ensemble id)."""
     ens = rec.get("ensemble", "ens")
@@ -367,8 +426,8 @@ def _lattice_cache_stem(rec, path) -> str:
 
 
 def build_datasets(q_key, fields, *, include_lattice=True, include_exp=True,
-                   include_dy=False, use_kernel_cache=True, with_systematics=True,
-                   with_exp_nuisances=True, t0=None):
+                   include_dy=False, include_nnpdf=False, use_kernel_cache=True,
+                   with_systematics=True, with_exp_nuisances=True, t0=None):
     """Build the PIXEL datasets for one truth member from its manifest.
 
     ``with_systematics`` adds the lattice nuisance contributions (the fit path);
@@ -383,7 +442,14 @@ def build_datasets(q_key, fields, *, include_lattice=True, include_exp=True,
     rows; multiplicative uncertainties are referenced to it instead of to the
     data (the NNPDF t0 prescription).  ``None`` is the first, data-referenced
     iteration -- see :func:`fit.run_fit`, which iterates it to convergence.
-    ``include_dy`` adds the bilinear Drell-Yan datasets.
+    ``include_dy`` adds the bilinear Drell-Yan datasets.  ``include_nnpdf`` adds the
+    NNPDF-commondata ``datasets`` section (CHORUS today).
+
+    ``include_nnpdf`` defaults to **False**, opt-in like ``include_dy``, and that default
+    is load-bearing rather than stylistic.  ``fit.py`` passes the other three flags
+    explicitly from the mode; a fourth defaulting to ``True`` would put 1,040 rows of
+    neutrino DIS into a ``lattice``-only fit, which is precisely the silent inclusion the
+    contract machinery exists to prevent.  Generation asks for it explicitly.
 
     Returns a list of ``Dataset`` objects for the requested sources (linear
     lattice/DIS first, then any bilinear Drell-Yan datasets).
@@ -402,6 +468,21 @@ def build_datasets(q_key, fields, *, include_lattice=True, include_exp=True,
         for rec in manifest.get("exp", []):
             path = truth_dir / rec["file"]
             cache = _cache_path("exp", path.stem, enabled=use_kernel_cache)
+            label = rec.get("name", Path(rec["file"]).stem)
+            out.append(_experimental_builder(rec["kind"])(
+                rec, path, fields, cache, with_systematics=with_systematics,
+                with_exp_nuisances=with_exp_nuisances,
+                t0=None if t0 is None else t0.get(label)))
+    if include_nnpdf:
+        # The NNPDF-commondata ``datasets`` section.  These are linear DIS operators
+        # exactly like the ``exp`` ones and share their builders; they are a separate
+        # manifest section only because their contracts select on ``commondata_name``
+        # rather than a fitpack table id.  They must stay **after** ``exp`` and before
+        # ``dy``: ``generate.generate_member`` splits its operator list positionally
+        # against ``lattice_layout() + exp_layout() + nnpdf_layout()``.
+        for rec in manifest.get("datasets", []):
+            path = truth_dir / rec["file"]
+            cache = _cache_path("datasets", path.stem, enabled=use_kernel_cache)
             label = rec.get("name", Path(rec["file"]).stem)
             out.append(_experimental_builder(rec["kind"])(
                 rec, path, fields, cache, with_systematics=with_systematics,
