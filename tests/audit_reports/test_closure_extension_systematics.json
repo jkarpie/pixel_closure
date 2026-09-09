@@ -1,0 +1,545 @@
+{
+  "file": "tests/test_closure_extension_systematics.py",
+  "area": "closure-suite",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "closure_JAM_truth/generate.py (_mellin_n1_row, build_systematic_curves, coefficient, fold_lattice_systematics, inflate_diagonal, lattice_layout)",
+    "closure_JAM_truth/config.py (Ensemble.z_max/p_max, active_ensembles, ITD_SYSTEMATICS, MOMENT_SYSTEMATICS, low_x_completion, itd_momentum_density, field_cparity, moment_nuisance_specs, make_moment_nuisance_grid)",
+    "closure_JAM_truth/datasets.py (_moment_systematic_contributions)",
+    "closure_NNPDF_truth/generate.py and config.py and datasets.py (mirror copies of the above, physically duplicated files, exercised directly by the non-suite-parametrized tests and implicitly by the suite=nnpdf parametrization)",
+    "src/pixel/kernels/common.py (Cosine/Sine aliased as PseudoITDReal/PseudoITDImag, Mellin, Unit)",
+    "src/pixel/kernels/lowx.py (low_x_fourier_head, low_x_mellin_head, via Kernel.matrix)",
+    "src/pixel/kernels/base.py (Kernel.matrix / apply_coefficient)",
+    "src/pixel/kernels/lattice.py (LATTICE_SYSTEMATICS registry, lattice_systematic_keys, MELLIN_MOMENT)",
+    "src/pixel/core/model.py (Field.create, Contribution)",
+    "src/pixel/geometry/grid.py (ProductGrid, Grid, via cfg.make_moment_nuisance_grid/make_grid)"
+  ],
+  "drives_non_pixel": null,
+  "n_tests": 21,
+  "n_parametrized_cases": 42,
+  "tests": [
+    {
+      "name": "test_z_range_is_ceil",
+      "line": 112,
+      "claim": "the lattice pseudo-ITD separation range is z = 1..ceil(Z_PHYS_MAX_FM / a) for every active ensemble",
+      "actual": "recomputes ceil(0.3fm/a_fm) via np.ceil independently of the source's math.ceil (config.py Ensemble.z_max, line 435-437) and checks z_values == arange(1, z_max+1)",
+      "how": "independent-library exact-integer recomputation of the same closed-form ceiling division, for all 13 configured ensembles",
+      "oracle": "A1",
+      "bar": "exact integer equality",
+      "strength": "S1",
+      "catches": "an off-by-one or wrong rounding mode in Ensemble.z_max/z_values (e.g. floor instead of ceil); verified none of the 13 ensembles has an exactly-integral Z_PHYS_MAX_FM/a_fm, so ceil vs floor/trunc would diverge for every one of them"
+    },
+    {
+      "name": "test_finite_volume_systematics_are_enabled_for_both_lattice_data_types",
+      "line": 134,
+      "claim": "pseudo-ITD finite-volume uses the separation-dependent inf_Lz key and Mellin moments use the separation-free inf_L key, each excluding the other",
+      "actual": "4 membership checks against the module-level ITD_SYSTEMATICS/MOMENT_SYSTEMATICS tuples (config.py:535-536)",
+      "how": "direct membership test on hardcoded config tuples",
+      "oracle": "F1",
+      "bar": "membership (no numeric tolerance)",
+      "strength": "S3",
+      "catches": "accidentally using the same finite-volume key for both data kinds (would conflate a z-dependent and z-independent nuisance); catches nothing about whether inf_Lz/inf_L compute the right physics"
+    },
+    {
+      "name": "test_nulled_counting_moment",
+      "line": 150,
+      "claim": "the injected systematic curve has zero n=1 Mellin counting moment (module docstring property 3)",
+      "actual": "abs(gen._mellin_n1_row(basis) @ sys_curves[field][key]) < 1e-9 for every field/key",
+      "how": "recomputes the exact same functional (generate.py:141-153) that build_systematic_curves's linear-solve projector (generate.py:156-200) already nulled the curve against",
+      "oracle": "A3",
+      "bar": "1e-9 absolute",
+      "strength": "W1",
+      "catches": "nothing about whether _mellin_n1_row computes the physically correct n=1 functional -- DEMONSTRATED: monkeypatching it to the n=2 functional and rebuilding the curves still passes this exact check (residual 2.1e-14) while the true n=1 moment of those same curves is 51.6 (decisively nonzero); the projector's np.linalg.solve step algebraically guarantees C@s=0 for whatever C's rows are, and the test recomputes that same C's first row, so it can only catch the projection step being skipped or broken, never a wrong moment order/alpha/low-x power in _mellin_n1_row itself"
+    },
+    {
+      "name": "test_real_even_imag_odd_in_nu",
+      "line": 181,
+      "claim": "the injected systematic's real (cosine) component is even in nu and imaginary (sine) component is odd (module docstring property 1)",
+      "actual": "Br(+nu)@s == Br(-nu)@s and Bi(+nu)@s == -Bi(-nu)@s at atol=1e-10, using a fixed alpha=-1/linear-power kernel for every field regardless of that field's actual production alpha/low-x setting",
+      "how": "kernel-matrix parity under nu -> -nu, dotted with s",
+      "oracle": "A2",
+      "bar": "atol=1e-10",
+      "strength": "W1",
+      "catches": "nothing about the systematic curve -- DEMONSTRATED: substituting a random unrelated vector for s gives an IDENTICAL 0.000e+00 residual. Cosine.kernel_func=cos(nu*x) and its closed-form low-x head (src/pixel/kernels/lowx.py:641-728) depend on nu only through b=nu*x_min via b^2 (cos branch, exactly even) or an odd power series starting at b^1 (sin branch, exactly odd) -- both exactly parity-symmetric for ANY basis vector before ever touching s. Also never exercises the alpha=0/low_x='flat' kernel actually used in production for sigma/g (5 of 9 fields use that branch, not the alpha=-1 branch hardcoded here)"
+    },
+    {
+      "name": "test_real_vanishes_at_nu0_imag_vanishes_at_nu0",
+      "line": 224,
+      "claim": "the real component starts at zero at nu=0 and the imaginary component vanishes at nu=0, for every field (module docstring property 3), using each field's actual production alpha/low-x setting",
+      "actual": "abs(real_k.matrix([0],basis)@s) < 1e-9 and abs(imag_k.matrix([0],basis)@s) < 1e-12",
+      "how": "imag half: sin(0*x)=0 identically for the quadrature bulk, and the sine low-x head's coefficient starts at b=nu*x_min=0 and stays 0 through every term, so the row is the exact zero vector regardless of alpha/low-x/s. Real half, quark fields (alpha=-1): recomputes Cosine@nu=0 which measures bit-noise-close (4.996e-16) to the Mellin@n=1 row used by test_nulled_counting_moment. Real half, singlet/gluon fields (alpha=0, low_x='flat'): bitwise the SAME kernel construction as itd_zero inside build_systematic_curves (generate.py:167-172)",
+      "oracle": "A3",
+      "bar": "1e-9 (real), 1e-12 (imag)",
+      "strength": "W1",
+      "catches": "imag half: nothing about the curve, only a kernel bug that would make sin(0)!=0 -- essentially unfalsifiable. Real half: same narrow thing as test_nulled_counting_moment (was the projection applied) for quark fields, and for singlet/gluon fields it recomputes one of the projector's own two constraint rows bit-for-bit, so it cannot catch a wrong itd_zero construction either"
+    },
+    {
+      "name": "test_converges_at_large_nu",
+      "line": 276,
+      "claim": "the folded systematic decays at large nu relative to its peak over a moderate band (Riemann-Lebesgue, module docstring property 2)",
+      "actual": "tail (nu=300) < 0.7 * peak (max over nu in [1,40]), using the real built curves (not construction-invariant like tests 3-5)",
+      "how": "numeric evaluation of the actual sys_curves through the actual per-field kernel",
+      "oracle": "A2",
+      "bar": "0.7 (ratio)",
+      "strength": "S2",
+      "catches": "measured for all 45 (field,key) pairs of the jam suite: ratios range 1.2e-3 (sigma/chiral) to 6.07e-1 (t8/inf_Lz); only 1/45 pairs exceeds 0.6. For the 5 alpha=0 (singlet/gluon) fields the margin is ~300-400x -- effectively unfalsifiable there (would only catch a kernel that does not depend on nu at all). For the 4 alpha=-1 (quark-type) fields the closest case sits at 87% of the bound, so a real, moderately-broken decay (e.g. a missing low-x head) could plausibly be caught there"
+    },
+    {
+      "name": "test_generation_fold_enforces_cap_for_every_field_key",
+      "line": 363,
+      "claim": "every field/systematic pair is capped at <=10% of the folded PDF signal (module docstring property 4)",
+      "actual": "(a) set(observed)==expected(field,key) pairs; (b) recomputes max(|folds.scale[pair]*raw|/denom) from folds.scale/raw_shift/central (all outputs of fold_lattice_systematics, generate.py:247-336) and checks it equals SYSTEMATIC_MAX_FRACTION via both a <= bound and np.isclose(rtol=1e-10)",
+      "how": "(a) real structural coverage; (b) recomputation using ONLY the function's own outputs and its own formula (scale=max_fraction/max_ratio), so scale[pair]*max_ratio[pair]==max_fraction is an algebraic identity",
+      "oracle": "A3",
+      "bar": "np.isclose rtol=1e-10, and <= cap*(1+1e-12)",
+      "strength": "W1",
+      "catches": "(a) a field or key silently dropped from the layout/systematics wiring -- real. (b) DEMONSTRATED: substituting 1000*N(0,1) garbage curves (confirmed unnulled: true n=1 moment 4.9e2 vs the real curve's ~1e-14) for the real curves gives an IDENTICAL recomputed residual (max|observed-cap|=1.388e-17, bit-for-bit the same value as with the real curves) and both satisfy np.isclose(rtol=1e-10). The numeric cap check cannot be falsified by any curve content -- it only re-derives the NamedTuple's own internal consistency"
+    },
+    {
+      "name": "test_actual_folded_covariance_blocks_become_spd",
+      "line": 413,
+      "claim": "covariance inflation makes the actual folded replica blocks SPD (module docstring property 5)",
+      "actual": "(a) matrix_rank(cov) < cov.shape[0]; (b) inflate_diagonal + cholesky succeeds; (c) diag(reg) == diag(cov)*(1+frac)",
+      "how": "fixture (actual_lattice_folds, line 154) builds a synthetic 'ensemble' as (index+1)*replica_scale[:,None]*shape[None,:] -- every replica row is a scalar multiple of the SAME shape vector",
+      "oracle": "F1",
+      "bar": "exact rank inequality; Cholesky success; np.allclose default tol on (c)",
+      "strength": "W1",
+      "catches": "(a) DEMONSTRATED: the fixture ensemble has matrix_rank==1 of 6 possible by construction of the outer-product shape (any per-field operator folds a rank-1 ensemble to a rank-1 covariance under ANY linear operator, correct or not) -- catches nothing about the fold or about real JAM-replica correlation. (b) IS real: would catch inflate_diagonal failing to regularize enough to reach PD for this input. (c) IS real: a closed-form recheck of the inflation arithmetic, would catch e.g. an off-by-factor bug"
+    },
+    {
+      "name": "test_seeded_systematic_curves_match_between_truth_families",
+      "line": 445,
+      "claim": "truth choice (JAM vs NNPDF) must not change the injected nuisance realization",
+      "actual": "jam_gen.build_systematic_curves(...) and nnpdf_gen.build_systematic_curves(...) agree to atol=1e-14 given the same seed and nodes",
+      "how": "cross-package comparison of two physically-duplicated source files (closure_JAM_truth/generate.py vs closure_NNPDF_truth/generate.py, confirmed near-identical by diff -- differ only in one comment header) with the same SYSTEMATIC_SEED=20260721 in both configs",
+      "oracle": "A3",
+      "bar": "rtol=0.0, atol=1e-14",
+      "strength": "S3",
+      "catches": "someone editing one twin package's systematic-curve construction (RNG draw order, pheno shape params) without mirroring the change into the other; would NOT catch a bug present identically in both copies"
+    },
+    {
+      "name": "test_mellin_systematics_use_distinct_one_point_fields_and_unit",
+      "line": 486,
+      "claim": "Mellin moment systematics use distinct one-point nuisance fields (not shared with the ITD nuisance names) wired through a Unit kernel whose row equals the registry coefficient",
+      "actual": "builds a real one-point Field via cfg.make_moment_nuisance_grid + ProductGrid, checks n_grid==1/node value and name distinctness; calls the real dsets._moment_systematic_contributions (datasets.py:67-95) and checks contribution count/field/kernel-type/base_matrix/matrix",
+      "how": "_moment_systematic_contributions builds kernels.Unit(coefficient=factory(dataset.meta),...) where factory=kernels.LATTICE_SYSTEMATICS[key][1] (datasets.py:84-92); test's oracle gen.coefficient (generate.py:213-216) calls the exact same factory with the same meta object",
+      "oracle": "A3",
+      "bar": "np.testing.assert_allclose default (rtol=1e-7)",
+      "strength": "S2",
+      "catches": "wiring bugs: wrong key's factory selected, wrong meta threaded through, wrong contribution count/kernel class, Unit's row-scaling (apply_coefficient, src/pixel/kernels/base.py:432-445). Does NOT catch a wrong LATTICE_SYSTEMATICS[key] formula, since both call sites use the same factory -- that physics is independently covered by tests/test_coefficients.py (e.g. test_chiral_factory_is_constant_vector)"
+    },
+    {
+      "name": "test_mellin_systematic_truths_are_independent_and_seeded_by_power",
+      "line": 568,
+      "claim": "per (field,key,Mellin order) scalar truths are independent and 'seeded by power'",
+      "actual": "cross-package equality (jam==nnpdf, same character as test 9); set(jam)==expected names; len(set(jam.values()))==len(jam)",
+      "how": "structural coverage + pairwise float distinctness of iid standard-normal draws",
+      "oracle": "A2",
+      "bar": "exact dict/set equality; exact float distinctness",
+      "strength": "S3",
+      "catches": "an RNG-threading bug (e.g. RNG reset per key, giving identical draws) -- distinctness would collapse and fail. Does NOT catch a duplicate-name bug in moment_nuisance_specs() itself (both the actual dict and the 'expected' set are built from the same spec list, so a duplicated spec reduces both sides together, undetected). Nothing here actually ties the VALUE to the Mellin order/power in any way despite the test's name -- 'seeded_by_power' means only that order is embedded in the dict key string"
+    },
+    {
+      "name": "test_generation_fold_caps_mellin_scalars_separately_from_itd_curves",
+      "line": 600,
+      "claim": "Mellin/scalar systematics are capped independently of, and not mixed into, the ITD curve cap machinery",
+      "actual": "folds.scale=={}; set(folds.moment_scale)==expected names; per record: expected_raw=gen.coefficient(key,meta)*raw_values[name] vs folds.raw_shift (real, uses externally-supplied raw_values, not the function's own output); folds.moment_values[name]==raw_values[name]*folds.moment_scale[name]; ratio<=cap*(1+1e-12)",
+      "how": "mix of real wiring checks against an external input (raw_values) and one algebraic-identity cap check (same character as test 7, restricted to a single ensemble so each name has exactly one contributing record, and asserted only one-directionally with <=, not np.isclose)",
+      "oracle": "A3",
+      "bar": "np.testing.assert_allclose default; <= cap*(1+1e-12)",
+      "strength": "S2",
+      "catches": "raw_shift/moment_values checks: real wiring bugs (wrong name, wrong coefficient, wrong scale application), since raw_values is external to fold_lattice_systematics's own output. The final ratio<=cap check is the same self-referential tautology as test 7 (single record per name means scale=cap/ratio guarantees equality), just weaker since it is one-directional -- a moment_scale bug that under-uses the allowed cap (e.g. off by a factor of 2) would still pass here, unlike test 7's isclose sibling"
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_closure_extension_systematics-01",
+      "test": "test_nulled_counting_moment",
+      "pattern": "W-TAUT",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_nulled_counting_moment. Added a module-level _independent_power_moment_row(basis, nodes, weight, gamma): int_0^1 x^w e_j(x) dx computed by substituting x=exp(u), composite Gauss-Legendre per grid interval, and a closed-form [0,x_min) head x_min**(w+1)/(w+1+gamma) -- a different quadrature in a different variable with a different low-x treatment from pixel's composite rule plus low_x_quadrature_correction. The test now (a) compares gen._mellin_n1_row against that row and (b) folds every curve through that row. Bars: cols>=1 1e-12 (achieved 1.19e-14), col 0 1e-3 (achieved 8.557e-04, which is PIXEL's own head error -- see the new measurement), |m1_ind@s|/max|s| < 2e-4 (achieved 6.32e-05). Acceptance: monkeypatching _mellin_n1_row to the n=2 functional makes it fail, and so does patching it to alpha=0; before the fix BOTH passed, at max|m1@s| = 2.111e-14 and 2.109e-14 against the 1e-9 bar. tests/test_closure_extension_systematics.py:150 (docstring), 178 (assertion) vs closure_JAM_truth/generate.py:141-153,181-199 -- measured: monkeypatched _mellin_n1_row to the n=2 functional, rebuilt curves, test's own recomputed check reports 2.111e-14 (PASS) while the true n=1 moment of the same curves is 5.161e+01 (fails decisively)",
+      "why_it_matters": "build_systematic_curves's np.linalg.solve projection makes C@s=0 exact for whatever C's rows are (algebraic identity: C@(multipliers@bases)=constraint_matrix@multipliers=C@raw by definition of multipliers, so C@s=C@raw-C@raw=0). The test re-derives that same C's first row via the identical function, so it cannot detect a wrong Mellin order/alpha/low-x power in _mellin_n1_row -- only that the projection step ran at all",
+      "proposed_fix": "add an assertion independent of _mellin_n1_row -- e.g. numerically quadrature the n=1 Mellin integral of the projected curve with a separate rule (scipy.integrate or mpmath), or at minimum assert cfg.SYSTEMATIC_NULL_MOMENT_ORDER==1 and that _mellin_n1_row's literal nu argument matches it",
+      "effort": "M"
+    },
+    {
+      "id": "test_closure_extension_systematics-02",
+      "test": "test_real_even_imag_odd_in_nu",
+      "pattern": "W-NEVER",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_real_even_imag_odd_in_nu. The test now loops over three kernel settings -- the original fixed alpha=-1/linear-power pair plus each field's production (alpha, low_x_extension) -- so the alpha=0/'flat' branch used by sigma and g is exercised for the first time (it is a different low-x code path: low_x_fourier_head's closed-form series, versus the low_x_quadrature_correction fallback alpha!=0 forces). An assert len(settings)==3 stops the loop silently degenerating back to one branch. The docstring states plainly that parity is a kernel property, not a curve property. Acceptance: multiplying the flat-branch cosine head by (1 + 0.5*nu) makes it fail; the old alpha=-1-only form passed with residual 0.000e+00, because it never reached that head at all. tests/test_closure_extension_systematics.py:181 (docstring), 215-216 (assertions) -- measured: substituting a random unrelated vector for sys_curves[field][key] gives an identical 0.000e+00 parity residual (bar atol=1e-10)",
+      "why_it_matters": "Cosine/Sine kernel_func and their closed-form low-x heads (src/pixel/kernels/lowx.py:684-728) depend on nu only through nu^2 (cos) or an odd power series in nu (sin), so B(-nu)==B(nu) / B(-nu)==-B(nu) row-wise for ANY vector dotted against them, before s is ever involved. This is a legitimate kernel-structure test but proves nothing about the specific systematic curve, contrary to what the module docstring's property-1 framing implies. It also never exercises the alpha=0/low_x='flat' branch used in production for 5 of 9 fields (sigma, g)",
+      "proposed_fix": "re-scope the docstring to state this is a kernel-parity check, not a systematic-curve check (the property is automatic by construction per generate.py's own comment at line ~539); if per-curve coverage is wanted, also exercise the alpha=0 branch actually used for sigma/g",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-03",
+      "test": "test_real_vanishes_at_nu0_imag_vanishes_at_nu0",
+      "pattern": "W-NEVER",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_real_vanishes_at_nu0_imag_vanishes_at_nu0 and the new test_imag_small_nu_slope_matches_independent_moment. The content-free abs(i0) < 1e-12 is replaced by np.testing.assert_array_equal(imag_kernel_row, zeros) -- the exact zero asserted as what it is, a property of the kernel row with no reference to s. The imaginary component's real near-zero content, its slope, is now covered: Imag(nu)/nu -> int x^(alpha+1) f dx as nu->0, checked at nu=1e-4 against _independent_power_moment_row(alpha+1, gamma), bar 1e-7 on the ratio (achieved 1.57e-09), with a non-degeneracy guard requiring |oracle|/max|s| > 1e-3 (achieved minimum 5.12e-02) so the ratio bar is never vacuous. Acceptance: distorting the Sine kernel to sin(nu x)*(1+0.01x) -- which preserves both parity and sin(0)=0 -- fails the new test and nothing else in the file. tests/test_closure_extension_systematics.py:224 (docstring), 273 (imag assertion) -- measured: imag(nu=0) is exactly np.float64(0.0) for both the real systematic curve and a random vector",
+      "why_it_matters": "sin(0*x)=0 identically for every x, and the sine low-x head's leading coefficient is b=nu*x_min=0 at nu=0, propagating to an exact-zero head. The 'imag vanishes at nu=0' half of this test cannot fail for any vector, systematic or garbage -- it is not testing the curve, or even really the kernel, just that sin(0)=0",
+      "proposed_fix": "drop the imag-at-nu0 assertion (it is content-free) or replace it with a comment noting it is a trivial consequence of the kernel, not a property of the curve",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-04",
+      "test": "test_real_vanishes_at_nu0_imag_vanishes_at_nu0",
+      "pattern": "W-TAUT",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_real_vanishes_at_nu0_imag_vanishes_at_nu0. The real half now also folds each curve through _independent_power_moment_row(alpha, gamma) for that field's production settings, and compares the independent row against the kernel's own nu=0 row column by column. Bars: cols>=1 1e-12 (achieved 1.16e-14 alpha=-1, 1.31e-14 alpha=0); col 0 1e-12 for alpha=0 (achieved 4.44e-16, closed-form Fourier head) and 1e-3 for alpha=-1 (achieved 8.557e-04, the known quadrature-fallback head error); value 1e-12 for alpha=0 (achieved 4.26e-15) and 2e-4 for alpha=-1 (inherits -01's 6.32e-05). Acceptance: zeroing the flat-branch cosine low-x head makes it fail; before the fix it passed at max|r0| = 9.159e-16 against the 1e-9 bar. tests/test_closure_extension_systematics.py:224 (docstring), 270 (real assertion) vs closure_JAM_truth/generate.py:166-172 -- measured: for a quark field, Cosine(alpha=-1,pow1)@nu=0 differs from Mellin(alpha=-1,pow1)@n=1 (_mellin_n1_row) by max 4.996e-16 against row magnitude ~1.07, i.e. bit-noise-close",
+      "why_it_matters": "for quark fields (4 of 9) this restates test_nulled_counting_moment's exact tautology through a numerically-indistinguishable code path (W-DUP in effect). For singlet/gluon fields (5 of 9) real_k.matrix([0.0],basis) is bitwise the SAME construction (same alpha, same low_x_extension, same nu) as itd_zero inside build_systematic_curves, so it is guaranteed ~0 by the same projector identity as weakness -01",
+      "proposed_fix": "same fix direction as -01/test_nulled_counting_moment: recompute the nu=0 real functional via an independent path (direct quadrature) rather than reusing PseudoITDReal/Mellin's own low-x machinery",
+      "effort": "M"
+    },
+    {
+      "id": "test_closure_extension_systematics-05",
+      "test": "test_converges_at_large_nu",
+      "pattern": "W-LOOSE",
+      "severity": "S2",
+      "evidence": "RESOLVED 2026-08-13 by test_converges_at_large_nu. The single 0.7 bound is split into a module-level DECAY_BARS = {-1.0: 0.7, 0.0: 5e-3}, from a full sweep of both suites: alpha=-1, 35 pairs, ratios in [1.4518e-01, 6.0700e-01]; alpha=0, 10 pairs, ratios in [1.2365e-03, 2.5946e-03]. Bar utilisation goes from 87%/0.4% to 87%/52%. Two guards give the other direction, per shape 7: peak > 1e-3 (measured minimum peak 3.62e-03) so the ratio bound is never vacuous, and tail > 0.05*bar*peak so a bar that has drifted loose is flagged rather than left as decoration (measured minima 21% and 25% of bar). A seen == {-1.0: 35, 0.0: 10} assertion pins the class split itself. Acceptance: an odd-in-nu perturbation of the flat cosine head lifts the alpha=0 ratios to a maximum of 7.0843e-03 (the first pair the test trips on is sigma/ht at 6.3955e-03), which fails the new 5e-3 bar and passed the old 0.7 one. tests/test_closure_extension_systematics.py:317 bar=0.7 -- measured full sweep of jam's 45 (field,key) pairs: max ratio 6.07e-1 (t8/inf_Lz), min 1.2e-3 (sigma/chiral); alpha=0 (singlet/gluon) fields sit at ratio ~1.2e-3 to 2.2e-3, roughly 300-400x below the bar",
+      "why_it_matters": "the single shared 0.7 bound reads as one uniform check but is only mildly discriminating for the 4 quark-type (alpha=-1) fields and essentially unfalsifiable for the 5 singlet/gluon (alpha=0) fields -- a broken decay in the alpha=0 branch specifically would need to be gross (order-1 non-decay) to be caught",
+      "proposed_fix": "split the bound by alpha class (e.g. 0.65 for alpha=-1, 0.05 for alpha=0) using the measured margins above, or note the asymmetry in the docstring",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-06",
+      "test": "test_generation_fold_enforces_cap_for_every_field_key",
+      "pattern": "W-TAUT",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_generation_fold_enforces_cap_for_every_field_key. Only folds.scale now comes from the function under test: raw is rebuilt as gen.coefficient(key, gen.lattice_meta(rec)) * (B @ sys_curves[field][key]) from the fixture's own operator and curves, and central as (ensemble[field] @ B.T).mean(axis=0) in plain numpy. Both reproduce the fold's own outputs bit-exactly (rtol=0, atol=0 passes), so they are asserted with assert_array_equal; the recomputed cap ratio hits SYSTEMATIC_MAX_FRACTION to 2.22e-16 relative under the kept rtol=1e-10 bound. Also added: set(folds.raw_shift[i]) == set(rec['systematics']), and folds.curves == sys_curves * scale exactly. Acceptance: a fold applying the FIRST key's coefficient to every systematic of a record makes it fail; the pre-fix recompute passed that mutation at max|observed/cap - 1| = 2.220e-16, bit-identical to the clean run. (The mutation had to be applied to fold_lattice_systematics, not to gen.coefficient: patching the shared helper moves the test's rebuild too and cancels itself -- no-op mode 3.) tests/test_closure_extension_systematics.py:363 (docstring), 403-409 (assertions) vs closure_JAM_truth/generate.py:307-310 -- measured: swapping in 1000*N(0,1) garbage curves (true n=1 moment 4.9e2, vs ~1e-14 for the real curves) gives an IDENTICAL recomputed cap residual (max|observed-cap|=1.388e-17, bit-for-bit the same as with the real curves)",
+      "why_it_matters": "scale[pair]=max_fraction/max_ratio[pair] by definition, so recomputing max(scale[pair]*ratio_record) over records always returns exactly max_fraction for any nonzero systematic content -- the numeric half of this test cannot distinguish a correctly-shaped/nulled curve from pure noise. Only the set(observed)==expected coverage check carries real information",
+      "proposed_fix": "recompute the cap ratio from sys_curves/coefficient() independently (not from folds.scale/raw_shift), e.g. reconstruct raw = coefficient(key,meta)*(B@sys_curves[field][key]) directly and compare against folds.scale using a value not sourced from folds itself",
+      "effort": "M"
+    },
+    {
+      "id": "test_closure_extension_systematics-07",
+      "test": "test_actual_folded_covariance_blocks_become_spd",
+      "pattern": "W-NEVER",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_actual_folded_covariance_blocks_become_spd, now parametrized over two fixtures. The original rank-1 toy is KEPT (shape 4: its folded central value is readable by inspection) and joined by nondegenerate_lattice_folds, whose replicas each carry an i.i.d. seeded perturbation: matrix_rank(ensemble[field]) == 6 of 6, versus 1 for the toy, and the folded blocks come back rank 3-5 -- still singular, but for the emergent reason that a covariance of n_rep replicas has rank <= n_rep - 1 while every pseudo-ITD record has >= 15 rows. The test now asserts the ensemble's own rank (so the fixture cannot silently go degenerate), the block SHAPE == (n_rows, n_rows) from the record's operator, rank <= N_SYNTHETIC_REPLICAS - 1, and rank == 1 / rank >= 2 per fixture. Acceptance: np.cov(Y, rowvar=True) -- a 6x6 replica-space covariance -- makes it fail, and PASSED every assertion of the old form (measured: all 117 blocks came back (6,6), rank 1, Cholesky fine, diagonal formula fine). Building the covariance from only two replicas fails the new full-rank case and passed the old one. tests/test_closure_extension_systematics.py:327-328 (fixture docstring), 434 (assertion) -- measured: ensemble['t3'] (the fixture's synthetic replica array) has np.linalg.matrix_rank==1 of 6 possible",
+      "why_it_matters": "the fixture builds every replica as (index+1)*replica_scale[r]*shape[:] -- literally a scalar multiple of one shape vector -- so ANY single-field linear fold of it is rank<=1 by elementary linear algebra, regardless of whether the fold operator or curves are correct. The 'actual folded covariance is naturally singular' framing implies this emerges from realistic replica correlation (as it does for the real JAM ensemble via ensemble_curves()), but here it is guaranteed by the toy fixture's construction",
+      "proposed_fix": "build the fixture ensemble from independent-per-replica noise around a common shape (e.g. shape + small iid perturbation per replica) so the rank-deficiency, if it appears, reflects genuine near-collinearity rather than an exact rank-1 construction",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-08",
+      "test": "test_mellin_systematics_use_distinct_one_point_fields_and_unit",
+      "pattern": "W-COMMON",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 (documentation only, as proposed). The module docstring states the cross-reference: 'The systematic-coefficient formulas (ht, chiral, inf_Lz, ...) are independently pinned in tests/test_coefficients.py, not here -- this file treats the LATTICE_SYSTEMATICS registry as a shared oracle for wiring only.' No code change: the common-mode factory call is the correct design for a wiring test, and the formulas do have an independent home. tests/test_closure_extension_systematics.py:486 (docstring), 552-559 (assertions) vs closure_JAM_truth/datasets.py:84-92 and closure_JAM_truth/generate.py:213-216 -- both call kernels.LATTICE_SYSTEMATICS[key][1] with the identical meta object",
+      "why_it_matters": "a wrong LATTICE_SYSTEMATICS[key] formula would be invisible to this specific assertion since both sides call the same factory; this is a caveat, not a defect, because the test's real target here is the datasets.py wiring (contribution count, kernel type, coefficient plumbing) and the factory formulas ARE independently covered by tests/test_coefficients.py (e.g. test_chiral_factory_is_constant_vector)",
+      "proposed_fix": "none needed functionally; note the cross-reference in the module docstring so a reader does not assume this file also validates the systematic-coefficient formulas",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-09",
+      "test": "test_generation_fold_caps_mellin_scalars_separately_from_itd_curves",
+      "pattern": "W-TOL",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 by test_generation_fold_caps_mellin_scalars_separately_from_itd_curves. The final cap assertion is now two-sided, np.isclose(ratio, SYSTEMATIC_MAX_FRACTION, rtol=1e-10), matching the ITD sibling; the one-directional <= is kept alongside. Measured max|ratio/cap - 1| = 2.22e-16, so the equality holds to float noise. Acceptance: halving moment_scale makes it fail; the old <=-only form passed that mutation at max|ratio/cap - 1| = 5.000e-01, i.e. it was leaving a whole factor of 2 unguarded. tests/test_closure_extension_systematics.py:600 (docstring), 685 (assertion) (ratio <= cap*(1+1e-12)) vs the ITD sibling test_generation_fold_enforces_cap_for_every_field_key line 208-209 (np.isclose(value, cap, rtol=1e-10))",
+      "why_it_matters": "given the same tautological guarantee (scale=cap/ratio for a single contributing record) holds here too, the sibling ITD test's isclose bound is achievable and would catch a moment_scale bug that under-uses the cap (e.g. a stray factor of 2) that this one-directional <= bound would not",
+      "proposed_fix": "change the final assertion to np.isclose(ratio, cfg.SYSTEMATIC_MAX_FRACTION, rtol=1e-10) to match the ITD sibling's rigor",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-10",
+      "test": "test_mellin_systematic_truths_are_independent_and_seeded_by_power",
+      "pattern": "W-NAME",
+      "severity": "S2",
+      "evidence": "RESOLVED 2026-08-13. Renamed test_mellin_systematic_truths_are_independent_and_seeded_by_power -> ..._and_deterministic_per_order, with a docstring paragraph recording why: build_moment_systematic_values draws one rng.standard_normal() per (field, key, order) spec with no functional dependence on the order's numeric value, so 'seeded by power' promised a relationship nothing asserted. Entry table and TEST_EXPLANATION.md updated to the new name. tests/test_closure_extension_systematics.py:568 (docstring), 583-594 (assertions) vs closure_JAM_truth/generate.py:203-210",
+      "why_it_matters": "build_moment_systematic_values draws one rng.standard_normal() per (field,key,order) spec with no dependence on order's numeric value beyond it being embedded in the dict key string; the test name's 'seeded_by_power' suggests a power-dependent relationship that nothing in the assertions checks",
+      "proposed_fix": "rename to something like test_mellin_systematic_truths_are_independent_and_deterministic, or state explicitly in the docstring that 'by power' means only 'one independent draw per Mellin order', not a functional dependence",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-11",
+      "test": "test_actual_folded_covariance_blocks_become_spd",
+      "pattern": "W-APPROX",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 by test_actual_folded_covariance_blocks_become_spd. The bare np.allclose on the inflated diagonal is now np.testing.assert_allclose(..., rtol=1e-13, atol=0.0). The implicit atol=1e-8 was NOT harmless: measured diag(cov) ranges from 8.269e-07 to 3.099e+00 across the 117 blocks, so the default absolute floor sat only ~1.2% below the smallest diagonal entry. Achieved residual 2.22e-16, i.e. 0.2% of the new bar. tests/test_closure_extension_systematics.py:439-442 (assertion) -- np.allclose(np.diag(reg), np.diag(cov)*(1.0+cfg.COV_DIAGONAL_INFLATE)) with no explicit rtol/atol, so numpy's defaults (rtol=1e-5, atol=1e-8) apply",
+      "why_it_matters": "the folded covariance diagonal scale is not stated/verified in this file, so it is not clear the default atol=1e-8 is tight relative to typical diag(cov) magnitudes here; not currently known to be masking anything, just unstated",
+      "proposed_fix": "pass an explicit rtol (e.g. 1e-10) matching the other exact-formula checks in this file",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-12",
+      "test": "test_nulled_counting_moment, test_real_vanishes_at_nu0_imag_vanishes_at_nu0",
+      "pattern": "W-BAR-MISLEADING",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_low_x_head_error_converges_in_x_min. Both column-0 bars (1e-3 in test_nulled_counting_moment, head_bar in test_real_vanishes_at_nu0_imag_vanishes_at_nu0) read as universal head-accuracy guarantees and are neither universal nor about head accuracy: both sides use the SAME low-x completion, so they compare two evaluations of one head model and can never see the model being the wrong shape -- which beats the quadrature error by ~1000x for any sublinear field. Correction to the audit's framing: 1e-3 is NOT inherited from x_min. It is the Gauss-Jacobi rule's closed form 1/(npts+1)**2 at the shipped LowXExtension.npts=32. Measured on both axes at this file's fixture size (n_points=128): x_min 1e-4/1e-6/1e-8 x npts 16/32/64 gives 3.3255e-03/8.8037e-04/2.2677e-04, 3.2320e-03/8.5569e-04/2.2041e-04, 3.1421e-03/8.3194e-04/2.1430e-04 -- four decades of x_min move it 6%, one doubling of npts moves it 3.8x (17**2/33**2 = 0.2654, measured 0.2648). Only test_closure_constraints.py's 2e-4 is an x_min-inherited bar. The new test sweeps x_min in {1e-6, 1e-7, 1e-8} at fixed n_points=145, states x_min explicitly, and asserts three things against 40-digit mpmath truths: integrability (alpha+gamma > -1, which src/ never checks), the level against a closed-form head-model error (bar 10%, measured 0.002-2.17%), and the per-decade rate 10**rate with rate set by the field class (10**a = 3.1623 for the seven alpha=-1 fields, measured 3.1724/3.2215; x100 for sigma/g, measured 99.71 on the first step, with the floor-limited third rung excluded automatically by a predicted-level floor rather than by a hardcoded index). Acceptance, three in-memory mutations, each caught by a DIFFERENT assertion: (i) a linear head on sigma/g -> 3.362e-06 instead of 1.008e-11 (3.3e5x) and x10.0000 instead of x100, failing the rate -- the level does not fire, since the prediction follows the declared completion and tracks the mutation to got/pred = 1.000000; (ii) a flat head on the vanishing class -> alpha+gamma = -1, failing integrability -- the rate does not fire, since the mutated error still falls at 3.1606/3.1528; (iii) inflating low_x_quadrature_correction by 50% -> got/pred = 0.5008, failing the level, while the rate stays at 3.1831/3.2860 inside the band. Precision about what the pre-existing tests do: they DO fail under all three, but never as a head-accuracy or convergence statement. (i) trips test_real_vanishes_at_nu0_imag_vanishes_at_nu0's projector-floor bar (5.086e-09 vs 1e-09) because build_systematic_curves nulls against generate.py's HARDCODED flat itd_zero row -- a config-inconsistency detection. (ii) makes _independent_power_moment_row's own closed-form head divide by zero (weight+1+gamma = 0) and surfaces as a bare ZeroDivisionError inside a helper: the oracle encodes the same integrability condition src/ does not, and blows up on it. (iii) trips the column-0 quadrature bars. None of them measures the rate, the level against a head model, or which class an error belongs to, which is what the new test adds. Both original bars are kept, with docstrings rewritten to say what each is a bar on. Full diagnosis: plans/low_x_head_diagnosis.md."
+    },
+    {
+      "id": "test_closure_extension_systematics-13",
+      "test": "test_generation_fold_caps_mellin_scalars_separately_from_itd_curves",
+      "pattern": "W-SRC-REGRESSION",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-14. The regression is gone: the guard that caused it was corrected the same night to count the kernel's OWN low-x power (Mellin -> min(nu)-1, Sine -> 1) instead of testing alpha+gamma alone, so convergent Mellin orders n=2/n=3 are accepted again. Verified by the coordinator: test_generation_fold_caps_mellin_scalars_separately_from_itd_curves passes in both [jam] and [nnpdf] (the [jam] case is no longer collected -- FULL_SUITES was trimmed to the NNPDF pair on 2026-08-14, after this verification; re-verifying today gives [nnpdf] only), and tests/test_kernel_guards.py is 17 passed. Also corrected: this was filed as a concurrent PEER session's regression; it was in fact this workstream's own src/-fix agent mid-flight, and the mis-attribution came from reading an unstaged hunk as evidence of authorship. RED as of 2026-08-13, and NOT a defect of this test. A concurrent session added check_low_x_integrable (src/pixel/kernels/lowx.py:566), called from base_matrix (src/pixel/kernels/base.py:135), which refuses alpha + gamma <= -1. The criterion is deliberately kernel-agnostic (its own docstring says so), so it refuses Mellin(alpha=-1, low_x_extension='flat') at EVERY order -- measured: n=1, n=2 and n=3 all raise -- even though at n>=2 the kernel's own x**(n-1) leaves a convergent head int_0^x_min x**(n-2) dx = x_min**(n-1)/(n-1), measured 5.0e-13 at n=3, x_min=1e-6. This test builds that pairing because PRODUCTION does: closure_*_truth/datasets.py::build_mellin passes momentum_density=True for every field while taking low_x_completion(field), and 26 of the 117 Mellin lattice records in both full closure suites are sigma/g at n=3 with the flat completion (measured from gen.lattice_layout()). So the fixture mirrors production correctly and the guard has surfaced a live production break. Deliberately left failing rather than edited around: changing the test to dodge the guard would hide the break. Resolution is one of (a) make the criterion kernel-aware -- at Mellin order n the head weight is alpha + gamma + n - 1 -- or (b) make build_mellin pass momentum_density per field instead of True for all nine. Neither is actionable from a test pass: src/ is another session's active file and closure_*_truth/ is under the owner's hold. Cross-referenced from test_kernel_guards-02."
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_closure_extension_systematics-M01",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_p_range_is_floor. Oracle: int(np.floor(L_sites / P_INDEX_DIVISOR)) recomputed independently of config.py's math.floor, plus p_values == arange(1, p_max+1); exact integer equality (A1). Independent because numpy's floor is a different implementation of the same closed form, the way test_z_range_is_ceil uses np.ceil. Measured and recorded in the test: only 5 of the 13 ensembles separate floor from ceil (L=32 twice, 5 vs 6; L=64 three times, 10 vs 11) -- the other 8 have L_sites/6 exactly integral -- so the test asserts that discriminating set is non-empty rather than assuming it. Acceptance: replacing Ensemble.p_max with a ceil-based property makes it fail. assert the floor-based lattice momentum range (p = 1..floor(L/6)) the way z is already asserted",
+      "rationale": "config.py's Ensemble.p_max/p_values (closure_JAM_truth/config.py:439-442,449-450) is the exact structural sibling of z_max/z_values, which test_z_range_is_ceil covers, but p_max/p_values has zero test coverage anywhere in the suite; lattice_layout() (generate.py:408-440) builds its (z,p) meshgrid from both, so an off-by-one in p_max would silently change every ensemble's row count with no test catching it",
+      "proposed_oracle": "A1",
+      "proposed_location": "tests/test_closure_extension_systematics.py",
+      "searched": [
+        "grep -in 'p_max' $AUDIT/test_index.txt -> 0 hits",
+        "grep -rn 'p_values' tests/test_*.py -> 4 hits, all in tests/test_analysis_state_adoption.py (substring collision with 'map_values'), none about lattice momentum",
+        "grep -rl '\\.p_max\\b' tests/test_*.py -> 0 files",
+        "grep -i 'p_max' $AUDIT/missing_running.tsv -> 0 hits (file is empty)"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-M02",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_fold_lattice_systematics_rejects_malformed_inputs. Oracle: F1 (structural). All three ValueErrors are matched on their MESSAGE, not the class, since all three raise ValueError and type-only matching lets a corruption trip the wrong guard: 'records and operators must have equal length', 'max_fraction must lie in [0, 1]', 'empty operator'. max_fraction is probed just outside both ends (-1e-9, 1+1e-9) and far outside (-1.0, 2.0). Controls: the unmodified fixture inputs raise nothing, and max_fraction=0.0 and 1.0 are accepted -- so the cases cannot be passing against a validator that rejects everything, and an off-by-one-strictness slip to < is caught. Acceptance: replacing the max_fraction guard with a silent clamp makes it fail. exercise fold_lattice_systematics's three ValueError guards",
+      "rationale": "generate.py:264 (records/operators length mismatch), :266 (max_fraction outside [0,1]), and :277 (empty operator list) are explicit defensive raises in the function this file's cap/spd tests exercise on the happy path only; none of the three has ever been triggered by any test",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_extension_systematics.py",
+      "searched": [
+        "grep -in 'fold_lattice_systematics' $AUDIT/test_index.txt -> 0 hits",
+        "grep -rl 'fold_lattice_systematics' tests/test_*.py -> 1 file (this file itself, happy path only)",
+        "grep -rn \"records and operators must have equal|max_fraction must lie|empty operator\" tests/test_*.py -> 0 hits",
+        "grep -i 'fold_lattice_systematics' $AUDIT/missing_running.tsv -> 0 hits (file is empty)"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-M03",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_systematic_curves_are_distinct_across_keys. Oracle: A2 -- the independence property of the construction, asserted as a scale-free relative separation max|a-b| / max(max|a|, max|b|) so it does not track the curves' overall amplitude. It is independent of build_systematic_curves in the sense that matters: none of the file's other property tests (parity, nulled moment, nu=0, cap, decay) can see curve collapse, because each holds per curve. Both axes covered: 90 same-field key pairs (measured minimum separation 2.55e-02, maximum 1.95e+00) and 180 same-key field pairs (minimum 1.38e-01); bar 1e-3, ~25x below the tightest real pair. Acceptance: hoisting the three rng.uniform draws out of the 'for key in cfg.ITD_SYSTEMATICS' loop -- the exact bug this item names -- makes it fail, and fails nothing else in the file. assert build_systematic_curves produces distinct curves across different systematic keys for the same field",
+      "rationale": "the Mellin/scalar sibling (test_mellin_systematic_truths_are_independent_and_seeded_by_power, line 312) explicitly checks len(set(values))==len(values) for the scalar nuisances, but nothing checks the analogous property for the x-space ITD curves built by build_systematic_curves (generate.py:156-200); a bug hoisting the per-key rng.uniform(...) draws (line 193-195) out of the 'for key in cfg.ITD_SYSTEMATICS' loop would silently give every key of a field the identical curve, and none of this file's existing property tests (parity/nu0/nulled-moment/cap/decay) would notice since each holds per-curve regardless of whether curves coincide",
+      "proposed_oracle": "A2",
+      "proposed_location": "tests/test_closure_extension_systematics.py",
+      "searched": [
+        "grep -in 'distinct' $AUDIT/test_index.txt | grep -i closure -> 1 hit, test_mellin_systematics_use_distinct_one_point_fields_and_unit (about Field objects being distinct, not curve values)",
+        "grep -rl 'build_systematic_curves' tests/test_*.py -> 1 file (this file itself)",
+        "grep -rn 'sys_curves\\[field\\]\\[.*\\] !=' tests/test_*.py -> 0 hits",
+        "grep -i 'distinct.*curve' $AUDIT/missing_running.tsv -> 0 hits (file is empty)"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-M04",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_inflate_diagonal_symmetrizes_and_scales_the_diagonal. Oracle: A1, the closed form sym(C) + f*diag(diag(C)) written out in numpy; measured bit-exact, so asserted with assert_array_equal rather than a chosen tolerance. Asymmetric input covered ([[4,1],[3,9]] -> [[4.04,2.0],[2.0,9.09]]), exercising the 0.5*(cov+cov.T) line for the first time. The 'insufficient regularization' half is recorded as the real limitation of a MULTIPLICATIVE nugget: C_ii -> C_ii(1+f) cannot lift an exactly-zero variance, so diag(0,1) stays singular at f = 0.01, 1.0 and 1e6 alike (asserted via pytest.raises(LinAlgError)); the rank-1 all-ones block IS lifted, eigenvalues [f, 2+f] to rtol 1e-13. Acceptance: dropping the symmetrization makes it fail. unit-test inflate_diagonal in isolation, including an asymmetric input and a case where 1% is not enough regularization",
+      "rationale": "inflate_diagonal (generate.py:110-118) is only ever exercised inside this file's actual_lattice_folds fixture, whose covariance is already-symmetric np.cov output and only mildly singular (rank 1 of 6) -- the 0.5*(cov+cov.T) symmetrization line has never been exercised with a genuinely asymmetric input, and there is no test of what happens when 1% is insufficient to reach positive-definiteness",
+      "proposed_oracle": "A1",
+      "proposed_location": "tests/test_closure_extension_systematics.py",
+      "searched": [
+        "grep -in 'inflate_diagonal' $AUDIT/test_index.txt -> 0 hits",
+        "grep -rl 'inflate_diagonal' tests/test_*.py -> 1 file (this file itself)",
+        "grep -rin 'symmetriz' tests/test_*.py -> 4 hits, all in test_closure_dy_plotting.py/test_direct_coordinates.py/test_joint_action.py about unrelated Jacobian/Hessian symmetrization",
+        "grep -i 'inflate_diagonal' $AUDIT/missing_running.tsv -> 0 hits (file is empty)"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-M05",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_active_ensembles_honours_env_override_and_module_subset. Oracle: F1 (structural), with monkeypatch on both os.environ and the module constant. Covers the default (returns LATTICE_ENSEMBLES itself, 13 entries), ACTIVE_ENSEMBLE_IDS alone, PIXEL_CLOSURE_ENSEMBLES taking precedence over it, whitespace stripping, empty comma entries dropped, REQUESTED order preserved rather than the table's (lattice_layout emits records in that order), an empty-string override falling through to the module constant rather than returning nothing, and an unknown id raising KeyError rather than silently yielding a short tuple. Acceptance: an active_ensembles that ignores the env var makes it fail. test active_ensembles()'s PIXEL_CLOSURE_ENSEMBLES env-var and ACTIVE_ENSEMBLE_IDS subsetting path",
+      "rationale": "active_ensembles() (config.py:487-498) has an env-var override and a module-constant subsetting branch that every test in this file bypasses (ACTIVE_ENSEMBLE_IDS is None by default, so all suite-parametrized tests always see the full 13-ensemble tuple); a bug in the override's comma-split/lookup (e.g. KeyError on an unknown id, or ignoring the override) has no test coverage",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_extension_systematics.py",
+      "searched": [
+        "grep -in 'PIXEL_CLOSURE_ENSEMBLES|ACTIVE_ENSEMBLE_IDS' $AUDIT/test_index.txt -> 0 hits",
+        "grep -rl 'PIXEL_CLOSURE_ENSEMBLES|ACTIVE_ENSEMBLE_IDS' tests/test_*.py -> 0 files",
+        "grep -rln 'monkeypatch.*environ|os.environ' tests/test_closure*.py -> 0 files",
+        "grep -i 'PIXEL_CLOSURE_ENSEMBLES' $AUDIT/missing_running.tsv -> 0 hits (file is empty)"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_extension_systematics-M06",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_low_x_head_error_converges_in_x_min. Sweep x_min and assert the per-decade rate of the column-0 low-x head error, per field class, instead of a fixed bar. Oracle: 40-digit mpmath quadrature of the entire [0,1] weighted integral plus a closed-form head-model prediction -- independent because it uses no basis, no grid, no pixel import and no low-x completion. Acceptance: a linear head on sigma/g fails the rate; a flat head on the vanishing class fails the integrability assertion; a 50%-inflated low_x_quadrature_correction fails the level.",
+      "rationale": "Both of this file's column-0 bars compare two evaluations of the same completion, so neither can see the completion being the wrong shape, and no test anywhere varied x_min for a low-x accuracy claim.",
+      "effort": "M"
+    }
+  ],
+  "unjustified_tolerances": [
+    {
+      "line": 178,
+      "text": "assert abs(moment) < 1e-9, f\"{field}/{key} n=1 moment={moment}\"",
+      "quantity": "n=1 Mellin functional dotted with the projected systematic curve",
+      "comment_added": "bar is the projector's own linear-solve floor, not a physics-measured accuracy -- see weakness -01",
+      "provenance": "known (algebraic, not measured -- see measurements)"
+    },
+    {
+      "line": 215,
+      "text": "assert np.allclose(Br_pos @ s, Br_neg @ s, atol=1e-10)",
+      "quantity": "real-component kernel row parity residual under nu -> -nu",
+      "comment_added": "residual is exactly 0 for any s (measured); atol=1e-10 is far looser than the achieved bit-level agreement",
+      "provenance": "known (measured this audit: 0.000e+00)"
+    },
+    {
+      "line": 216,
+      "text": "assert np.allclose(Bi_pos @ s, -(Bi_neg @ s), atol=1e-10)",
+      "quantity": "imaginary-component kernel row parity residual under nu -> -nu",
+      "comment_added": "residual is exactly 0 for any s (measured); atol=1e-10 is far looser than the achieved bit-level agreement",
+      "provenance": "known (measured this audit: 0.000e+00)"
+    },
+    {
+      "line": 270,
+      "text": "assert abs(r0) < 1e-9, f\"real {field}/{key} nu=0 -> {r0}\"",
+      "quantity": "real-component kernel row at nu=0 dotted with the projected curve",
+      "comment_added": "same projector-floor character as line 86, plus (singlet/gluon fields) bitwise identical to the projector's own itd_zero row",
+      "provenance": "known (algebraic, not measured -- see measurements)"
+    },
+    {
+      "line": 273,
+      "text": "assert abs(i0) < 1e-12, f\"imag {field}/{key} nu=0 -> {i0}\"",
+      "quantity": "imaginary-component kernel row at nu=0 dotted with the projected curve",
+      "comment_added": "row is the exact zero vector for any s (measured, bit-for-bit 0.0); not a measurement of the curve at all",
+      "provenance": "known (measured this audit: exactly 0.0)"
+    },
+    {
+      "line": 317,
+      "text": "assert tail < 0.7 * peak, f\"{field}/{key}: tail {tail} vs peak {peak}\"",
+      "quantity": "ratio of |folded systematic| at nu=300 to its peak over nu in [1,40]",
+      "comment_added": "measured this audit across all 45 jam (field,key) pairs: range 1.2e-3 to 6.07e-1 -- tight for alpha=-1 fields, loose (300-400x margin) for alpha=0 fields",
+      "provenance": "known (measured this audit)"
+    },
+    {
+      "line": 407,
+      "text": "assert all(value <= cfg.SYSTEMATIC_MAX_FRACTION * (1.0 + 1e-12) for value in observed.values())",
+      "quantity": "per-(field,key) max scaled-shift-to-signal ratio",
+      "comment_added": "1e-12 slack is solver/floating-point headroom around an algebraically-guaranteed equality, not a physics margin -- see weakness -06",
+      "provenance": "known (algebraic, not measured)"
+    },
+    {
+      "line": 409,
+      "text": "assert all(np.isclose(value, cfg.SYSTEMATIC_MAX_FRACTION, rtol=1e-10) for value in observed.values())",
+      "quantity": "same ratio as line 206, checked for exact cap saturation",
+      "comment_added": "rtol=1e-10 is solver floating-point headroom; the equality itself is guaranteed by scale=max_fraction/max_ratio, not measured against an independent target",
+      "provenance": "known (algebraic, not measured)"
+    },
+    {
+      "line": 436,
+      "text": "np.linalg.cholesky(reg)  # raises if not SPD",
+      "quantity": "success/failure of Cholesky factorization after 1% diagonal inflation",
+      "comment_added": "the input cov is rank-1 by fixture construction (measured this audit), not by any emergent property of the fold -- see weakness -07",
+      "provenance": "known (measured this audit: rank 1 of 6)"
+    },
+    {
+      "line": 685,
+      "text": "assert ratio <= cfg.SYSTEMATIC_MAX_FRACTION * (1.0 + 1e-12)",
+      "quantity": "per-Mellin-nuisance scaled-shift-to-signal ratio",
+      "comment_added": "same algebraic guarantee as line 206, and weaker (one-directional) than that sibling's np.isclose check -- see weakness -09",
+      "provenance": "known (algebraic, not measured)"
+    }
+  ],
+  "measurements": [
+    {
+      "claim": "the real/imag parity assertion (line 103-104) is exactly 0 for the real systematic curve AND for an unrelated random vector",
+      "command": "scratchpad/audit/m1_parity_decay.py (OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=. .venv/bin/python3 ...)",
+      "result": "s=real 'ht' systematic: even_err=0.000e+00, odd_err=0.000e+00; s=garbage random vector: even_err=0.000e+00, odd_err=0.000e+00"
+    },
+    {
+      "claim": "the imag(nu=0) assertion (line 126) is exactly 0.0 for the real systematic curve AND for an unrelated random vector",
+      "command": "scratchpad/audit/m1_parity_decay.py",
+      "result": "s=real 'ht' systematic: imag(nu=0)=0.0; s=garbage random vector: imag(nu=0)=0.0"
+    },
+    {
+      "claim": "for a quark-type field, PseudoITDReal(alpha=-1,pow1)@nu=0 numerically coincides with Mellin(alpha=-1,pow1)@n=1 (_mellin_n1_row)",
+      "command": "scratchpad/audit/m1_parity_decay.py",
+      "result": "max|Cosine_row(nu=0) - Mellin_row(n=1)| = 4.996e-16 (row max|.|=1.073e+00); m1@s=2.966e-16, Cosine_row(nu=0)@s=4.840e-16 against bar 1e-9"
+    },
+    {
+      "claim": "decay-bound (line 151, bar 0.7) tail/peak ratios across all 45 jam (field,key) pairs",
+      "command": "scratchpad/audit/m1b_decay_full.py",
+      "result": "highest: t8/inf_Lz=6.070e-01, t8/chiral=5.804e-01, t8/ht=5.790e-01, t15/cont_invz=5.589e-01, t3/cont_aL=5.314e-01; lowest: g/chiral=1.789e-03, g/cont_aL=1.736e-03, sigma/chiral=1.236e-03; 5/45 pairs above 0.5, 1/45 above 0.6"
+    },
+    {
+      "claim": "test_nulled_counting_moment cannot detect _mellin_n1_row computing the wrong (n=2) Mellin order",
+      "command": "scratchpad/audit/m2_nulled_moment_taut.py -- monkeypatches generate._mellin_n1_row in-memory only, restored immediately after, never touches src/ or disk",
+      "result": "test's own recomputed check: max|m1_buggy @ s|=2.111e-14 (bar 1e-9 -> PASSES); TRUE n=1 moment of the same curves: max|m1_true @ s|=5.161e+01 (bar 1e-9 -> FAILS). gen._mellin_n1_row confirmed restored to the original function afterward"
+    },
+    {
+      "claim": "test_generation_fold_enforces_cap_for_every_field_key's numeric cap check is identical for the real curves and for pure-noise garbage curves",
+      "command": "scratchpad/audit/m3_cap_taut.py -- restricted to 1 ensemble (a117m310) for speed",
+      "result": "garbage curve's true n=1 moment (t3/ht) = 4.868e+02 (vs ~1e-14 for real curves). real curves: max|observed-cap|=1.388e-17, all np.isclose(rtol=1e-10)=True. garbage curves: max|observed-cap|=1.388e-17 (bit-for-bit identical residual), all np.isclose(rtol=1e-10)=True"
+    },
+    {
+      "claim": "the actual_lattice_folds fixture's synthetic replica ensemble is exactly rank-1 per field",
+      "command": "scratchpad/audit/m3_cap_taut.py (same run as above)",
+      "result": "ensemble['t3'] shape=(6, 128), matrix_rank=1 (of 6 possible)"
+    },
+    {
+      "claim": "An independently-built n=1 Mellin row (x=exp(u) substitution, composite Gauss-Legendre per grid interval, closed-form low-x head) agrees with gen._mellin_n1_row on every basis column except column 0, and is converged in its own order.",
+      "command": "scratchpad/explore_oracle.py and scratchpad/measure.py (OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=. venv/bin/python)",
+      "result": "cols>=1 max|ratio-1| = 1.1879e-14; col 0 = 8.5569e-04. Identical at 8, 16, 24 and 40 points per interval, so the col-0 gap is a scheme difference, not truncation error. Same numbers for jam and nnpdf."
+    },
+    {
+      "claim": "The col-0 gap is PIXEL's error, not the oracle's: for alpha != 0, base_matrix disables the closed-form head and low_x_quadrature_correction's Gauss-Jacobi weight t**gamma does not absorb the x**alpha baked into the kernel, leaving a 1/t singularity in the sampled integrand.",
+      "command": "OMP_NUM_THREADS=1 PYTHONPATH=. venv/bin/python -c 'low_x_quadrature_correction(lambda nu,x: x**(nu-1)*x**-1, [1.0], 1e-6, power(alpha=1))'",
+      "result": "PIXEL head = 0.99908173; exact head = int_0^x_min x^-1 (x/x_min)^1 dx = 1 exactly; relative error -9.1827e-04. The SINE head at the same settings is exact to 2.2e-16 (sin(nu x)/x is regular at the origin), so only the even-kernel/Mellin case is affected."
+    },
+    {
+      "claim": "The systematic curves' n=1 moment under the independent row, and their nu=0 real value for the alpha=0 fields, are genuinely ~0.",
+      "command": "scratchpad/measure.py",
+      "result": "max |m1_ind@s| / max|s| = 6.3185e-05 over all 45 (field,key) pairs; max |itd0_ind@s| / max|s| = 4.2550e-15 for the alpha=0 fields. Identical for jam and nnpdf."
+    },
+    {
+      "claim": "Imag(nu)/nu at nu=1e-4 matches the independent x^(alpha+1) moment row, and that oracle is far from zero so the ratio bar is not vacuous.",
+      "command": "scratchpad/measure.py",
+      "result": "max |slope/independent - 1| = 1.5663e-09 (bar 1e-7); minimum |independent|/max|s| = 5.1175e-02 (guard 1e-3)."
+    },
+    {
+      "claim": "Decay ratios split cleanly by alpha class, and the old single 0.7 bar was ~300x oversized for alpha=0.",
+      "command": "scratchpad/measure.py",
+      "result": "alpha=-1: 35 pairs, [1.4518e-01, 6.0700e-01]. alpha=0: 10 pairs, [1.2365e-03, 2.5946e-03]. Minimum peak over both classes 3.6213e-03. Identical for jam and nnpdf."
+    },
+    {
+      "claim": "The cap test's independent rebuild reproduces the fold's own raw_shift and central bit-exactly, and the cap equality holds to float noise.",
+      "command": "scratchpad/measure2.py",
+      "result": "assert_allclose(rtol=0, atol=0) passes for both raw_shift and central over all 117 records; max|observed/cap - 1| = 2.220e-16 over the 45 pairs; folds.curves - sys_curves*scale = 0.0 exactly."
+    },
+    {
+      "claim": "A full-rank replica ensemble still folds to a singular covariance, for the emergent reason rank <= n_rep - 1 < n_pts.",
+      "command": "scratchpad/measure2.py",
+      "result": "rank-1 fixture: matrix_rank(ensemble[field]) == 1, every folded block rank 1 with n from 15 to 80. noisy fixture: matrix_rank(ensemble[field]) == 6, folded blocks rank 3-5. diag(cov) spans 8.183e-07 to 3.131e+00 (noisy), 8.269e-07 to 3.099e+00 (rank-1) -- numpy's implicit atol=1e-8 sat ~1.2% below the smallest diagonal entry. Diagonal formula max|ratio-1| = 2.22e-16."
+    },
+    {
+      "claim": "Systematic curves are well separated across keys and across fields.",
+      "command": "scratchpad/measure2.py",
+      "result": "90 same-field key pairs: relative separation in [2.5493e-02, 1.9458e+00]. 180 same-key field pairs: minimum 1.3774e-01."
+    },
+    {
+      "claim": "inflate_diagonal's behaviour in isolation, including the case 1% cannot fix.",
+      "command": "scratchpad/measure2.py",
+      "result": "[[4,1],[3,9]] at f=0.01 -> [[4.04,2.0],[2.0,9.09]] (symmetric). ones(2,2) at f=0.01 -> eigenvalues [0.01, 2.01], SPD. diag(0,1) at f=0.01 -> cholesky raises LinAlgError ('Matrix is not positive definite'); a multiplicative nugget cannot lift a zero variance at any f."
+    },
+    {
+      "claim": "ACCEPTANCE: the pre-fix assertions passed under mutations the new ones catch.",
+      "command": "scratchpad/old_form_check.py with scratchpad/mutplug/mut_sys.py (MUT=<name>), re-running the exact pre-fix assertion bodies",
+      "result": "mellin_n2 -> OLD test_nulled_counting_moment PASSED, max|m1@s| = 2.111e-14. mellin_alpha0 -> PASSED, 2.109e-14. flat_head_zero -> OLD test_real_vanishes_at_nu0 PASSED, max|r0| = 9.159e-16. flat_head_odd -> OLD test_real_even_imag_odd_in_nu PASSED, residual 0.000e+00 (branch never reached), and OLD test_converges_at_large_nu PASSED with alpha=0 ratio 7.0843e-03 under the 0.7 bar. wrong_key_coefficient -> OLD cap test PASSED, 2.220e-16. cov_rowvar -> OLD SPD test PASSED with every block (6,6). cov_two_replicas -> OLD SPD test PASSED. moment_scale_half -> OLD mellin cap test PASSED with max|ratio/cap - 1| = 5.000e-01. Under a clean run (MUT=none) all six pre-fix forms pass, as expected."
+    },
+    {
+      "claim": "EVIDENCE QUALITY: the batch C1 mutation harness is immune to the two failure modes reported mid-flight by batch C4 (FIX_AGENT_BRIEF mode 6), and every recorded acceptance failure is the intended assertion.",
+      "command": "grep for exec(/compile(/__dict__/getsource over scratchpad/mutplug/*.py and over both test files; then pytest --tb=line per mutation to read the failing line number and message",
+      "result": "The plugins define plain functions and assign them onto module attributes (gen._mellin_n1_row, gen.fold_lattice_systematics, common.Sine.kernel_func, cfg.Ensemble.p_max, ...) -- no exec, no compile, no __dict__ copy, so neither the shifted-line getsource mode nor the frozen-globals mode can apply; collaborators are looked up on the module object at call time. Neither test file reads repository source as text (no inspect/getsource/read_text/__file__). Failing lines confirmed one per mutation: mellin_n2 and mellin_alpha0 -> :334 'cols>=1 max rel 8.475e+05'; flat_head_zero -> :471 'sigma col 0 1.302e+01'; flat_head_odd -> :405 label 'production-alpha-+0' and :604 'sigma/ht (alpha=+0): tail/peak 6.3955e-03 vs bar 0.005'; sine_distorted -> :540 'slope -1.781640e-01 vs independent -1.773712e-01'; wrong_key_coefficient -> :757 assert_array_equal on the independently rebuilt raw shift; cov_rowvar -> :830 'assert (6, 6) == (15, 15)'; cov_two_replicas -> :839 'assert 1 >= 2'; moment_scale_half -> :1098 'ratio 0.05 vs cap 0.1'; shared_curve -> :1133 'ht and chiral coincide (0.000e+00)'; no_max_fraction_guard -> :1181 'DID NOT RAISE ValueError'; p_max_ceil -> :258 'assert 6 == 5'; env_ignored -> :1276 wrong id list; no_symmetrize -> :1223 assert_array_equal on the closed form; ignore_truth_curves -> :1331 and fold_truth_first_only -> :1381, the two truth-branch assertions."
+    },
+    {
+      "claim": "test_nulled_counting_moment's 1e-3 column-0 bar is set by LowXExtension.npts=32 (closed form 1/(npts+1)**2 = 9.18e-4), NOT by x_min: it moves 6% over four decades of x_min and 3.8x per doubling of npts.",
+      "command": "scratchpad/mut_lowx2/ (OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 venv/bin/python), _independent_power_moment_row vs Mellin(alpha=-1, power alpha=1, npts=...) at n_points=128",
+      "result": "ratio[0] at (x_min, npts): (1e-4,16)=3.3255e-03 (1e-4,32)=8.8037e-04 (1e-4,64)=2.2677e-04; (1e-6,16)=3.2320e-03 (1e-6,32)=8.5569e-04 (1e-6,64)=2.2041e-04; (1e-8,16)=3.1421e-03 (1e-8,32)=8.3194e-04 (1e-8,64)=2.1430e-04. npts32/npts16 = 0.2648 vs the closed-form 17**2/33**2 = 0.2654."
+    },
+    {
+      "claim": "The pseudo-ITD column-0 head error at nu=4 falls at a rate set by the field class, and the two production classes differ by 11 orders of magnitude at the same x_min. Oracle: 40-digit mpmath quadrature of the whole [0,1] integral.",
+      "command": "scratchpad/mut_lowx2/measure_itd.py (PYTHONPATH=. venv/bin/python), n_points=145, PseudoITDReal with cfg.low_x_completion",
+      "result": "alpha=-1 linear head on q=x**0.5 (1-x)**3: 1.355615e-03, 4.273111e-04, 1.326421e-04 (ratios 3.1724, 3.2215; got/pred 1.000353, 0.997152, 0.978810). alpha=0 flat head on q=(1-x)**3: 1.008471e-11, 1.011413e-13, 8.881784e-16 (first-step ratio 99.7091; got/pred 1.000020, 1.002936; the third rung is at the FE floor, predicted 1.008453e-15). Mutation: linear head on the alpha=0 class gives 3.361509e-06/3.361509e-07/3.361509e-08, rate exactly x10."
+    },
+    {
+      "claim": "The new kernel-agnostic check_low_x_integrable refuses 26 of the 117 production Mellin lattice records in each full closure suite -- sigma and g at n=3 with the flat completion -- even though their [0, x_min) head is convergent.",
+      "command": "PYTHONPATH=. OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 venv/bin/python: gen.lattice_layout() kind=='mellin' tally, and kernels.Mellin(alpha=-1, low_x_extension='flat').matrix([n], basis) for n in (1, 2, 3)",
+      "result": "Mellin layout: g n=3 flat x13, sigma n=3 flat x13, t3/t8/t15 n=3 power-1 x13 each, v/v3/v8/v15 n=2 power-1 x13 each (117 total). Mellin(alpha=-1, flat) RAISES at n=1, n=2 AND n=3. Exact head at n=3, alpha=-1, flat, x_min=1e-6 is x_min**2/2 = 5e-13, i.e. finite and convergent."
+    }
+  ],
+  "notes_for_readme": "this file's property tests split cleanly into two classes: three (nulled-moment, parity, nu=0-vanishing) are guaranteed by construction (projector algebra or kernel symmetry) and independent of the systematic curve's actual content -- demonstrated by mutation, not just argued; the cap-enforcement test has the same character. The decay and covariance-SPD tests are partially real. Readers of the area index should not count this file as validating the systematic-injection *physics* beyond structural wiring and the (real) cross-package consistency checks."
+}

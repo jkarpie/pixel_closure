@@ -1,0 +1,339 @@
+{
+  "file": "tests/test_closure_plot_scaling.py",
+  "area": "closure-suite",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "closure_JAM_truth/run_closure.py:116-154 (reproduction_ylim)",
+    "closure_JAM_truth_small/run_closure.py:115-153 (reproduction_ylim)",
+    "closure_NNPDF_truth/run_closure.py:116-154 (reproduction_ylim)",
+    "closure_NNPDF_truth_small/run_closure.py:115-153 (reproduction_ylim)"
+  ],
+  "drives_non_pixel": "This file imports nothing from pixel -- only `run_closure` from the four closure_*_truth{,_small} driver packages. It drives reproduction_ylim, a pure-numpy y-axis-limit calculator, and (added 2026-08-13) plot_reproduction, its only caller, which does ax.set_ylim(*reproduction_ylim(...)) on each of nine panels. The four copies are byte-identical (diff, confirmed this audit; re-confirmed 2026-08-13 by comparing inspect.getsource lengths, 1527 chars in all four).",
+  "n_tests": 8,
+  "n_parametrized_cases": 36,
+  "tests": [
+    {
+      "name": "test_reproduction_ylim_contains_both_bands_above_point_two",
+      "line": 48,
+      "claim": "Name and inline comments claim the returned (ymin, ymax) contains both the truth's and the posterior's one-sigma bands for x >= 0.2, with headroom, while the much larger low-x excursions do not flatten the useful region.",
+      "actual": "Checks only four one-sided bounds on the returned floats: ymin < 0, ymax > 1.6, ymin > -10, ymax < 10. Run once per closure package (runner in {jam_full, jam_small, nnpdf_full, nnpdf_small}); all four bodies are byte-identical, so this is a drift guard, not four independent implementations. The true value on this fixture (hand-derived and confirmed by direct computation this audit) is exactly (-0.192, 1.792); none of the four bounds is tight against it.",
+      "how": "Builds 5-point x/truth/truth_std/posterior/posterior_std arrays (posterior and truth share the same x array), calls runner.reproduction_ylim with default focus_x=0.2, pad_fraction=0.12, and checks the loose bounds instead of the exact value.",
+      "oracle": "A1",
+      "bar": "ymin < -0.0, ymax > 1.6, ymin > -10.0, ymax < 10.0 -- one-sided bounds, not rtol/atol; true value (-0.192, 1.792)",
+      "strength": "W1",
+      "catches": "Catches (demonstrated by mutation this audit): dropping the upper (center + spread) contribution to a band -> ymax falls to 1.008, fails ymax>1.6; relaxing the x >= focus_x cutoff to strict x > focus_x -> ymax falls to 0.672, fails ymax>1.6. Does NOT catch (demonstrated): dropping the lower (center - spread) contribution entirely -- on this fixture the true minimum comes from an exact zero at x=1.0 (truth=posterior=0, std=0), so that mutant returns the identical (-0.192, 1.792) and the test still passes, despite the test's own name promising 'both bands'. Also does not catch removing the min(0.0, ...)/max(0.0, ...) zero-inclusion clamp the source docstring calls out -- same reason, the exact-zero point already sits at the true min/max on this fixture."
+    },
+    {
+      "name": "test_reproduction_ylim_has_stable_fallback_for_missing_focus_data",
+      "line": 101,
+      "claim": "Name promises a stable fallback when no data falls in the focus window.",
+      "actual": "With x=[0.01, 0.1] (both below the default focus_x=0.2) and all-zero curves, asserts exact equality to the literal (-0.08, 1.08). This is a real, distinct branch (finite.size == 0, an early return before any min/max/pad arithmetic), not a weak check -- exact-tuple equality also implicitly rules out NaN/Inf and an unguarded np.min/np.max on an empty array.",
+      "how": "Both truth-leg and posterior-leg masks (x >= focus_x) are all-False since both entries of x are below 0.2, so `values` stays empty and reproduction_ylim takes its finite.size == 0 branch, returning the hardcoded literal.",
+      "oracle": "F2",
+      "bar": "exact tuple equality to (-0.08, 1.08)",
+      "strength": "S3",
+      "catches": "Catches the hardcoded fallback literal drifting, the finite.size==0 guard being removed (which would raise ValueError: zero-size array on the subsequent np.min), or the branch returning NaN/Inf. Runs only jam_small -- the byte-identical jam_full/nnpdf_full/nnpdf_small copies never take this branch anywhere in the suite (grep, this audit; see missing M01)."
+    },
+    {
+      "name": "test_reproduction_ylim_floor_comes_from_the_lower_band",
+      "line": 168,
+      "claim": "On a fixture with no exact zero in the focus region, ymin is set by the center-spread edge and ymax by the center+spread edge, both unique.",
+      "actual": "Asserts the exact return (-0.436, 1.486) at rtol=1e-12, atol=0.0, for all four runners.",
+      "how": "Hand-derived from the literals: focus-region values sort to -0.25, 0.13, 0.2, 0.37, 0.4, 0.55, 0.65, 0.7, 0.8, 0.8, 1.25, 1.3; min=-0.25 (truth lower edge at x=0.9, strictly negative so the zero clamp is a no-op), max=1.3 (truth upper edge at x=0.3), span=1.55, pad=0.186.",
+      "oracle": "A1",
+      "bar": "rtol=1e-12, atol=0.0; measured agreement 0.0 relative difference",
+      "strength": "S2",
+      "catches": "Measured by mutation 2026-08-13: an upper-only mutant returns (-0.156, 1.456); a lower-only mutant returns (-0.364, 0.814). Both fail this test. The upper-only mutant -- the one the audit found nothing could see -- still PASSES test_reproduction_ylim_contains_both_bands_above_point_two, which is the original finding demonstrated; the lower-only mutant does fail that older test, because dropping the upper edge also pushes ymax under its 1.6 bound. This is the fixture weakness -01 said did not exist."
+    },
+    {
+      "name": "test_reproduction_ylim_clamps_a_one_signed_band_to_include_zero",
+      "line": 213,
+      "claim": "min(0.0, ...)/max(0.0, ...) put zero inside the returned interval when every focus-region band edge is one-signed.",
+      "actual": "Two fixtures (sign=+1 and sign=-1), each asserting the exact return -- (-0.132, 1.232) and (-1.232, 0.132) -- plus ymin < 0 < ymax and the data's own extreme strictly inside.",
+      "how": "Hand-derived: edges span [+0.4, +1.1] and [-1.1, -0.4]; the clamp moves one endpoint to 0.0 before the pad is computed, so it changes both the endpoint and the span.",
+      "oracle": "A1",
+      "bar": "rtol=1e-12, atol=0.0",
+      "strength": "S2",
+      "catches": "Measured by mutation 2026-08-13: replacing the clamp with a bare float(np.min(finite))/float(np.max(finite)) returns (0.316, 1.184) and (-1.184, -0.316), failing all 8 of this test's items and the 4 plot_reproduction items (12 failed / 24 passed); every other test in the file passes, and before this pass the mutation was invisible to the whole suite."
+    },
+    {
+      "name": "test_reproduction_ylim_honours_explicit_focus_x_and_pad_fraction",
+      "line": 275,
+      "claim": "The keyword-only focus_x and pad_fraction are read from the arguments, not from their literal defaults.",
+      "actual": "Four calls on one fixture: defaults (control) -> (-0.436, 1.486); focus_x=0.6 -> (-0.376, 0.926); pad_fraction=0.0 -> (-0.25, 1.3); pad_fraction=0.25 -> (-0.6375, 1.6875).",
+      "how": "Hand-derived. pad_fraction=0.0 is the strongest of the four: it pins the clamped extremes with no pad arithmetic in the way.",
+      "oracle": "A1",
+      "bar": "rtol=1e-12, atol=0.0",
+      "strength": "S2",
+      "catches": "Measured by mutation 2026-08-13: a body ignoring focus_x returns the default answer for the focus_x=0.6 call; one ignoring pad_fraction returns it for both pad calls. The focus_x mutation is invisible to every other test in the file."
+    },
+    {
+      "name": "test_reproduction_ylim_pads_a_degenerate_all_zero_band",
+      "line": 332,
+      "claim": "The span > 0.0 fallback gives a nonzero axis range when every selected band edge is exactly zero.",
+      "actual": "Asserts (-1.2e-4, 1.2e-4) at the default pad_fraction and (-5e-4, 5e-4) at pad_fraction=0.5.",
+      "how": "After the clamp ymin <= 0 <= ymax, so span == 0 forces ymin == ymax == 0 and pad = pad_fraction * max(abs(ymin), 1e-3) = pad_fraction * 1e-3. Distinct from the finite.size == 0 branch, which returns earlier.",
+      "oracle": "A1",
+      "bar": "rtol=1e-12, atol=0.0",
+      "strength": "S2",
+      "catches": "Measured by mutation 2026-08-13: pad = pad_fraction * span returns the degenerate (0.0, 0.0) and fails; nothing else in the file notices. Not an audit item -- found while closing -02."
+    },
+    {
+      "name": "test_reproduction_ylim_drops_nonfinite_points_instead_of_propagating_them",
+      "line": 371,
+      "claim": "NaN/Inf entries are removed rather than clipped or propagated, and the concatenated np.isfinite filter is what removes an overflowed sum.",
+      "actual": "Fixture 1 (NaN truth center, +inf posterior spread, both in the focus region) -> (-0.38, 1.48). Fixture 2 (center=spread=1e308, so center+spread overflows) -> (-0.072, 0.672).",
+      "how": "Hand-derived from the surviving points in each case.",
+      "oracle": "A1",
+      "bar": "rtol=1e-12, atol=0.0",
+      "strength": "S2",
+      "catches": "Measured by mutation 2026-08-13: deleting the concatenated filter leaves fixture 1 unchanged (the per-point mask already removed those points) but returns (-inf, inf) on fixture 2, so the overflow case is what makes the test able to fail there. Deleting both filters gives (-1.2e-4, 1.2e-4) and (-inf, inf). Deleting ONLY the per-point isfinite terms is byte-identical on every fixture in the file -- they are provably redundant with the concatenated filter, recorded in the module docstring."
+    },
+    {
+      "name": "test_plot_reproduction_sets_each_panel_ylim_from_its_own_bands",
+      "line": 460,
+      "claim": "plot_reproduction wires reproduction_ylim's return onto each of its nine Axes, per field, with the truth leg's own x/curve/curve_std and the posterior leg's own.",
+      "actual": "Wraps save_figure_both to read all nine ax.get_ylim() at the moment the figure is complete, then delegates to the real save and requires the PNG and PDF to appear. Asserts the exact per-panel limits, that all nine differ, and that len(cfg.ALL_FIELDS) == 9 (the 3x3 grid zips against the field list and would silently drop a tenth). Run twice: with curve_std present, and without it to exercise the np.zeros_like fallback.",
+      "how": "Oracle A1, not a re-call of the helper: field i's curves are field 0's times (i+1) and reproduction_ylim is homogeneous of degree one in y, so panel i must be (i+1)*(-0.32, 0.92) with curve_std and (i+1)*(-0.096, 0.896) without. The truth leg has 5 nodes and the posterior leg 4 different ones, so crossing them raises rather than returning a plausible number, and the true min comes from the truth leg while the true max comes from the posterior leg.",
+      "oracle": "A1",
+      "bar": "rtol=1e-12, atol=0.0; measured largest relative difference across all 18 limits 2.22e-16",
+      "strength": "S2",
+      "catches": "Measured by mutation 2026-08-13 against mutated copies of plot_reproduction installed on all four modules (an identity copy passes all 36 items, so the harness is not what fails): posterior-x-for-truth raises ValueError on the (4,) vs (5,) broadcast; zeroing t_std returns the no-curve_std limits; computing the limits once and sharing them fails panels 2-9; reversing the tuple mismatches 18/18; deleting set_ylim leaves Matplotlib's autoscale. Each fails only this test."
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_closure_plot_scaling-01",
+      "test": "test_reproduction_ylim_contains_both_bands_above_point_two",
+      "pattern": "W-LOOSE",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_reproduction_ylim_floor_comes_from_the_lower_band (added, parametrized over all four runners). The new fixture has no exact zero in the focus region and both extremes are unique: min=-0.25 is the truth lower edge at x=0.9 (strictly negative, so the zero clamp cannot supply the floor instead) and max=+1.30 is the truth upper edge at x=0.3. The exact return (-0.436, 1.486) is asserted at rtol=1e-12, atol=0.0. Acceptance: an in-memory mutant appending only center+spread returns (-0.156, 1.456) and one appending only center-spread returns (-0.364, 0.814); both fail the new test, and the upper-only mutant still PASSES test_reproduction_ylim_contains_both_bands_above_point_two, which is the original finding reproduced. That older test also gained an exact-value assertion (-0.192, 1.792) alongside its four one-sided bounds. tests/test_closure_plot_scaling.py:89,92,95,98 (the four asserts, final file) -- measured via a standalone mutation script (pasted function body, no closure_*/ import): with the test's exact literal inputs, a mutant reproduction_ylim that only ever appends `center[mask] + spread[mask]` (silently drops the `center[mask] - spread[mask]` lower-edge contribution for both truth and posterior legs) returns ymin=-0.192, ymax=1.792 -- byte-identical to the correct implementation -- because the true minimum in the focus region is an exact zero at x=1.0 (truth=posterior=0, std=0), independent of whether the lower band is computed. All four assertions still pass.",
+      "why_it_matters": "A real bug that drops the lower error bar from the reproduction-panel scaling (e.g. a copy-paste keeping only the `+ spread` half) would ship undetected, even though the test's own name explicitly promises 'both bands' are contained.",
+      "proposed_fix": "Add a case (or amend this fixture) where the lower 1-sigma edge is the unique binding minimum -- e.g. a curve whose center is not already 0 at the point with the largest std -- so dropping it changes ymin measurably.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_plot_scaling-02",
+      "test": "test_reproduction_ylim_contains_both_bands_above_point_two",
+      "pattern": "W-NEVER",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_reproduction_ylim_clamps_a_one_signed_band_to_include_zero (added, 4 runners x 2 signs). Both fixtures are strictly one-signed in the focus region ([+0.4, +1.1] and [-1.1, -0.4]), so the clamp is the only thing that can put zero inside the interval; the exact returns (-0.132, 1.232) and (-1.232, 0.132) are asserted at rtol=1e-12, atol=0.0. Acceptance: a mutant using bare float(np.min(finite))/float(np.max(finite)) returns (0.316, 1.184) and (-1.184, -0.316), failing all eight of that test's items. Re-measured after the plot_reproduction test was added: the clamp mutation also fails that test (12 failed / 24 passed in total), because its expectation is a closed form rather than a re-call of the helper; every other test in the file passes. Before this pass the clamp mutation was invisible to the entire suite. A neighbouring never-reached branch found while doing this -- pad = pad_fraction * (span if span > 0 else max(abs(ymin), 1e-3)) -- is now covered by test_reproduction_ylim_pads_a_degenerate_all_zero_band. tests/test_closure_plot_scaling.py:48-98 and :101-130 (final file, both full test bodies) -- measured via the same standalone mutation script: removing the `min(0.0, ...)` / `max(0.0, ...)` zero-inclusion clamp from reproduction_ylim (the source's own docstring: 'plus zero and modest headroom') leaves both tests' results unchanged. Test 1's finite array already contains an exact 0.0 from the x=1.0 point, so the clamp changes nothing; test 2 returns from the finite.size==0 branch before the clamp line is ever reached.",
+      "why_it_matters": "The zero-inclusion behavior is a deliberate, documented design point (an all-positive or all-negative injected truth should still show the x-axis at 0), and no test in this file -- or anywhere in the suite, by grep -- would notice it being deleted.",
+      "proposed_fix": "Add a case whose focus-region values are all strictly positive (verifies ymin clamps down to 0.0, below the data's own minimum) and one whose values are all strictly negative (verifies ymax clamps up to 0.0).",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_plot_scaling-03",
+      "test": "test_reproduction_ylim_contains_both_bands_above_point_two",
+      "pattern": "W-DEAD",
+      "severity": "S4",
+      "evidence": "RESOLVED 2026-08-13 as DOCUMENTATION-ONLY (no strengthening, and none was proposed: this weakness's own proposed_fix concluded no code change was required). VERIFIED present in the file this pass -- tests/test_closure_plot_scaling.py:15 and :67-68 record that the four reproduction_ylim bodies are byte-identical and that the four-way parametrization is kept deliberately as a drift guard. Recorded here because the JSON was left unannotated when the documentation landed; a reader of the report alone would have counted this as outstanding work. The underlying limitation is unchanged and is stated in the file. UNCHANGED 2026-08-13, and deliberately extended: every test added this pass is parametrized over the same four runners, so the drift guard now covers every branch rather than only the main one. Re-confirmed the four bodies are identical by comparing inspect.getsource lengths (1527 chars in all four). tests/test_closure_plot_scaling.py:44-47 parametrizes over jam_full, jam_small, nnpdf_full, nnpdf_small, but closure_JAM_truth/run_closure.py:116-154, closure_JAM_truth_small/run_closure.py:115-153, closure_NNPDF_truth/run_closure.py:116-154 and closure_NNPDF_truth_small/run_closure.py:115-153 are byte-identical reproduction_ylim bodies (diff, confirmed this audit) -- one distinct implementation run four times under different names.",
+      "why_it_matters": "Not a current defect and buys no extra confidence about today's behavior, but it is real insurance if any one of the four copies is edited in isolation and drifts -- exactly the failure mode test_closure_truth_representable.py's excluded _small packages went undetected under (S0-05: closure_*_small/generate.py's dy_central computes a forbidden ensemble second moment, 7-8% off, because no test exercised those two packages at all).",
+      "proposed_fix": "No action needed; keep the four-way parametrization as a drift guard. Documented as such in the module docstring.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_plot_scaling-04",
+      "test": "test_the_duplicated_run_closure_helpers_are_one_implementation, test_the_four_plot_reproduction_copies_differ_only_by_their_suite_name",
+      "pattern": "W-PROSE",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-14 by test_the_duplicated_run_closure_helpers_are_one_implementation (parametrized over 9 callables) and test_the_four_plot_reproduction_copies_differ_only_by_their_suite_name. Every RUNNERS parametrization in this file is licensed by the module docstring's claim that the four reproduction_ylim bodies are byte-identical -- a hand-run diff at audit time, with nothing to re-check it, in exactly the shape where a fix lands in one copy and stays broken in three. The claim is now asserted on the parsed executable body (docstrings dropped), and the scope is measured: of the 12 top-level callables all four run_closure.py copies share, 9 are ONE implementation copied four times, plot_reproduction is one implementation plus a suite-name literal (asserted in both directions), and only run_one (3 raw / 2 agnostic) and main (4 raw / 2 agnostic) genuinely differ between the full and _small suites. Acceptance, two mutations: (a) a drifted default pad_fraction on one copy fails the new test plus 8 numeric tests of that copy; (b) a BEHAVIOUR-PRESERVING rewrite of one copy -- self-checked to return identical numbers on a random fixture and on both fallback branches -- fails test_the_duplicated_run_closure_helpers_are_one_implementation[reproduction_ylim] ALONE (1 failed, 45 passed), proving it sees drift no other test in the file can. The parametrization is structurally uniform, so the same mechanism covers the other 8 names. De-duplicating the copies outright was considered and NOT done: the shared home would have to be src/pixel (off-limits) or a new top-level package, and the four suites are deliberately self-contained trees with no cross-imports.",
+      "why_it_matters": "Four near-identical copies with only a prose claim binding them is how a fix lands in one and stays broken in three; that exact shape produced two other findings in these packages the same session.",
+      "proposed_fix": "(applied) assert the executable identity; leave the duplication in place and record why.",
+      "effort": "S"
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_closure_plot_scaling-M01",
+      "topic": "closure-suite",
+      "title": "Exercise the empty-focus-region fallback for jam_full, nnpdf_full and nnpdf_small",
+      "rationale": "RESOLVED 2026-08-13 by test_reproduction_ylim_has_stable_fallback_for_missing_focus_data, now parametrized over all four runners (RUNNERS tuple) instead of jam_small alone. Oracle: F2, the source's own hardcoded fallback literal -- unchanged, only the coverage widened. Acceptance: an in-memory mutant that removes the finite.size == 0 early return fails all four items and nothing else in the file. test_reproduction_ylim_has_stable_fallback_for_missing_focus_data calls only jam_small.reproduction_ylim; the finite.size==0 branch is never taken by the other three byte-identical copies anywhere in the suite. Cheap fix mirroring test 1's existing @pytest.mark.parametrize(\"runner\", ...) pattern.",
+      "proposed_oracle": "F2",
+      "proposed_location": "tests/test_closure_plot_scaling.py",
+      "searched": [
+        "grep -in reproduction_ylim $AUDIT/test_index.txt -> 2 hits, both this file (test 1 and test 2 def lines)",
+        "grep -rln reproduction_ylim tests/test_*.py -> 1 file (this one)",
+        "grep -i reproduction_ylim $AUDIT/missing_running.tsv -> 0 hits (file is empty, 0 lines)"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_plot_scaling-M02",
+      "topic": "closure-suite",
+      "title": "Pin the min(0.0, ...)/max(0.0, ...) zero-inclusion clamp with data that needs it",
+      "rationale": "RESOLVED 2026-08-13 by test_reproduction_ylim_clamps_a_one_signed_band_to_include_zero -- the same test that closes weakness -02, written once. Oracle: A1, hand-derived from an all-positive and an all-negative focus region, where the clamp changes both the endpoint and the span. Acceptance: removing the clamp returns (0.316, 1.184)/(-1.184, -0.316) and fails all 8 of that test's items, plus the 4 plot_reproduction items whose expectation is a closed form (12 failed / 24 passed); before this pass it was invisible to the whole suite. Demonstrated in weakness -02: no current test's data requires the zero clamp to produce its answer (the exact-0.0 data point already dominates). A focus-region-all-positive case and a focus-region-all-negative case would each force the clamp to change the unclamped min/max, per the source's own 'plus zero ... headroom' docstring claim (closure_JAM_truth/run_closure.py:127-134).",
+      "proposed_oracle": "A1",
+      "proposed_location": "tests/test_closure_plot_scaling.py",
+      "searched": [
+        "grep -in clamp $AUDIT/test_index.txt -> 3 hits, all unrelated (QMin clamp in test_closure_truth_scales.py, probit clamp in test_vegas_units.py)",
+        "grep -rn 'reproduction_ylim|clamp.*zero|zero.*clamp' tests/test_*.py -> only this file matches reproduction_ylim; no clamp-related hit elsewhere",
+        "grep -i clamp $AUDIT/missing_running.tsv -> 0 hits (empty file)"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_plot_scaling-M03",
+      "topic": "closure-suite",
+      "title": "Isolate the lower (center - spread) band as the unique binding minimum",
+      "rationale": "RESOLVED 2026-08-13 by test_reproduction_ylim_floor_comes_from_the_lower_band -- the same test that closes weakness -01, written once. Oracle: A1, a fixture whose unique minimum is a strictly negative lower band edge. Acceptance: an upper-only mutant returns (-0.156, 1.456) and fails. Demonstrated in weakness -01: dropping the lower-edge contribution entirely is undetected by the current fixture because the true minimum coincidentally comes from an exact-zero data point. A fixture where the lower sigma edge is strictly the binding value (no exact zero available elsewhere) would close this gap.",
+      "proposed_oracle": "A1",
+      "proposed_location": "tests/test_closure_plot_scaling.py",
+      "searched": [
+        "grep -in reproduction_ylim $AUDIT/test_index.txt -> 2 hits, both this file",
+        "grep -rln reproduction_ylim tests/test_*.py -> 1 file (this one)",
+        "grep -i 'reproduction|lower.*band' $AUDIT/missing_running.tsv -> 0 hits (empty file)"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_plot_scaling-M04",
+      "topic": "closure-suite",
+      "title": "Exercise focus_x and pad_fraction as explicit (non-default) keyword overrides",
+      "rationale": "RESOLVED 2026-08-13 by test_reproduction_ylim_honours_explicit_focus_x_and_pad_fraction. Oracle: A1, four hand-derived returns on one fixture, including pad_fraction=0.0 which pins the un-padded clamped extremes directly. Acceptance: a body ignoring focus_x fails the focus_x=0.6 case (and is invisible to every other test in the file); one ignoring pad_fraction fails both pad cases. reproduction_ylim exposes focus_x and pad_fraction as keyword-only parameters with defaults 0.2/0.12; grep across the whole repo shows they are never passed explicitly anywhere -- not in this test file, not by plot_reproduction's own call site (closure_JAM_truth/run_closure.py:181, positional-only, all defaults). The non-default branch of both parameters is currently dead code from a test-coverage standpoint.",
+      "proposed_oracle": "A1",
+      "proposed_location": "tests/test_closure_plot_scaling.py",
+      "searched": [
+        "grep -rn 'focus_x=|pad_fraction=' tests/test_*.py closure_*/*.py -> 8 hits, all in the four reproduction_ylim signatures themselves; zero call sites pass either explicitly",
+        "grep -in 'focus_x|pad_fraction' $AUDIT/test_index.txt -> 0 hits",
+        "grep -i 'focus_x|pad_fraction' $AUDIT/missing_running.tsv -> 0 hits (empty file)"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_plot_scaling-M05",
+      "topic": "closure-suite",
+      "title": "Test plot_reproduction's actual use of reproduction_ylim (rendered axis, not just the helper)",
+      "rationale": "RESOLVED 2026-08-13 by test_plot_reproduction_sets_each_panel_ylim_from_its_own_bands. NOTE, a correction to how this item has been described elsewhere: the plot_reproduction that calls reproduction_ylim is closure_{JAM,NNPDF}_truth{,_small}/run_closure.py:156-157, signature (q_key, mode, marginal, truth, path) -- four copies. The two same-named functions in examples/closure_test.py:505 and examples/closure_test_nme.py:408 take (records, fits, path), are a different function, and never call reproduction_ylim; a claim that plot_reproduction lives only in examples/ is wrong. Oracle: A1 -- save_figure_both is wrapped to read all nine ax.get_ylim() before the figure is closed, and each panel's limits are compared to a closed form ((i+1) times the first panel's, by the helper's degree-one homogeneity), not to a second call of the helper. The real save still runs and the PNG/PDF must appear. Acceptance: five mutated copies of plot_reproduction installed on all four modules -- posterior-x-for-truth (raises ValueError on the (4,) vs (5,) broadcast), zeroed t_std, limits computed once and shared across panels, reversed set_ylim tuple, and no set_ylim at all -- each fail only this test, while an identity copy passes all 36 items. Cost: ~2.4 s for the four runners with a warm Matplotlib font cache. Nothing in the suite calls or checks plot_reproduction (grep, 0 hits anywhere in tests/test_*.py) -- the function that actually does ax.set_ylim(*reproduction_ylim(...)) and renders the panel. This file only ever tests the pure helper in isolation; whether the real call site wires the return value through correctly, and what the resulting Figure/Axes actually show, is untested. pixel.plotting's own suite has the pattern for this (tests/test_plotting.py:381, asserting figures[1].axes[0].get_xscale() directly on a returned Figure) -- see test_closure_dy_plotting.md's equivalent gap for plot_records.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_plot_scaling.py or tests/test_closure_dy_plotting.py",
+      "searched": [
+        "grep -rln 'set_ylim|plot_reproduction' tests/test_*.py -> 0 hits",
+        "grep -in set_ylim $AUDIT/test_index.txt -> 0 hits",
+        "grep -i 'plot_reproduction|set_ylim' $AUDIT/missing_running.tsv -> 0 hits (empty file)"
+      ],
+      "effort": "M"
+    },
+    {
+      "id": "test_closure_plot_scaling-M06",
+      "topic": "closure-suite",
+      "title": "Exercise the np.isfinite masking for NaN/Inf entries in truth or posterior curves",
+      "rationale": "RESOLVED 2026-08-13 by test_reproduction_ylim_drops_nonfinite_points_instead_of_propagating_them, with one honest limit recorded rather than papered over. Oracle: A1, hand-derived from the surviving points. Acceptance: deleting the concatenated finite = finite[np.isfinite(finite)] filter returns (-inf, inf) on the overflow fixture and fails; deleting both filters returns (-1.2e-4, 1.2e-4) on the NaN fixture and fails. MEASURED LIMIT: deleting ONLY the per-point np.isfinite(center) & np.isfinite(spread) terms from mask is byte-identical on every fixture in this file, and provably so -- any non-finite center or spread makes both center-spread and center+spread non-finite, so the concatenated filter removes it one step later. Those per-point terms are redundant; no test can catch their removal, and the test's docstring and the module docstring both say so. A second measured note: an unfiltered NaN does NOT propagate to the caller, because Python's min(0.0, nan) and max(0.0, nan) both answer 0.0, so the panel silently collapses onto the degenerate all-zero axis instead of raising. reproduction_ylim filters both at the per-point mask (`np.isfinite(center) & np.isfinite(spread)`) and again on the concatenated `finite` array -- a real code path for missing/undefined data points -- but neither test in this file, nor (by grep) any other test, ever passes a NaN or Inf value to it.",
+      "proposed_oracle": "A1",
+      "proposed_location": "tests/test_closure_plot_scaling.py",
+      "searched": [
+        "grep -n 'np.nan|nan\\\\b|isfinite' tests/test_closure_plot_scaling.py -> 0 hits in this file",
+        "grep -in 'reproduction.*nan|nan.*reproduction' $AUDIT/test_index.txt -> 0 hits",
+        "grep -i 'isfinite|nan' $AUDIT/missing_running.tsv -> 0 hits (empty file)"
+      ],
+      "effort": "S"
+    }
+  ],
+  "unjustified_tolerances": [
+    {
+      "line": 89,
+      "text": "assert ymin < -0.0",
+      "quantity": "sign of the padded lower y-limit; true value -0.192 on this fixture",
+      "comment_added": "True value -0.192 (see docstring); bound only requires the sign -- a pad as small as 1e-9 would pass as readily as the real pad_fraction=0.12.",
+      "provenance": "measured"
+    },
+    {
+      "line": 92,
+      "text": "assert ymax > 1.6",
+      "quantity": "padded upper y-limit vs. the un-padded posterior upper edge (1.2 + 0.4) at x=0.2; true value 1.792",
+      "comment_added": "True value 1.792; 1.6 is the un-padded posterior edge at x=0.2, so this line mainly checks pad > 0 together with the x >= 0.2 cutoff.",
+      "provenance": "measured"
+    },
+    {
+      "line": 95,
+      "text": "assert ymin > -10.0",
+      "quantity": "loose ceiling on the padded lower y-limit; true value -0.192",
+      "comment_added": "Loose ceiling (true value -0.192): only rules out a grossly oversized pad (pad_fraction gtrsim 6.25 against the real 0.12).",
+      "provenance": "measured"
+    },
+    {
+      "line": 98,
+      "text": "assert ymax < 10.0",
+      "quantity": "loose ceiling on the padded upper y-limit; true value 1.792",
+      "comment_added": "Loose ceiling (true value 1.792): only rules out a grossly oversized pad (pad_fraction gtrsim 5.25 against the real 0.12).",
+      "provenance": "measured"
+    },
+    {
+      "line": 125,
+      "text": "assert jam_small.reproduction_ylim(x, zeros, zeros, x, zeros, zeros) == (-0.08, 1.08)",
+      "quantity": "exact fallback tuple for the finite.size==0 branch",
+      "comment_added": "Transcribed verbatim from the source's own hardcoded fallback literal (run_closure.py:148 in the small package); no independent derivation -- see docstring.",
+      "provenance": "known"
+    },
+    {
+      "line": 105,
+      "text": "np.testing.assert_allclose((ymin, ymax), (-0.192, 1.792), rtol=1e-12, atol=0.0)",
+      "quantity": "the exact return of the original fixture, added alongside its four one-sided bounds",
+      "comment_added": "Docstring and inline comment give the hand-derivation (focus-region edges, span 1.6, pad 0.192) and the measured agreement (0.0 relative difference in both components).",
+      "provenance": "measured 2026-08-13"
+    },
+    {
+      "line": 202,
+      "text": "np.testing.assert_allclose(got, (-0.436, 1.486), rtol=1e-12, atol=0.0)",
+      "quantity": "lower-band-binding fixture; the value the audit's -01 mutant could not distinguish",
+      "comment_added": "atol=0.0 stated explicitly so the bar is purely relative; measured 0.0 relative difference.",
+      "provenance": "measured 2026-08-13"
+    },
+    {
+      "line": 511,
+      "text": "np.testing.assert_allclose(captured[\"ylim\"], expected, rtol=1e-12, atol=0.0)",
+      "quantity": "nine rendered Axes y-limits vs the closed-form (i+1)-scaled expectation",
+      "comment_added": "Docstring records the measured worst-case relative difference, 2.22e-16 across all 18 limits, so the 1e-12 bar is over set_ylim/decimal round-tripping.",
+      "provenance": "measured 2026-08-13"
+    }
+  ],
+  "notes_for_readme": "Unlike test_closure_truth_representable.py (S0-05), this file's tests parametrize over all four closure packages with no _small exclusion -- as of 2026-08-13 that includes every test in the file, not only the main one. It is also now the only place in the suite that calls plot_reproduction, which is the reproduction panels' real entry point; note that the same-named functions in examples/closure_test.py and examples/closure_test_nme.py are a different function with a different signature and do not call reproduction_ylim.",
+  "measurements": [
+    {
+      "claim": "the four reproduction_ylim bodies are still identical",
+      "command": "for each package: len(inspect.getsource(run_closure.reproduction_ylim))",
+      "result": "1527 chars in all four"
+    },
+    {
+      "claim": "the audit's stated true value for the original fixture reproduces exactly",
+      "command": "abs(got/(-0.192, 1.792) - 1) on the test's own literals",
+      "result": "0.0 in both components"
+    },
+    {
+      "claim": "an upper-only mutant is invisible to the original test but fails the new lower-band test",
+      "command": "PITD-style in-memory plugin replacing reproduction_ylim on all four modules; pytest -p mut_ylim",
+      "result": "16 failed / 16 passed; test_reproduction_ylim_contains_both_bands_above_point_two is NOT among the failures"
+    },
+    {
+      "claim": "removing the zero clamp is invisible to every pre-existing test",
+      "command": "same harness, mutation no_clamp",
+      "result": "12 failed / 24 passed; only test_reproduction_ylim_clamps_a_one_signed_band_to_include_zero (8 items) and test_plot_reproduction_sets_each_panel_ylim_from_its_own_bands (4 items) fail -- the latter because its expectation is a closed form, not a re-call of the helper. Neither test existed before this pass."
+    },
+    {
+      "claim": "the per-point isfinite terms in mask are redundant with the concatenated filter",
+      "command": "same harness, mutation no_point_mask",
+      "result": "32 passed -- byte-identical output on every fixture in the file"
+    },
+    {
+      "claim": "plot_reproduction cost with a warm Matplotlib font cache",
+      "command": "time one call, with and without the real save_figure_both",
+      "result": "0.60 s with PNG+PDF save, 0.17 s without; ~9 s on the very first call, which is the font-cache build"
+    },
+    {
+      "claim": "the nine rendered Axes limits match the closed form",
+      "command": "abs(get_ylim()/((i+1)*unit) - 1) over all 18 values, both with and without curve_std",
+      "result": "max 2.22e-16 (one ULP)"
+    },
+    {
+      "claim": "the acceptance evidence in this report cannot be a line-offset artifact",
+      "command": "ast scan of both test files for getsource/getsourcelines/getsourcefile and read_text; plus grep of the three mutation plugins for exec/getsource",
+      "result": "tests/test_closure_plot_scaling.py: 0 getsource, 0 read_text. tests/test_closure_pseudoitd_matching.py: 0 getsource, 1 read_text (the JSON manifest, not source). No plugin recompiles any function: every mutant is a hand-written function defined in the plugin module or a wrapper holding a reference to the original, so no line numbers shift. All mutations re-run from a private scratch directory 2026-08-13 after a shared-scratchpad collision deleted one plugin; every recorded result reproduced."
+    },
+    {
+      "claim": "The four run_closure.py copies duplicate far more than reproduction_ylim, and the duplication is now asserted rather than claimed in prose.",
+      "command": "ast.dump with the leading docstring dropped, over every top-level callable the four closure_*/run_closure.py copies share; plot_reproduction additionally with 'JAM'/'NNPDF' substituted to 'SUITE'",
+      "result": "12 shared callables. 9 have byte-identical parsed bodies (_hatched_band, _prepare_matplotlib, _pull_chi2_per_point, build_kernels_only, generated_qs, hybrid_xscale, plot_comparison, reproduction_ylim, save_figure_both). plot_reproduction: 2 raw bodies -> 1 after substitution. run_one: 3 raw / 2 agnostic. main: 4 raw / 2 agnostic -- the full pair also saves posterior moments, draws a kinematic-coverage plot, and prints a nuisance-coverage summary."
+    }
+  ]
+}

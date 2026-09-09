@@ -1,0 +1,154 @@
+{
+  "file": "tests/test_small_synthetic_z.py",
+  "area": "closure-suite",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "src/pixel/data/drell_yan.py (DrellYan factory; DrellYanData.name/.source/.component/.n_data/.bilinear_contributions/.mean/.cov)",
+    "src/pixel/core/model.py (DatasetMetadata.source/.component; Field.create; Dataset)"
+  ],
+  "drives_non_pixel": [
+    "closure_JAM_truth_small/datasets.py (build_datasets, build_drell_yan, _cache_path)",
+    "closure_JAM_truth_small/config.py (TEST_MODE_SYNTHETIC_Z, TEST_MODES, truth_dir, truth_label, make_fields, dy_field_maps, DY_ORDER/DY_ALPHA_S/DY_NF/DY_CHANNELS/DY_ALPHA_EM)",
+    "closure_NNPDF_truth_small/datasets.py (byte-identical to the JAM copy for build_datasets/build_drell_yan; diffed directly)",
+    "closure_NNPDF_truth_small/config.py (byte-identical DY-relevant constants; diffed directly)",
+    "NOT exercised: closure_JAM_truth_small/generate.py and closure_NNPDF_truth_small/generate.py -- neither test imports or calls generate.py; both write manifest.json by hand and monkeypatch config.truth_dir"
+  ],
+  "n_tests": 2,
+  "n_parametrized_cases": 2,
+  "tests": [
+    {
+      "name": "test_small_synthetic_z_mode_builds_only_one_labeled_proxy",
+      "line": 88,
+      "claim": "One hand-written manifest record survives build_datasets labeled and alone, for both the JAM and NNPDF small-closure config/datasets pairs.",
+      "actual": "built[0].name/.source/.component/.n_data exactly equal the literal name/classification/observable_contract/row-count the test wrote into the manifest a few lines earlier; len(built)==1; bilinear_contributions is nonempty; TEST_MODE_SYNTHETIC_Z is a member of TEST_MODES (a static config.py fact unrelated to the build). Does not assert built[0].mean or .cov at all. The JAM and NNPDF parametrized cases execute byte-identical build_datasets/build_drell_yan code (diffed directly), so they exercise one mechanism twice, not two implementations.",
+      "how": "writes a manifest.json literal into tmp_path, monkeypatches config.truth_dir to return that directory, calls build_datasets(q_key='mc', include_synthetic_z=True, all other include_* False), asserts fields on built[0] against the literals written above",
+      "oracle": "D1",
+      "bar": "exact `==` on strings/int, `in` membership on a tuple, truthiness on a tuple -- no float tolerance anywhere in this file",
+      "strength": "S3",
+      "catches": "a wiring bug that drops, empties, or misroutes a manifest field into the wrong Dataset/DatasetMetadata attribute, or an emptied DY_CHANNELS x field-map cross product (bilinear_contributions would be empty). Does NOT catch: (1) a build that corrupts or drops mean/cov -- measured directly, see measurements; (2) a name<->label field mixup in build_drell_yan's rec.get('name', rec['label']) -- both fixture fields are the identical literal string 'synthetic_z_plumbing'."
+    },
+    {
+      "name": "test_small_synthetic_z_rejects_missing_or_unclassified_manifest",
+      "line": 173,
+      "claim": "Both build_datasets synthetic_z guard clauses raise their documented text.",
+      "actual": "A manifest with zero synthetic_z records raises ValueError matching 'exactly one'. A manifest with one record classified 'physics' (not 'synthetic_proxy') raises ValueError matching 'synthetic_proxy'. Only the JAM config/datasets pair is exercised; not parametrized over NNPDF.",
+      "how": "writes two different malformed manifest.json literals in sequence inside one test body, wraps each build_datasets call in pytest.raises(ValueError, match=<substring>)",
+      "oracle": "F1",
+      "bar": "pytest.raises exception type + literal message substring match -- structural, no numeric content",
+      "strength": "S3",
+      "catches": "either guard clause being deleted or its exception type/message changed past the matched substring. Does NOT catch: the 'exactly one' guard weakening to 'at least one' (2+ records is never tried, only 0 and 1); any regression in closure_NNPDF_truth_small's identical guard clauses (zero coverage, JAM-only test)."
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_small_synthetic_z-01",
+      "test": "test_small_synthetic_z_mode_builds_only_one_labeled_proxy",
+      "pattern": "W-DEAD",
+      "severity": "S4",
+      "evidence": "RESOLVED 2026-08-13 as DOCUMENTATION-ONLY (no strengthening, and none was proposed: this weakness's own proposed_fix concluded no code change was required). VERIFIED present in the file this pass -- tests/test_small_synthetic_z.py:29-38 and :49 record that build_datasets/build_drell_yan and the DY config constants are identical between the two packages, so the parametrization is a JAM/NNPDF drift guard rather than two independent cases. Recorded here because the JSON was left unannotated when the documentation landed; a reader of the report alone would have counted this as outstanding work. The underlying limitation is unchanged and is stated in the file. tests/test_small_synthetic_z.py:81-87 parametrizes over (jam_config, jam_datasets) and (nnpdf_config, nnpdf_datasets); `diff closure_JAM_truth_small/datasets.py closure_NNPDF_truth_small/datasets.py` shows exactly 2 hunks in the whole file -- one docstring cross-reference line, one unrelated kwarg-line reorder inside build_pseudoitd -- and build_datasets/build_drell_yan are untouched; the DY-relevant config.py constants (DY_ORDER, DY_ALPHA_EM, DY_ALPHA_S, DY_NF, DY_CHANNELS, DY_FIT_NORMALIZATION, dy_field_maps, DY_PARTON_BASIS_PROTON/DEUTERON) are identical in value between the two config.py files.",
+      "why_it_matters": "the NNPDF parametrized case cannot catch any bug the JAM case would miss, because it runs the same code with the same constants; a reader who sees '2 parametrized cases, both green' may credit this with more independent coverage than it has. Now disclosed in both the module and per-test docstring, so no longer a silent gap, but the underlying redundancy is unchanged.",
+      "proposed_fix": "either accept and document (done) that this parametrization only guards JAM/NNPDF from drifting apart from each other, or drop it to one case and note the equivalence once at module level",
+      "effort": "S"
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_small_synthetic_z-M01",
+      "topic": "closure-suite",
+      "title": "Parametrize (or add a twin for) the synthetic_z guard-clause test over closure_NNPDF_truth_small",
+      "rationale": "RESOLVED 2026-08-14 by test_both_small_suites_share_one_synthetic_z_code_path, and the PROPOSAL IS SUPERSEDED. It asked to parametrize the guard test over closure_NNPDF_truth_small -- exactly the byte-identical double run the owner stripped from this file's other test on 2026-08-14. Running the same code twice for the same answer cannot detect a divergence; only comparing the copies can. The new test asserts the identity directly (inspect.getsource of build_datasets, build_drell_yan and synthetic_z_layout, the 8 DY-relevant config constants, the layout record as data, and dy_field_maps('pp')), following the ALL_SUITES/ALL_RUNNERS convention already used in test_closure_constraints.py and test_closure_plot_scaling.py; the new ALL_SMALL_SUITES tuple must keep both entries for the same reason. Oracle A3, structural. Acceptance: mut_sz_suites_diverge (one copy's DY_NF drifts 4 -> 5) makes it fail; 1 failed / 7 passed. closure_NNPDF_truth_small/datasets.py carries byte-identical `len(records) != 1` and `classification != 'synthetic_proxy'` guard clauses (same lines as JAM, confirmed by direct diff) but test_small_synthetic_z_rejects_missing_or_unclassified_manifest hardcodes jam_config/jam_datasets throughout, so a regression in the NNPDF copy's guards -- e.g. from independent future edits, since nothing pins the two files together outside this audit's own observation -- would pass silently.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_small_synthetic_z.py",
+      "searched": [
+        "grep -n 'nnpdf_datasets|nnpdf_config' tests/test_small_synthetic_z.py -> 4 hits, all inside the first test's parametrize list and module docstring; zero inside the second test",
+        "grep -rln synthetic_z tests/test_*.py -> 1 file total (this one) -- no other test file touches the NNPDF guard clauses either",
+        "AUDIT test_index.txt/missing_running.tsv do not exist in this AUDIT directory (plans/test_audit/); used direct grep across tests/test_*.py as the substitute per METHODOLOGY STEP 5"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_small_synthetic_z-M02",
+      "topic": "closure-suite",
+      "title": "Give the synthetic_z fixture's manifest 'name' and 'label' different values",
+      "rationale": "RESOLVED 2026-08-14 by test_synthetic_z_manifest_keys_map_to_distinct_dataset_attributes (primary key preferred) and test_synthetic_z_optional_keys_fall_back_to_their_partners (fallback taken). Oracle D1, but a NON-degenerate one: name/label and observable_contract/reaction are all four different, and that is asserted before the reads, so a swapped read fails instead of coinciding. reaction must stay 'pp' (cfg.dy_field_maps dispatches on it), which is why the contrast is made on observable_contract. Acceptance: mut_sz_reads_label_for_name and mut_sz_wrong_fallback_partner each make exactly one of the two fail; 1 failed / 7 passed each. build_drell_yan (closure_JAM_truth_small/datasets.py:181, identical in NNPDF) reads `name=rec.get('name', rec['label'])`. This file's only fixture record sets both keys to the identical literal 'synthetic_z_plumbing' (test_small_synthetic_z.py:130-131), so built[0].name=='synthetic_z_plumbing' cannot distinguish the correct mapping from one that reads the wrong key -- a fixture degenerate in exactly the dimension the assertion probes (tests/README.md rule 9's second failure class).",
+      "proposed_oracle": "D1",
+      "proposed_location": "tests/test_small_synthetic_z.py",
+      "searched": [
+        "grep -n 'rec\\[.name.\\]|rec.get(.name.|rec\\[.label.\\]' closure_JAM_truth_small/datasets.py closure_NNPDF_truth_small/datasets.py -> 4 hits per file, confirms name=rec.get('name', rec['label']) is live code reached by this test's synthetic_z path",
+        "grep -n '\"label\"|\"name\"' tests/test_small_synthetic_z.py -> both set to the same string in the only manifest record this file writes"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_small_synthetic_z-M03",
+      "topic": "closure-suite",
+      "title": "Assert built[0].mean and .cov against the manifest's [1.0]/[[0.01]]",
+      "rationale": "RESOLVED 2026-08-14 by test_synthetic_z_mean_and_cov_reach_the_built_dataset. Oracle D1 at [2.5]/[[0.16]] -- neither DrellYan's defaults nor the sibling test's [1.0]/[[0.01]], so a hardcoded or stale-cached vector fails. assert_array_equal rather than a tolerance: these are JSON round-tripped literals, not computed numbers, and a tolerance would only hide a corruption. Also pins the other side of `if \"mean\" in rec and \"cov\" in rec` (both None). Acceptance: mut_sz_drops_mean_cov (build_drell_yan stops forwarding mean/cov) makes it fail; 1 failed / 7 passed. Measured directly (see measurements array): rebuilding the identical dataset with the manifest's mean/cov keys removed entirely (DrellYan then defaults mean=None, cov=None) leaves built[0].name/.source/.component/.n_data and bilinear_contributions truthiness bit-for-bit unchanged. Every assertion in the first test would pass on a build that silently dropped or corrupted the measured vector/covariance.",
+      "proposed_oracle": "D1",
+      "proposed_location": "tests/test_small_synthetic_z.py",
+      "searched": [
+        "grep -n 'built\\[0\\]\\.mean|built\\[0\\]\\.cov' tests/test_small_synthetic_z.py -> 0 hits, confirms neither is asserted anywhere in the file"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_small_synthetic_z-M04",
+      "topic": "closure-suite",
+      "title": "Cross-check generate.py's synthetic_z_layout() output against what build_datasets's synthetic_z reader expects",
+      "rationale": "RESOLVED 2026-08-14 by test_generation_time_synthetic_z_layout_is_what_the_manifest_reader_consumes -- without running the generator (owner instruction, no closure pipeline runs). It takes the real synthetic_z_layout() record, applies _public and the two keys generate_member adds at generate.py:578-580, and drives it through the reader; a key the generator stopped emitting or one the reader started requiring now fails here. Oracle A3 between the generation-time build_drell_yan(rec, None, fields, None) call at generate.py:566 and the fitting-time build_datasets manifest route: measured 360 bilinear contributions whose (field_A, field_B) pairs match as an ordered sequence and whose weights are array-equal. The route-identity half alone cannot see a GENERATOR-side rename (both routes read the same record and fall back together), so the layout's own contract values are asserted too, two of them against external constants (C1): sqrt(Q2)/91.1876 and sqrt(S)/7000 both < 1e-12. Acceptance: mut_sz_layout_renames_a_key (observable_contract renamed in synthetic_z_layout, applied to both copies so the identity test stays out of it) makes it fail; 1 failed / 7 passed. generate.py's synthetic_z_layout() (line 217, JAM/NNPDF-identical) is the real production source of the manifest record this test hand-writes, and generate_member's synthetic_z block (generate.py:469-493) folds it through the same build_drell_yan and through dy_central, then writes it into manifest.json under the same 'synthetic_z' key this test's reader consumes. No test calls synthetic_z_layout or that block, so a schema change on either side (a renamed/dropped manifest key in the generator, or a new required key in the reader) would drift silently: this test's hand-written literal would keep exercising the OLD schema forever regardless of what the real generator now produces.",
+      "proposed_oracle": "A3",
+      "proposed_location": "tests/test_small_synthetic_z.py or a new tests/test_closure_small_generate.py",
+      "searched": [
+        "grep -rn synthetic_z_layout /Users/jkarpie-admin/work/building/pixel --include='*.py' (excluding .venv) -> 4 hits total: 1 def + 1 call site in closure_JAM_truth_small/generate.py, same in closure_NNPDF_truth_small/generate.py; zero hits under tests/",
+        "grep -c synthetic_z tests/test_closure_truth_scales.py -> 0 (this file imports generate.py from all four closure packages but never references synthetic_z or dy_central)"
+      ],
+      "effort": "M"
+    },
+    {
+      "id": "test_small_synthetic_z-M05",
+      "topic": "closure-suite",
+      "title": "Exercise the synthetic_z 'exactly one' guard with 2+ records",
+      "rationale": "RESOLVED 2026-08-14 by test_synthetic_z_rejects_two_records. Oracle F1, matched on the message rather than the type -- the reader raises ValueError from a second guard a few lines below and both records here are correctly classified, so a type-only match would have accepted the wrong guard. Control: the identical first record alone builds one dataset. Acceptance: mut_sz_guard_accepts_many (the guard weakens to `if not records`, simulated at load_manifest so build_datasets's source text stays intact and the cross-suite identity test is not dragged in) makes it fail; 1 failed / 7 passed. build_datasets raises on `len(records) != 1`, but this file's manifests only ever construct a 0-record or 1-record synthetic_z list, so a regression that weakens the check to `if not records` (accepting 2+) would pass every existing test.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_small_synthetic_z.py",
+      "searched": [
+        "grep -n \"synthetic_z.: \\[record\\]|synthetic_z.: \\[\\]\" tests/test_small_synthetic_z.py -> exactly these two list literals appear in the file (lengths 0 and 1); no 2+-element synthetic_z list anywhere"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_small_synthetic_z-M06",
+      "topic": "closure-suite",
+      "title": "Exercise build_drell_yan's component=rec.get('observable_contract', rec['reaction']) fallback for a synthetic_z record missing observable_contract",
+      "rationale": "RESOLVED 2026-08-14 by test_synthetic_z_optional_keys_fall_back_to_their_partners, which covers both of build_drell_yan's rec.get(a, rec[b]) defaults at once (name <- label, component <- reaction). The two fallback partners are asserted to be different strings first, so 'fell back correctly' is distinguishable from 'read the removed key from somewhere else'. Oracle F1/D1. Acceptance: mut_sz_wrong_fallback_partner (fallbacks point at the wrong partner: name <- reaction, component <- label; fires only when the optional key is absent) makes it fail; 1 failed / 7 passed. build_drell_yan defaults component to the reaction string when observable_contract is absent from the manifest record. This file's only record always supplies observable_contract, so the fallback branch is never taken by this file.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_small_synthetic_z.py",
+      "searched": [
+        "grep -rln observable_contract tests/test_*.py -> 2 files: tests/test_observable_contracts.py (a different subsystem entirely -- pixel.data.contracts' YAML observable-contract registry, confirmed by reading its imports) and this file, which always supplies the key"
+      ],
+      "effort": "S"
+    }
+  ],
+  "unjustified_tolerances": [],
+  "measurements": [
+    {
+      "claim": "Dropping 'mean'/'cov' from the synthetic_z manifest record (so DrellYan receives mean=None, cov=None instead of [1.0]/[[0.01]]) does not change built[0].name/.source/.component/.n_data or the truthiness of bilinear_contributions -- i.e. every assertion in test_small_synthetic_z_mode_builds_only_one_labeled_proxy would pass identically either way.",
+      "command": "OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 PYTHONPATH=/Users/jkarpie-admin/work/building/pixel .venv/bin/python /private/tmp/.../scratchpad/measure_mean_cov_blindness.py -- script builds the record via jam_datasets.build_datasets twice (with and without mean/cov keys, use_kernel_cache=False) and diffs name/source/component/n_data/bilinear_contributions length between the two builds",
+      "result": "name: 'synthetic_z_plumbing' == 'synthetic_z_plumbing'; source: 'synthetic_proxy' == 'synthetic_proxy'; component: 'inclusive_boson_level_pointwise_unevolved' == same; n_data: 1 == 1; bilinear_contributions len 360 == 360 (both nonempty); mean/cov themselves did differ ([1.0]/[[0.01]] vs None/None), confirming the harness works and only mean/cov distinguish the two builds. ALL_TEST_ASSERTIONS_WOULD_PASS_IDENTICALLY: True. Runtime 0.84s real."
+    },
+    {
+      "date": "2026-08-14",
+      "what": "generation-time vs fitting-time synthetic_z build",
+      "command": "datasets.build_drell_yan(generate.synthetic_z_layout()[0], None, fields, None) vs build_datasets(..., include_synthetic_z=True) on the manifest form",
+      "result": "identical name/source/component/n_data; 360 bilinear contributions with array-equal weights and identical ordered (field_A, field_B) pairs; generate._public(rec) == rec (no private keys); sqrt(Q2)=91.1876 and sqrt(S)=7000 to <1e-12"
+    },
+    {
+      "date": "2026-08-14",
+      "what": "the boson key is NOT observable in the bilinear weights",
+      "command": "build_drell_yan with and without rec['boson']; compare the 360 weights",
+      "result": "bit-identical (max|wa/wb-1| = 0.0) -- the electroweak configuration enters the kernel, not the weight, so a dropped boson key cannot be caught by a weight comparison. This is why the layout's contract values are asserted directly"
+    }
+  ],
+  "notes_for_readme": null
+}

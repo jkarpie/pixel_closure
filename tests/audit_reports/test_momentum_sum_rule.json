@@ -1,0 +1,199 @@
+{
+  "file": "tests/test_momentum_sum_rule.py",
+  "area": "evolution",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "src/pixel/kernels/pqcd/evolution.py (NonSingletEvolution, SingletEvolution)",
+    "src/pixel/kernels/pqcd/splitting.py (lo_singlet, nlo_singlet, lo_nonsinglet, nlo_nonsinglet, singlet_splitting_functions, splitting_functions)",
+    "src/pixel/kernels/pqcd/heavy_threshold.py (pdf_singlet_matching/pdf_singlet_inverse_matching, via VFNS threshold crossings for mc/5gev/10gev/100gev targets)",
+    "src/pixel/kernels/evolution/_factors.py (non_singlet_evolution_factors == evolution_factors, singlet_evolution_factors)",
+    "src/pixel/kernels/evolution/assembly.py (non_singlet_evolution_matrix == evolution_matrix, singlet_evolution_matrix)",
+    "src/pixel/kernels/evolution/contour.py (adaptive_contour)",
+    "src/pixel/geometry (Grid)",
+    "src/pixel/geometry/finite_elements.py (CubicSplineBasis)"
+  ],
+  "drives_non_pixel": null,
+  "n_tests": 6,
+  "n_parametrized_cases": 20,
+  "tests": [
+    {
+      "name": "test_jam24_momentum_sum_rule_at_input_scale",
+      "line": 407,
+      "claim": "JAM24 has the expected total parton momentum at the 2 GeV input scale.",
+      "actual": "Sums the JAM24 LHAPDF dump's quark-singlet + gluon momentum-weighted quadrature at Q=2 GeV and checks it against 1.0 within 1e-4 abs. Exercises only closure_JAM_truth_small.pdf_guidance.dump_jam and the local quadrature helper; no src/pixel code runs.",
+      "how": "_jam24_input_momentum() reads raw LHAPDF columns (gluon=raw[:,1], quark_singlet=raw[:,2:10].sum(axis=1)) and contracts with Gauss-quadrature weights from _split_quadrature.",
+      "oracle": "A1",
+      "bar": "abs 1.0e-4 (JAM24_NORMALIZATION_ATOL)",
+      "strength": "S1",
+      "catches": "a wrong LHAPDF column index, member, or unit in pdf_guidance.dump_jam, or a JAM24 grid that itself violates momentum conservation beyond its own fit's ~4e-5 quality -- not a pixel evolution bug, since evolution never runs in this test. Independently reproduced: measured deviation 3.8719e-05, matching the docstring's claimed 3.9e-05."
+    },
+    {
+      "name": "test_pixel_singlet_evolution_preserves_jam24_momentum_sum_rule",
+      "line": 425,
+      "claim": "PIXEL preserves the JAM24 N=2 singlet+gluon momentum at requested scales.",
+      "actual": "Builds the NLO singlet Mellin-space operator at N=2 for 5 target Q values (mc, 4, 5, 10, 100 GeV) and asserts (a) each operator column sums to 1 within 5e-7 abs, (b) evolved JAM24 momentum total matches the un-evolved total within 5e-7 abs, (c) that total matches 1.0 within 1e-4 abs.",
+      "how": "singlet_evolution_factors(order='NLO') -> SingletEvolution.operator, which diagonalizes P[0]=lo_singlet via _projector_solve and adds the NLO truncated correction from P[1]=nlo_singlet; crosses VFNS thresholds via pdf_singlet_(inverse_)matching for 4 of 5 target scales. lo_singlet/nlo_singlet build qq, qg, gq, gg as four independently-coded closed-form Mellin expressions (not derived from one another), so N=2 column-sum conservation is an emergent cancellation, not built by construction -- confirmed by an in-memory monkeypatch of the LO pgq term (never touching src/ on disk): a 1e-4 relative error moves the defect from its ~1e-8 floor to 1.8e-5/1.8e-6, a 1e-2 error to 1.8e-3/1.8e-4, both comfortably above the bar.",
+      "oracle": "A2",
+      "bar": "atol 5.0e-7 (PIXEL_CONSERVATION_ATOL), two assertions",
+      "strength": "W2",
+      "catches": "a coefficient, sign, color-factor, or nf-dependent-term error in lo_singlet/nlo_singlet (demonstrated down to ~1e-4 relative; loses sensitivity below ~1e-6 relative, both measured). Does NOT catch a quark_singlet<->gluon component swap in the JAM24 input: both assertions consume only operator.sum(axis=0) or evolved_momentum.sum(), and a full component swap changes that sum by only 5.5e-9 (demonstrated at Q=10 GeV), far under both the 5e-7 and 1e-4 bars -- the docstring's 'singlet+gluon' phrasing over-claims what a sum-only check can see. The sibling valence test below checks its four flavors elementwise and does not share this gap. This test does not exercise NNLO: cfg.ORDER='NLO' is fixed and unparametrized in this file (closure_JAM_truth_small/config.py:190), so it cannot be and is not the NNLO-fit-floor witness described in CLAUDE.md -- that is tests/test_nnlo_splitting.py::test_momentum_sum_rule_measures_the_parametrization_accuracy, cross-referenced directly from src/pixel/kernels/pqcd/nnlo_splitting.py:69."
+    },
+    {
+      "name": "test_jam24_valence_flavor_sum_rules_at_input_scale",
+      "line": 471,
+      "claim": "JAM24 has the expected proton valence counts at the 2 GeV input scale.",
+      "actual": "Computes int dx (q-qbar) for (u,d,s,c) from the JAM24 dump via quadrature and checks elementwise against (2,1,0,0) within 5e-3 abs. Exercises only the JAM24 fixture and reading pipeline, no src/pixel code.",
+      "how": "_jam24_input_valence_counts() contracts (raw[:,2]-raw[:,3])/x etc. with the same quadrature weights as the momentum test.",
+      "oracle": "A1",
+      "bar": "atol 5.0e-3, rtol 0.0 (JAM24_VALENCE_ATOL)",
+      "strength": "S1",
+      "catches": "a JAM24 grid, member, or reading-pipeline bug shifting a valence count past the fixture's own measured deviation. Measured directly: deviations (1.985e-3, 1.321e-3, 5.60e-4, 0.0) for (u,d,s,c) -- max 1.985e-3, so the bar has 2.5x headroom, comparably tight to the sibling normalization check rather than a loose afterthought (previously unrecorded in the file; now added as a comment)."
+    },
+    {
+      "name": "test_pixel_non_singlet_evolution_preserves_jam24_valence_sum_rules",
+      "line": 493,
+      "claim": "PIXEL preserves int dx (q - qbar) = N_q at requested scales.",
+      "actual": "Computes the NLO non-singlet (minus channel) factor at N=1 for the 5 target scales; asserts the factor equals 1.0 within 5e-7 abs, that evolved_valence (factor * input) matches input elementwise within 5e-7 abs, and that it matches (2,1,0,0) elementwise within 5e-3 abs.",
+      "how": "evolution_factors(channel='minus') -> NonSingletEvolution.sigma. At N=1, lo_nonsinglet(1) = 4/3*(3 + 2/(1*2) - 4*S1(1)) = 4/3*(3+1-4) = 0 exactly (an emergent cancellation of independently-coded terms, not a special-cased identity), and the NLO minus-channel P1NSM(1) must vanish too for the truncated-RGE operator to stay at 1 -- verified numerically, not imposed.",
+      "oracle": "A2",
+      "bar": "atol 5.0e-7 (PIXEL_CONSERVATION_ATOL) x2, then atol 5.0e-3 (JAM24_VALENCE_ATOL)",
+      "strength": "S1",
+      "catches": "a coefficient/sign error in nlo_nonsinglet's minus channel at N=1, or a VFNS threshold-matching bug leaking valence number across a flavor boundary. Measured directly: |factor-1| is 1.1e-9 to 2.9e-9 across the five scales (170x-470x under the bar) -- wider headroom than the singlet case but every assertion here is elementwise over 4 flavors (not summed), so unlike the singlet momentum test above this also catches a same-size component reordering (a u<->d swap fails immediately against the asymmetric (2,1,0,0) target)."
+    },
+    {
+      "name": "test_xspace_reconstruction_preserves_momentum_sum_rule",
+      "line": 547,
+      "claim": "After x-space evolution, re-integrating int dx x f preserves momentum.",
+      "actual": "Evolves the real JAM24 x-space singlet+gluon PDFs through singlet_evolution_matrix (finite-element basis, adaptive c>1 contour) for 5 target scales, re-integrates the momentum moment, and checks the total against (a) the Mellin-space N=2 prediction within 1.2e-2 abs, (b) 1.0 within 1.2e-2 abs.",
+      "how": "singlet_evolution_matrix's sigma_block_fn calls evo.operator(nodes, Q2, Q20) -- the identical SingletEvolution.operator used by the Mellin-space test above, just evaluated at many contour nodes and inverse-Mellin-transformed onto the CubicSplineBasis, confirmed by reading assembly.py:898-901. So a splitting-function bug is common-mode with test 2; this test's independent territory is the basis/contour/low-x-completion pipeline.",
+      "oracle": "A3",
+      "bar": "abs 1.2e-2 (XSPACE_MELLIN_ATOL), abs 1.2e-2 (XSPACE_SUM_RULE_ATOL)",
+      "strength": "W2",
+      "catches": "a basis/quadrature/contour bug in the x-space assembly that the Mellin-space N=2 evaluation cannot see (the file's own comment records a 3x node-count refinement moving the Q=10/Q=100 GeV residuals by only 6.5e-8/8.3e-8, i.e. the bar's dominant error -- low-x completion below x_min~1.2e-6 -- has already survived refinement in the suspect parameter). Shares the singlet Mellin-space test's quark_singlet<->gluon sum-only blind spot by the identical argument (only .sum() is ever compared); not independently re-measured here since the argument is structural, not numerical. 2 of 5 parametrize cases (mc, 5gev) are hand-marked pytest.mark.slow in the file's own decorator; the rest inherit auto-marking."
+    },
+    {
+      "name": "test_xspace_reconstruction_preserves_valence_sum_rules",
+      "line": 582,
+      "claim": "After x-space evolution, re-integrating int dx (q-qbar) preserves Nq.",
+      "actual": "Evolves the real JAM24 x-space valence PDFs (u,d,s,c) through non_singlet_evolution_matrix for 5 target scales, re-integrates, and checks elementwise against (a) the Mellin-space N=1 prediction within 1.2e-2 abs, (b) (2,1,0,0) within 1.2e-2 abs.",
+      "how": "non_singlet_evolution_matrix's sigma_fn calls evo.sigma(nodes, Q2, Q20) -- the identical NonSingletEvolution.sigma used by the Mellin-space valence test, confirmed by reading assembly.py:678-679. Common-mode on splitting-function physics with test 4; independent on the basis/contour pipeline.",
+      "oracle": "A3",
+      "bar": "atol 1.2e-2 x2 (XSPACE_MELLIN_ATOL, XSPACE_SUM_RULE_ATOL)",
+      "strength": "S2",
+      "catches": "a basis/quadrature/contour bug in non_singlet_evolution_matrix's x-space assembly. Elementwise over 4 flavors like the Mellin-space valence test, so it retains that test's robustness to a component reorder rather than the momentum pair's blind spot."
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_momentum_sum_rule-01",
+      "test": "test_pixel_singlet_evolution_preserves_jam24_momentum_sum_rule",
+      "pattern": "W-LOOSE",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_pixel_singlet_evolution_preserves_jam24_momentum_sum_rule itself (added a 4th assertion). Added `assert evolved_momentum[0] > evolved_momentum[1]` (quark-singlet exceeds gluon) after the three existing sum-only checks. MEASURED at all 5 target scales (mc, 4, 5, 10, 100 GeV): evolved (quark_singlet, gluon) = ([0.602,0.398], [0.551,0.449], [0.548,0.452], [0.541,0.459], [0.526,0.473]) -- the inequality holds throughout with a shrinking-but-never-crossing margin (0.204 down to 0.053, the smallest still ~1e5x PIXEL_CONSERVATION_ATOL=5e-7). A quark_singlet<->gluon column swap flips the inequality at every scale (measured swapped-input evolved momenta: [0.418,0.582], [0.428,0.572], [0.432,0.568], [0.443,0.557], [0.461,0.539]). Acceptance: PYTHONPATH=<tmpdir> venv/bin/python -m pytest tests/test_momentum_sum_rule.py -q -p no:randomly -p mutate_jam24_momentum_swap (plugin swaps _jam24_input_momentum()'s two return entries via pytest_collection_modifyitems) -> exactly the 5 parametrized cases of this test fail (e.g. `assert 0.4605973384138518 > 0.5393639076555398` at Q=mc), 17 passed -- test_jam24_momentum_sum_rule_at_input_scale (a different, legitimately sum-only test) and all 4 valence tests unaffected. Before the fix, this identical mutation left all 6 originally-selected cases (this test's 5 scales plus the input-scale fixture gate) green. Original evidence: tests/test_momentum_sum_rule.py:456-468 -- both assertions reduce a 2-vector to operator.sum(axis=0) or evolved_momentum.sum() before comparing. Demonstrated (never touching src/ on disk): evaluating the same NLO operator against the real JAM24 input_momentum=[0.5763, 0.4237] and its component-swapped reverse gives evolved.sum()=0.99996126287... vs 0.99996125740..., a difference of 5.5e-9 -- 91x under PIXEL_CONSERVATION_ATOL=5e-7 and >18000x under JAM24_NORMALIZATION_ATOL=1e-4. Structural, not incidental: for any operator whose columns already sum near 1, operator.sum(axis=0)@v collapses to sum(v), which is exactly invariant to the order of v's entries.",
+      "why_it_matters": "A plausible, realistic transcription bug -- reading JAM24's gluon and quark-singlet LHAPDF columns into the wrong slots of the 2-vector -- would pass every assertion in this test and its x-space sibling (test_xspace_reconstruction_preserves_momentum_sum_rule, same sum-only pattern) undetected, because total momentum conservation is insensitive to how the total is initially partitioned. The sibling valence tests do not share this gap: their assertions are elementwise over 4 flavors, and the (2,1,0,0) target is asymmetric enough that a u<->d swap fails immediately.",
+      "proposed_fix": "Add one assertion that is sensitive to component order -- e.g. assert input_momentum[0] (quark singlet) exceeds input_momentum[1] (gluon) at this input scale, or cross-check the individual components against an independently published JAM24 momentum-fraction figure -- closing the same gap the valence tests already avoid structurally.",
+      "effort": "S"
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_momentum_sum_rule-M01",
+      "topic": "evolution",
+      "title": "Add an LO case to the x-space momentum/valence sum-rule reconstruction",
+      "rationale": "RESOLVED 2026-08-14 by test_xspace_reconstruction_preserves_sum_rules_at_lo (5 scales) in tests/test_momentum_sum_rule.py; _xspace_reconstructed_sum_rules gained an `order` parameter defaulting to cfg.ORDER, so the two existing NLO tests are unchanged. Oracle A2: at LO the Mellin-space N=2 identity is exact to float64 (reproduced here at 2.2e-16), so an LO x-space residual contains no perturbative component and is a strictly tighter guard on the basis/contour/low-x pipeline. MEASURED at XSPACE_GRID_N=201 over the five scales: |reconstructed-expected| = 1.56e-05 (mc), 5.60e-05 (4), 8.10e-05 (5), 1.85e-04 (10), 4.28e-04 (100 GeV); |reconstructed-1| peaks at 4.80e-04; valence-vs-expected peaks at 1.44e-03. Bars set at 1.5e-3 / 4.0e-3, ~3x over measured and ~8x under XSPACE_MELLIN_ATOL. PROVED THE PLAN (and XSPACE_CONTOUR_TOL's comment) WRONG on one point, measured three ways: that comment reads the 1.0733e-2 residual at Q=100 GeV as 'the finite-element/JAM24 low-x floor, not contour error', and at that scale it is neither. (i) LO and NLO agree to ~15% at Q<=10 GeV (1.85e-04 vs 2.10e-04) but differ by 25x at Q=100 GeV (4.28e-04 vs 1.08e-02) on the identical pipeline. (ii) Refining x_min -- the parameter under suspicion, not the panel -- via XSPACE_GRID_N 161/201/241/281 (x_min 1.9e-05 -> 5.5e-09) converges cleanly at Q=10 GeV (1.34e-03 -> 1.85e-04 -> 3.70e-05 -> 1.47e-05, LO) but PLATEAUS at Q=100 GeV (2.21e-02 -> 4.28e-04 -> 2.80e-04 -> 7.36e-04 LO; 4.70e+00 -> 1.08e-02 -> 6.61e-03 -> 6.20e-03 NLO). (iii) Tightening XSPACE_CONTOUR_TOL 1e-2 -> 3e-3 at Q=100 GeV NLO moves it by exactly 0 (1.0763e-02 both). So the Q=100 GeV NLO residual is an unexplained, order-dependent plateau, not a converged low-x floor. Nothing new asserts on it; the measurements are recorded in the new test's docstring. Acceptance: a plugin putting a 2e-3 relative normalization error on the assembled singlet x-space matrix fails all five new LO cases while all 24 other tests PASS, including the five NLO x-space momentum cases at their 1.2e-2 bar -- i.e. the new bar catches a pipeline defect the old one tolerates. (Also measured, and recorded as a separate note: forcing low_x_extension='flat' on both assembly entry points changes NOTHING in this file, LO or NLO -- at x_min=1.24e-06 the head is inert for these unweighted integrals, so that keyword is currently untested by this file.) This file's x-space tests (test_xspace_reconstruction_preserves_momentum_sum_rule/_valence_sum_rules) run only at cfg.ORDER='NLO'. At LO the underlying Mellin-space check is exact to 1e-12 (tests/test_evolution.py::test_lo_singlet_momentum_columns_conserve_n2), so an LO x-space case would cleanly isolate how much of the current 1.2e-2 x-space bar is basis/contour/low-x-completion error alone, versus the NLO ~1e-9 floating-point floor the module docstring now documents.",
+      "proposed_oracle": "A2",
+      "proposed_location": "tests/test_momentum_sum_rule.py",
+      "searched": [
+        "grep -in 'xspace.*lo\\b|x_space.*lo\\b|xspace_reconstruction' $AUDIT/test_index.txt -> 2 hits, both this file's own NLO-only tests",
+        "grep -rln singlet_evolution_matrix tests/test_*.py -> 13 files; grepped each for order=\"LO\" -> widely used (test_evolution.py, test_coverage_edges.py, test_origin_grid_completions.py, etc.) but none combine it with a momentum/valence sum-rule assertion",
+        "grep -rln adaptive_contour tests/test_*.py -> 7 files (test_contour_invariance, test_coverage_edges, test_evolution, test_momentum_sum_rule, test_origin_grid_completions, test_parametric_contour, test_sidis_dataset); none of the other six assert a momentum or valence sum rule"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_momentum_sum_rule-M02",
+      "topic": "evolution",
+      "title": "Codify a small-coefficient-corruption regression guard on the singlet splitting matrix",
+      "rationale": "RESOLVED 2026-08-14 by test_conservation_atol_catches_a_realistic_splitting_coefficient_error (tests/test_momentum_sum_rule.py). Oracle A2: the N=2 column sum is exactly 1 for the true splitting functions, so its deviation reads out the injected coefficient error directly. Turns PIXEL_CONSERVATION_ATOL's prose scan into an executable two-sided pin. MEASURED at Q=10 GeV from Q0=2 GeV, quark column (gluon in parentheses): clean 1.95e-09 (3.78e-08); pgq*(1+1e-7) 1.62e-08 (3.60e-08); 1e-6 1.80e-07 (1.99e-08); 1e-5 1.82e-06 (1.41e-07); 1e-4 1.82e-05 (1.75e-06) -- so the 5e-7 bar sits between the 1e-6 and 1e-5 rows, matching that constant's comment to the digit. Two implementation traps found and recorded in the test docstring: the Mellin moments sit on the TRAILING axis, so P[..., 1, 0] silently perturbs pqg/pgg instead of pgq; and _SPLITTING_CACHE is keyed on contour nodes and (nf, order, channel) but NOT on the splitting functions, so without clearing it the perturbation is a total no-op -- measured, all four perturbation sizes returned the clean defect bit-for-bit. The cache is cleared in finally; nothing is written to disk (cache_path is None throughout). Acceptance: a plugin normalizing each column of the N=2 singlet operator to sum to 1 -- a 'helpful' fix-up -- fails ONLY this test, while all 13 other non-xspace tests PASS, three of them now VACUOUSLY (operator.sum(axis=0) is exactly (1,1) by construction under the mutation). That is the failure mode this test exists for. This audit's own mutation test (in-memory monkeypatch of lo_singlet's pgq term, never touching src/ on disk) shows PIXEL_CONSERVATION_ATOL=5e-7 catches a >=1e-4 relative coefficient error but loses sensitivity below ~1e-6 relative. No test in the suite currently makes that sensitivity boundary an explicit, permanent assertion, so a future refactor could silently narrow it without any test noticing.",
+      "proposed_oracle": "A2",
+      "proposed_location": "tests/test_momentum_sum_rule.py or tests/test_evolution.py",
+      "searched": [
+        "grep -in 'mutant|mutate|corrupt|perturb.*coefficient|coefficient.*perturb' $AUDIT/test_index.txt, filtered to splitting|singlet|evolution|momentum -> 0 hits"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_momentum_sum_rule-M03",
+      "topic": "evolution",
+      "title": "Assert JAM24's quark-singlet and gluon momentum fractions individually, not only their sum",
+      "rationale": "RESOLVED 2026-08-14 by test_pixel_singlet_evolution_flows_to_the_asymptotic_momentum_partition (tests/test_momentum_sum_rule.py), NOT by the proposed D1 golden pin -- the proposal is withdrawn with a reason. There is no source in this tree for JAM24's individual momentum fractions that is independent of pdf_guidance.dump_jam itself, so a pin would have been F2 (freeze what the code produces) exactly where the item asked for an independent expectation. Oracle A2 instead: the LO N=2 singlet anomalous-dimension matrix has a zero eigenvalue whose eigenvector is (3nf, 16), so every input flows to <x>_g -> 16/(16+3nf) = 16/31 for this configuration's nf=5 (only mc and mb are passed). Textbook closed form, independent of the repo, and it constrains each component SEPARATELY. MEASURED (JAM24 central, Q0=2 GeV, NLO): the gluon fraction rises monotonically 0.42366 / 0.45934 / 0.47348 / 0.48129 / 0.48636 / 0.49270 / 0.49658 over Q = 2 ... 1e8 GeV, approaching 0.516129 strictly FROM BELOW with the gap shrinking every step (9.25e-02 -> 1.95e-02). Swapping the two input fractions makes the gluon fraction run 0.57630 -> 0.52053, approaching from ABOVE and DECREASING, so both the sign and the monotonicity assertions flip -- which is exactly the quark_singlet<->gluon reading swap this item and weakness -01 name. Bars are on direction and monotonicity plus a loose <0.03 cap on the residual gap at 1e8 GeV; deliberately not an equality with 16/31, since the approach is logarithmic and NLO shifts the fixed point. Acceptance: a plugin exchanging Q2 and Q20 inside singlet_evolution_factors -- evolution running DOWN in scale -- fails ONLY this test; all 13 other non-xspace tests PASS, because momentum conservation is scale-pair-agnostic (column sums stay 1 to 8.5e-08) and the quark fraction still exceeds the gluon one. That bug was invisible to the entire file before this pass. Closes weakness test_momentum_sum_rule-01: an independently-sourced expectation for each component (not just their sum) would make a quark_singlet<->gluon reading swap fail. See src/pixel-external closure_JAM_truth_small/pdf_guidance.py:103 (dump_jam) for the column contract this would be checking.",
+      "proposed_oracle": "D1",
+      "proposed_location": "tests/test_momentum_sum_rule.py",
+      "searched": [
+        "grep -in 'gluon_momentum|momentum_fraction|per_flavor.*momentum|quark_singlet.*moment' $AUDIT/test_index.txt -> 0 hits",
+        "grep -rn '\\[::-1\\]|swap' tests/test_evolution.py tests/test_momentum_sum_rule.py -> 1 hit, an unrelated contour-node-ordering comment in test_evolution.py:933, not a PDF-component check"
+      ],
+      "effort": "M"
+    }
+  ],
+  "unjustified_tolerances": [
+    {
+      "line": 155,
+      "text": "PIXEL_CONSERVATION_ATOL = 5.0e-7",
+      "quantity": "Mellin-space N=2 singlet column-sum defect and N=1 valence-factor defect of PIXEL's own NLO evolution operator",
+      "comment_added": "measured range 1.0e-10 to 6.4e-9 (N=2 quark column) / 2.2e-8 to 5.5e-8 (N=2 gluon column) / 1.1e-9 to 2.9e-9 (N=1 valence) across the file's five scales; mutation-demonstrated to catch >=1e-4 relative coefficient bugs in the singlet matrix, losing sensitivity below about 1e-6 relative; does not catch a quark_singlet<->gluon component swap (measured effect 5.5e-9)",
+      "provenance": "known"
+    },
+    {
+      "line": 140,
+      "text": "JAM24_VALENCE_ATOL = 5.0e-3",
+      "quantity": "JAM24 input valence counts (u,d,s,c) vs the exact target (2,1,0,0)",
+      "comment_added": "measured max deviation 1.985e-3 (u quark); 2.5x headroom, comparably tight to the sibling JAM24_NORMALIZATION_ATOL rather than a loose afterthought",
+      "provenance": "known"
+    }
+  ],
+  "measurements": [
+    {
+      "claim": "Mellin-space singlet momentum-conservation defect at N=2, NLO truncated, across the file's 5 target scales",
+      "command": "singlet_evolution_factors([2.0], Q2=Qt**2, Q20=4.0, order='NLO', mode='truncated', alphaS_MZ=0.118, mc=1.28, mb=4.18)[:, :, 0].sum(axis=0) for Qt in (4.0, 5.0, 10.0, 100.0, 1.28)",
+      "result": "quark column 1.0142e-10 to 6.4390e-09; gluon column 2.2357e-08 to 5.5119e-08 (bar atol=5e-7)"
+    },
+    {
+      "claim": "Mellin-space valence (N=1, minus channel) conservation defect across the same 5 scales",
+      "command": "evolution_factors([1.0], Q2=Qt**2, Q20=4.0, channel='minus', order='NLO', mode='truncated', alphaS_MZ=0.118, mc=1.28, mb=4.18)[0]; abs(factor-1)",
+      "result": "1.0553e-09 to 2.8696e-09 (bar atol=5e-7)"
+    },
+    {
+      "claim": "PIXEL_CONSERVATION_ATOL=5e-7 catches realistic relative coefficient errors in the LO singlet pgq term and loses sensitivity below ~1e-6 relative (in-memory monkeypatch of pixel.kernels.pqcd.splitting.lo_singlet, clearing the module's _SPLITTING_CACHE between trials; src/ never touched on disk, git status --porcelain -- src/ confirmed clean of new changes)",
+      "command": "P=lo_singlet(N,nf); P[1,0]*=(1+eps); singlet_evolution_factors([2.0], Q2=100.0, Q20=4.0, order='NLO', mode='truncated', alphaS_MZ=0.118, mc=1.28, mb=4.18)[:,:,0].sum(axis=0) for eps in (1e-2,1e-4,1e-6,1e-8)",
+      "result": "eps=1e-2 -> defect [1.819e-3, 1.789e-4]; eps=1e-4 -> [1.819e-5, 1.752e-6]; eps=1e-6 -> [1.800e-7, 1.988e-8]; eps=1e-8 -> back at the unperturbed floor ([1.28e-10, 3.76e-8])"
+    },
+    {
+      "claim": "JAM24_NORMALIZATION_ATOL's documented 3.9e-05 deviation independently reproduces",
+      "command": "tests.test_momentum_sum_rule._jam24_input_momentum().sum() - 1.0",
+      "result": "3.8719e-05 (file's existing comment claims 3.9e-05 -- matches)"
+    },
+    {
+      "claim": "JAM24_VALENCE_ATOL=5e-3 achieved margin, previously unrecorded in the file",
+      "command": "tests.test_momentum_sum_rule._jam24_input_valence_counts() - EXPECTED_VALENCE_COUNTS",
+      "result": "deviations (1.985e-3, 1.321e-3, 5.60e-4, 0.0) for (u,d,s,c); max/bar = 1.985e-3/5e-3 -> 2.5x headroom"
+    },
+    {
+      "claim": "Both momentum-sum-rule assertions in test_pixel_singlet_evolution_preserves_jam24_momentum_sum_rule cannot detect a quark_singlet<->gluon component swap in the JAM24 input, because they consume only .sum()",
+      "command": "op = singlet_evolution_factors([2.0], Q2=100.0, Q20=4.0, order='NLO', mode='truncated', alphaS_MZ=0.118, mc=1.28, mb=4.18)[:,:,0]; (op @ [0.57630494,0.42365634]).sum() vs (op @ [0.42365634,0.57630494]).sum()",
+      "result": "0.9999612628732845 vs 0.9999612574040286 -- differ by 5.469e-09, far inside the 5e-7 and 1e-4 bars"
+    },
+    {
+      "claim": "FIX PASS 2026-08-13: evolved quark-singlet exceeds evolved gluon at all 5 target scales, with the smallest margin (100 GeV) still ~1e5x PIXEL_CONSERVATION_ATOL; a component swap flips the order at every scale.",
+      "command": "scratchpad/work/explore_momentum_swap.py: for target_q_gev in (mc, 4.0, 5.0, 10.0, 100.0), singlet_evolution_factors([2.0], Q2=target_q_gev**2, Q20=4.0, order='NLO', mode=cfg.MODE, alphaS_MZ=cfg.ALPHAS_MZ, mc=cfg.MC, mb=cfg.MB)[:,:,0] @ input_momentum vs @ input_momentum[::-1]",
+      "result": "input_momentum=[0.57630494,0.42365634] (quark_singlet>gluon at input). Evolved (quark_singlet,gluon): Q=mc(1.28) [0.6020,0.3979] margin 0.2041; Q=4 [0.5511,0.4488] margin 0.1023; Q=5 [0.5477,0.4523] margin 0.0954; Q=10 [0.5406,0.4593] margin 0.0813; Q=100 [0.5265,0.4735] margin 0.0530. Swapped-input evolved at the same scales: [0.4185,0.5815], [0.4278,0.5722], [0.4316,0.5683], [0.4425,0.5574], [0.4606,0.5394] -- inequality direction flips at every scale under the swap."
+    },
+    {
+      "claim": "FIX PASS 2026-08-13 acceptance: mutating _jam24_input_momentum to swap its two return entries fails exactly the 5 parametrized cases of test_pixel_singlet_evolution_preserves_jam24_momentum_sum_rule, leaving the other 17 tests (including the sum-only test_jam24_momentum_sum_rule_at_input_scale and all 4 valence tests) unaffected.",
+      "command": "PYTHONPATH=<tmpdir> venv/bin/python -m pytest tests/test_momentum_sum_rule.py -q -p no:randomly -p mutate_jam24_momentum_swap (plugin: pytest_collection_modifyitems patches sys.modules['test_momentum_sum_rule']._jam24_input_momentum to return the reversed array)",
+      "result": "5 failed (test_pixel_singlet_evolution_preserves_jam24_momentum_sum_rule[mc/4gev/5gev/10gev/100gev], each failing on the new `evolved_momentum[0] > evolved_momentum[1]` line, e.g. AssertionError: assert 0.4605973384138518 > 0.5393639076555398 at Q=mc), 17 passed. Before the fix (same mutation, filtered to the 6 originally-present cases via -k): 6 passed, 0 failed -- the weakness reproduced exactly as the audit described."
+    }
+  ],
+  "notes_for_readme": "test_momentum_sum_rule.py runs exclusively at cfg.ORDER='NLO' (never LO, never NNLO) and is NOT the NNLO-fit-floor witness CLAUDE.md's evolution section describes -- that is tests/test_nnlo_splitting.py::test_momentum_sum_rule_measures_the_parametrization_accuracy; this file measures a different, much tighter quantity (~1e-8 floating-point floor) using a realistic JAM24 PDF as input instead of a bare N=2 matrix trace. FIX PASS 2026-08-13: weakness -01 (S1) resolved for the Mellin-space test (test_pixel_singlet_evolution_preserves_jam24_momentum_sum_rule) via an added order-sensitive assertion; the x-space sibling (test_xspace_reconstruction_preserves_momentum_sum_rule) still shares the same structural gap and was left open (M03) since it needs its own margin measurement, not a reuse of the Mellin-space numbers."
+}

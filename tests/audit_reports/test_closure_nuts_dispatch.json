@@ -1,0 +1,432 @@
+{
+  "file": "tests/test_closure_nuts_dispatch.py",
+  "area": "closure-suite",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "closure_JAM_truth/fit.py",
+    "closure_JAM_truth/run_closure.py",
+    "closure_JAM_truth/config.py",
+    "closure_NNPDF_truth/fit.py",
+    "closure_NNPDF_truth/run_closure.py",
+    "closure_NNPDF_truth/config.py",
+    "closure_JAM_truth_small/fit.py",
+    "closure_JAM_truth_small/run_closure.py",
+    "closure_JAM_truth_small/config.py",
+    "closure_NNPDF_truth_small/fit.py",
+    "closure_NNPDF_truth_small/run_closure.py",
+    "closure_NNPDF_truth_small/config.py",
+    "src/pixel/infer/gamma_method.py (autocorrelation_summary/_resolve_chain, called by _autocorrelation_ess)",
+    "src/pixel/infer/__init__.py (PosteriorResult)",
+    "src/pixel/infer/contour.py (ContourHMCSamples, read for context, not directly exercised)"
+  ],
+  "drives_non_pixel": "This file imports nothing from `pixel` directly -- it imports `fit` and `run_closure` from the four top-level closure-suite packages closure_JAM_truth, closure_NNPDF_truth, closure_JAM_truth_small, closure_NNPDF_truth_small (each has its own __init__.py; none are under src/pixel). Those driver modules do `import pixel` and call `pixel.map`, `pixel.run_direct_mcmc`, and `pixel.infer.run_mcmc` internally, so this file's tests exercise `pixel` only indirectly, through the closure drivers' own dispatch helpers (_closure_sampler, _markov_chain, _autocorrelation_ess, _weights, _dis_predictions) and through inspect.getsource text checks on run_fit/main. Confirmed absent from the coverage measurement: `grep -c closure_JAM_truth $AUDIT/coverage_index.txt` = 0.",
+  "n_tests": 23,
+  "n_parametrized_cases": 78,
+  "tests": [
+    {
+      "name": "test_bilinear_closures_use_public_nuts_family",
+      "line": 82,
+      "claim": "A pure H-S (bilinear, zero ordinary coords) full-suite model dispatches to plain contour NUTS.",
+      "actual": "Exercises the fallthrough branch of _closure_sampler's three-way if/elif/else with n_ordinary=0 making the middle branch falsy.",
+      "how": "SimpleNamespace model mock with has_bilinear=True and a contour_partition() returning n_ordinary=0; asserts the returned string.",
+      "oracle": "F1",
+      "bar": "exact string equality",
+      "strength": "S3",
+      "catches": "an inverted or dropped n_ordinary truthiness check, or a fallthrough that ignores n_ordinary"
+    },
+    {
+      "name": "test_exact_ratio_closures_use_explicit_direct_nuts",
+      "line": 103,
+      "claim": "has_nonlinear models dispatch to the explicit retained-(theta,q) direct-NUTS path with a tight prior rcond.",
+      "actual": "Confirms has_nonlinear is checked first/alone (model has no contour_partition attribute, so checking has_bilinear first would raise AttributeError, not misroute); confirms DIRECT_PRIOR_RCOND<=1e-10 (literal is exactly 1e-10); confirms 'run_direct_mcmc' appears in run_fit's source text.",
+      "how": "SimpleNamespace(has_nonlinear=True, has_bilinear=True); dispatch + cfg read + inspect.getsource substring.",
+      "oracle": "F2",
+      "bar": "exact string; one-sided <=1e-10; substring presence",
+      "strength": "S3",
+      "catches": "wrong dispatch order (would crash, not misroute); DIRECT_PRIOR_RCOND loosened past 1e-10; run_direct_mcmc call deleted or renamed. Does not catch: the value drifting to a different tight number, or run_direct_mcmc being called with wrong arguments"
+    },
+    {
+      "name": "test_full_mixed_linear_normalization_and_hs_closures_use_joint_hmc",
+      "line": 127,
+      "claim": "Bilinear models with nonzero ordinary coordinates (n_ordinary=5) route to joint contour HMC.",
+      "actual": "Exercises the middle branch of the same three-way conditional as test_bilinear_closures_use_public_nuts_family, with n_ordinary flipped from 0 to 5 -- a genuine paired discrimination of both sides of one condition.",
+      "how": "SimpleNamespace model mock, has_bilinear=True, contour_partition().n_ordinary=5.",
+      "oracle": "F1",
+      "bar": "exact string equality",
+      "strength": "S3",
+      "catches": "a truthiness check on n_ordinary that ignores its actual value"
+    },
+    {
+      "name": "test_small_dy_mode_uses_joint_affine_vegas",
+      "line": 146,
+      "claim": "Small-suite DY mode configures joint-affine nested VEGAS (inner-sample counts, joint grid, signed-ESS floor).",
+      "actual": "The _closure_sampler(model, 'dy') == 'vegas' line is a tautology: the small suite's _closure_sampler(model, mode=None) is `return \"vegas\"` unconditionally and reads neither argument -- verified directly, suite._closure_sampler(None, None) == 'vegas'. The elaborate model mock (contour_partition, _bilinear_normalization_design) is consequently unread by anything this test calls. The four cfg.VEGAS_* reads are real literal pins but only confirm the constants' values, not that DY mode wires them into run_fit -- that wiring is what test_small_bilinear_closures_configure_joint_affine_vegas checks.",
+      "how": "SimpleNamespace model mock (unread) + suite._closure_sampler call (tautological) + four suite.cfg.VEGAS_* attribute reads (real).",
+      "oracle": "D1",
+      "bar": "128; 1; True; approx(0.05)",
+      "strength": "W1",
+      "catches": "nothing via the _closure_sampler line (see docstring); the four cfg reads would catch VEGAS_N_ADAPT_INNER_SAMPLES/VEGAS_N_INNER_SAMPLES/VEGAS_JOINT_GRID/VEGAS_MIN_SIGNED_ESS_FRAC drifting off their current config.py values"
+    },
+    {
+      "name": "test_small_mixed_mode_samples_explicit_normalizations_with_joint_vegas",
+      "line": 180,
+      "claim": "Small-suite 'exp'/'both' modes marginalize the H-S sector with nested VEGAS, sampling explicit fitted normalizations.",
+      "actual": "Both _closure_sampler calls are the same tautology as test_small_dy_mode_uses_joint_affine_vegas (unconditional 'vegas'). The _bilinear_normalization_design mock (with its own explanatory comment about which normalization changes what) is read by nothing: grep confirms the name appears nowhere in closure_JAM_truth_small/fit.py or the full-suite fit.py. The two inspect.getsource(run_fit) checks are real but duplicate test_small_bilinear_closures_configure_joint_affine_vegas's own checks of the same two substrings on the same source object, with nothing this test's own fixture adds.",
+      "how": "SimpleNamespace model mock (unread) + two tautological _closure_sampler calls + two inspect.getsource substring checks (duplicated elsewhere).",
+      "oracle": "F2",
+      "bar": "two substring-in-text checks",
+      "strength": "W1",
+      "catches": "nothing via the two _closure_sampler lines; the two source-substring checks catch the same regressions test_small_bilinear_closures_configure_joint_affine_vegas already catches, redundantly"
+    },
+    {
+      "name": "test_full_linear_closures_use_nuts_without_a_contour",
+      "line": 217,
+      "claim": "A model with no bilinear sector at all uses ordinary real-parameter NUTS with the documented Hessian-mass tuning.",
+      "actual": "model has no contour_partition attribute (same defensive-mock trick as test_exact_ratio_closures_use_explicit_direct_nuts). Pins NUTS_WARMUP (loose, >0 only), NUTS_INITIAL_STEP_SIZE, NUTS_INTEGRATOR, NUTS_MAX_TREE_DEPTH, NUTS_ADAPT_MASS, MCMC_SAMPLES against their literal config.py values.",
+      "how": "SimpleNamespace(has_bilinear=False) + dispatch + six suite.cfg reads.",
+      "oracle": "F2",
+      "bar": "100(loose)/0.1/leapfrog/6/False/1000",
+      "strength": "S3",
+      "catches": "dispatch misrouting a bilinear-free model; drift on 5 of 6 constants (WARMUP only guarded against zero/negative, not drift off 100)"
+    },
+    {
+      "name": "test_small_linear_closures_use_ordinary_vegas",
+      "line": 241,
+      "claim": "Small-suite models with no bilinear sector use ordinary (non-nested) grid VEGAS with the documented tuning.",
+      "actual": "The _closure_sampler(model) == 'vegas' line is the same tautology as the other small-suite dispatch tests, but the model mock here is minimal (no unused attributes), unlike the dy/mixed tests. Four cfg.VEGAS_*/MCMC_SAMPLES reads are real literal pins.",
+      "how": "SimpleNamespace(has_bilinear=False) + tautological dispatch call + four suite.cfg reads.",
+      "oracle": "D1",
+      "bar": "16/5/128/1000",
+      "strength": "W1",
+      "catches": "nothing via the dispatch line; the four cfg reads catch VEGAS_N_BINS/VEGAS_N_ADAPT_ITERATIONS/VEGAS_N_EVAL_PER_ITERATION/MCMC_SAMPLES drift"
+    },
+    {
+      "name": "test_contour_saddle_tolerance_covers_observed_float_stall",
+      "line": 263,
+      "claim": "CONTOUR_SADDLE_TOL clears an observed floating-point stall just below 3e-3, without being unboundedly loose.",
+      "actual": "Reads suite.cfg.CONTOUR_SADDLE_TOL and checks it against a hardcoded [3e-3, 1e-2] range; the 3e-3 floor matches config.py's own comment ('stall just below a 3e-3 Newton decrement'), read directly from source. Does not itself re-measure the stall claim.",
+      "how": "Direct suite.cfg attribute read against a literal range, all four suites parametrized.",
+      "oracle": "D1",
+      "bar": "3.0e-3 <= x <= 1.0e-2",
+      "strength": "S3",
+      "catches": "CONTOUR_SADDLE_TOL regressing toward/below the documented 3e-3 stall floor (spurious saddle-not-found aborts), or being set far above 1e-2 (silently accepting non-converged saddles)"
+    },
+    {
+      "name": "test_full_bilinear_closures_enable_only_the_two_setup_caches",
+      "line": 282,
+      "claim": "Contour NUTS in a bilinear closure caches only the saddle reference and Hessian mass -- no chain or summary cache.",
+      "actual": "Four positive inspect.getsource(run_fit) substring checks plus two negative ones ('chain_cache'/'summary_cache' absent). Direct (non-textual) read of INFERENCE_CACHE_ROOT.name.",
+      "how": "inspect.getsource(suite.run_fit) substring membership, six checks.",
+      "oracle": "F2",
+      "bar": "substring presence/absence",
+      "strength": "S3",
+      "catches": "a cache key/path renamed or dropped in the bilinear NUTS branch, or chain_cache/summary_cache reintroduced; does not prove these caches are populated correctly at runtime, only that the text is present"
+    },
+    {
+      "name": "test_small_bilinear_closures_configure_joint_affine_vegas",
+      "line": 305,
+      "claim": "run_fit's bilinear branch (small suite) builds nested-VEGAS sampler_options, not MCMC-style ones.",
+      "actual": "Seven positive inspect.getsource(run_fit) substring checks pin the if model.has_bilinear: block's option dict; one negative check confirms no '\"n_warmup\"' leaked in. VEGAS_JOINT_COVARIANCE_INFLATION pinned directly (non-textually).",
+      "how": "inspect.getsource(suite.run_fit) substring membership, eight checks plus one direct cfg read.",
+      "oracle": "F2",
+      "bar": "substring presence/absence; approx(1.0)",
+      "strength": "S3",
+      "catches": "a sampler_options key renamed/dropped in the bilinear branch, or an MCMC-only option (n_warmup) leaking in; this is the test that actually establishes the small-suite bilinear-to-nested-VEGAS wiring claim, unlike the _closure_sampler-based tests"
+    },
+    {
+      "name": "test_no_dis_t0_datasets_skip_map",
+      "line": 335,
+      "claim": "DY-only/constraint-only layouts (no correlated_systematics datasets) must never enter bilinear MAP.",
+      "actual": "dataset.metadata.extras={} means _dis_predictions's `layouts` filter stays empty, so `if not layouts: return {}` fires before pixel.map is ever called. monkeypatch.setattr(suite.pixel,'map',unexpected_map) makes any call raise AssertionError instead of returning a value, so the test would fail loudly (not just read back an empty-but-coincidental dict) if the skip guard broke.",
+      "how": "SimpleNamespace model/dataset/layout mocks + a monkeypatch trap on pixel.map + a return-value assertion.",
+      "oracle": "F1",
+      "bar": "return value == {} plus zero calls to the trapped function",
+      "strength": "S3",
+      "catches": "the `if not layouts: return {}` short circuit being removed or its condition inverted; no MAP numerics are exercised (there is no positive-path test in this file for the correlated_systematics-present branch)"
+    },
+    {
+      "name": "test_autocorrelation_ess_routes_through_the_real_markov_history",
+      "line": 370,
+      "claim": "The reported autocorrelation ESS is measured on the real Markov chain (.chain), never on a contour's complex .samples (f).",
+      "actual": "Both assertions are genuinely discriminating for the claim they make: `is chain` fails if a mutant _markov_chain reads `contour` directly instead of preferring `.chain` (verified: such a mutant returns None on this fixture, via _markov_chain's own complex-dtype guard, so `is chain` fails); `slowest in ('t0','t1')` fails for any path that skips `.chain`, because `contour` itself carries no param_labels and a bypass would fall back to 'p0'/'p1'. NOT established: `_markov_chain`'s own np.iscomplexobj/weights guard is never exercised on a *chainless* complex object here, since contour.chain is always present, so candidate is always chain before that guard matters -- verified: deleting the guard entirely (a second mutant) returns the identical result on this fixture. No sampler type in pixel.infer currently reaches _markov_chain with complex .samples and no .chain (every contour dataclass carries .chain), so this is currently a guard with no known caller. Also verified directly: feeding the complex array straight to pixel.infer.gamma_method.autocorrelation_summary raises ValueError (an independent np.iscomplexobj check in _resolve_chain) rather than silently succeeding, so the pre-existing docstring's 'silently meaningless rather than loudly broken' framing overstated the current risk; corrected in the expanded docstring.",
+      "how": "SimpleNamespace contour+chain mocks; suite._markov_chain identity check; suite._autocorrelation_ess report field checks. Verified against three standalone mutants (see measurements).",
+      "oracle": "A3",
+      "bar": "identity (`is chain`); label membership; ess>0.0 (very weak)",
+      "strength": "S3",
+      "catches": "a regression that inspects the outer container's own .samples/.chain selection instead of preferring .chain (demonstrated). Does NOT catch: _markov_chain's own complex/weights guard being deleted while .chain-preference stays intact (demonstrated identical output) -- see weaknesses and missing"
+    },
+    {
+      "name": "test_autocorrelation_ess_declines_non_markov_inputs",
+      "line": 419,
+      "claim": "Importance draws (non-uniform weights) and fixed PosteriorResult posteriors report no autocorrelation.",
+      "actual": "Two distinct guard clauses in _markov_chain are exercised: non-uniform weights with no .chain (candidate is samples itself, rejected by np.allclose(weights, weights.flat[0])); PosteriorResult caught earlier by isinstance, before any attribute lookup. The all-None dict pins _autocorrelation_ess's exact placeholder shape.",
+      "how": "SimpleNamespace with non-uniform weights, no .chain; and PosteriorResult.__new__ (bypasses __init__, which needs a real Model).",
+      "oracle": "F1",
+      "bar": "identity (`is None`); exact dict equality",
+      "strength": "S3",
+      "catches": "the weights-uniformity check being dropped or inverted, or the PosteriorResult isinstance short-circuit being removed"
+    },
+    {
+      "name": "test_small_closure_reads_nested_vegas_signed_weights",
+      "line": 449,
+      "claim": "The small suite's _weights prefers NestedVegasSamples' normalized_signed_weights over the generic weight-attribute names.",
+      "actual": "samples exposes only normalized_signed_weights; if that name were dropped from (or reordered below others in) the small suite's 4-name priority list, the for/else would fall through to a uniform [1/3,1/3,1/3] default, failing the assert_allclose against [0.5,-0.25,0.75]. Weights already sum to 1.0, so the renormalization divide (w/total) is a no-op on this input -- a broken denominator would not be caught, only a wrong attribute choice.",
+      "how": "SimpleNamespace with only normalized_signed_weights set; np.testing.assert_allclose against the exact input array.",
+      "oracle": "A3",
+      "bar": "assert_allclose default rtol/atol (exact echo)",
+      "strength": "S3",
+      "catches": "normalized_signed_weights dropped from, or reordered below, the small suite's weight-name priority list. Does not catch a broken w/total renormalization, since total==1.0 here"
+    },
+    {
+      "name": "test_autocorrelation_ess_falls_below_the_sample_count_when_mixing_is_slow",
+      "line": 476,
+      "claim": "The headline ESS actually falls, and tau_int_max actually rises, for a badly-mixing AR(1) chain.",
+      "actual": "For rho=0.95, Wolff's tau_int = 1/2 + rho/(1-rho) = 19.5 (closed form for AR(1)), giving an inflation factor N/ESS = 2*tau_int = 39 -- matching the file's own '~40x' comment. The bar (ess<0.2n, tau_int_max>5.0) is well inside the analytically-expected regime (true ESS~0.026n, true tau_int~19.5) but generously loose -- a one-sided regression guard against a Gamma-method call that ignores correlation entirely (which would report ess==n, tau_int_max~0.5, failing both bounds), not a tight pin on the inflation factor.",
+      "how": "A synthetic AR(1) series with a known decay parameter, fed through suite._autocorrelation_ess.",
+      "oracle": "A1",
+      "bar": "ess < 0.2n; tau_int_max > 5.0",
+      "strength": "S1",
+      "catches": "an autocorrelation computation that ignores correlation (reports ess~=n); would not catch a computation that is systematically off by a factor of a few while still correlated (bar is ~4-8x looser than the analytic value)"
+    },
+    {
+      "name": "test_summary_reports_both_effective_sample_sizes",
+      "line": 509,
+      "claim": "summarize's JSON report keeps the phase/weight ESS beside the new autocorrelation (Wolff) ESS, under distinct keys reading distinct sources.",
+      "actual": "Two exact-string substring checks against inspect.getsource(suite.summarize) confirm 'effective_sample_size' reads result['autocorr']['ess'] and 'phase_effective_sample_size' reads result['ess'] specifically, not the same expression under both keys -- if one key were accidentally duplicated onto the other's source expression, the substring for the untouched key would vanish and this would fail. _finite_or_none(None) is None is a separate, direct one-line unit check.",
+      "how": "inspect.getsource(suite.summarize) substring membership (2 checks) plus a direct call to _finite_or_none.",
+      "oracle": "F2",
+      "bar": "substring presence (exact dict-literal text)",
+      "strength": "S3",
+      "catches": "the two ESS figures being accidentally wired to the same source dict path; cannot tell live code from the identical text inside a comment (no such comment currently exists in summarize, so not a live risk today)"
+    },
+    {
+      "name": "test_suite_runner_records_case_failures_and_continues",
+      "line": 533,
+      "claim": "run_closure.main catches per-case exceptions, records them to failures.json/run_manifest.json, and only aborts under --fail-fast.",
+      "actual": "Four literal substrings of inspect.getsource(runner.main): 'except Exception as exc' (present twice in the real source: once in the --kernels-only loop, once in the main fit loop; either satisfies `in`), the two output-file paths, and the fail-fast guard.",
+      "how": "inspect.getsource(runner.main) substring membership, four checks, across all four run_closure modules.",
+      "oracle": "F2",
+      "bar": "substring presence",
+      "strength": "S3",
+      "catches": "the exception handler, either output file, or the fail-fast guard being deleted from main's source text; does not itself prove a failure in one case leaves later cases unaffected at runtime -- that is exercised for real (not just as text) by test_suite_kernel_only_mode_builds_without_fitting, but only for the --kernels-only path"
+    },
+    {
+      "name": "test_suite_kernel_only_mode_builds_without_fitting",
+      "line": 556,
+      "claim": "--kernels-only builds every (Q, mode) kernel cache via build_kernels_only and never calls run_one.",
+      "actual": "The only test in this file that actually executes the dispatcher (runner.main() with a real argv/argparse parse) instead of only inspecting source text or calling a small helper directly. run_one is monkeypatched to raise AssertionError if called at all. calls==[('mc','both')] pins both the call arguments and that it happened exactly once.",
+      "how": "monkeypatch on build_kernels_only/run_one/sys.argv, then a real runner.main() call, across all four run_closure modules.",
+      "oracle": "F1",
+      "bar": "exact list equality; zero calls to the trapped function",
+      "strength": "S3",
+      "catches": "--kernels-only falling through to the fitting path, double-building a kernel cache, or the (q_key, mode) loop order/composition changing"
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_closure_nuts_dispatch-01",
+      "test": "test_small_dy_mode_uses_joint_affine_vegas",
+      "pattern": "W-NEVER",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_small_run_fit_configures_vegas_from_the_model_not_the_mode (new) plus a rewrite of test_small_dy_mode_uses_joint_affine_vegas. Both halves of the recorded proposed_fix are taken. (a) The dispatcher's constancy is now asserted AS a constant contract -- _closure_sampler(None, None) and (None, 'not-a-real-mode') -- instead of being disguised as a dispatch check on an elaborate mock; the inert mock (contour_partition, _bilinear_normalization_design) is deleted. (b) The real per-mode claim moved onto run_fit: a helper drives it with build_analysis, _iterate_t0, infer_mcmc and pixel.run_direct_mcmc stubbed and stops at the sampler with a sentinel exception, so the assertions are on the arguments that actually arrive -- sampler name, auxiliary, and the exact option key set (nested VEGAS keys present for a bilinear model, absent for a linear one). Acceptance: replacing the small _closure_sampler with a mode-dependent version that returns 'nuts' for mode 'dy' (a pure function replacement, so inspect.getsource is unaffected and the file's text-substring tests are undisturbed) fails ONLY the new test -- 2 failed, 76 passed, with all four original small-suite tests passing. A second mutation dropping the `if model.has_bilinear:` gate in run_fit also fails it. tests/test_closure_nuts_dispatch.py:172 (now, after docstrings added) asserts suite._closure_sampler(model, \"dy\") == \"vegas\"; closure_JAM_truth_small/fit.py:194-202 defines `_closure_sampler(model, mode=None): return \"vegas\"` unconditionally. Measured directly: `suite._closure_sampler(None, None) == \"vegas\"` and `suite._closure_sampler(SimpleNamespace(), \"not-a-real-mode\") == \"vegas\"` both hold.",
+      "why_it_matters": "The elaborate model mock (has_bilinear, contour_partition, _bilinear_normalization_design) implies _closure_sampler inspects the model to decide dispatch; it does not, for the small suite. Any implementation of _closure_sampler that returns the literal string \"vegas\" passes this line, including one that dropped the mode/model parameters entirely, or one that should have raised for an invalid mode. The same pattern repeats in test_small_mixed_mode_samples_explicit_normalizations_with_joint_vegas (both its _closure_sampler lines) and test_small_linear_closures_use_ordinary_vegas.",
+      "proposed_fix": "Either have small-suite _closure_sampler validate `mode` against cfg.TEST_MODES (giving these calls something to fail against), or replace the _closure_sampler(...) == \"vegas\" lines in all three tests with a single shared comment/skip noting the function is intentionally constant, and move the real per-mode claim entirely onto the existing inspect.getsource(run_fit) checks. (Cannot be done by this audit -- docstrings only.)",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_nuts_dispatch-02",
+      "test": "test_small_mixed_mode_samples_explicit_normalizations_with_joint_vegas",
+      "pattern": "W-DUP",
+      "severity": "S4",
+      "evidence": "RESOLVED 2026-08-13 by deleting test_small_mixed_mode_samples_explicit_normalizations_with_joint_vegas. Its two _closure_sampler lines were tautologies (see -01) and its two inspect.getsource substrings were already asserted verbatim by test_small_bilinear_closures_configure_joint_affine_vegas on the same source object, so nothing independent remained once the tautology was set aside. The 'exp'/'both' modes it named are now parametrized cases of test_small_run_fit_configures_vegas_from_the_model_not_the_mode, which drives them for real. Note for the coordinator: its row must be removed from TEST_EXPLANATION.md by re-running assemble.py; the entry records the deletion. tests/test_closure_nuts_dispatch.py: its two inspect.getsource(suite.run_fit) checks ('auxiliary = \"marginalize\"' in source, '\"n_inner_samples\"' in source) are a strict subset of test_small_bilinear_closures_configure_joint_affine_vegas's eight checks on the identical source object. grep -n '_bilinear_normalization_design' closure_JAM_truth_small/fit.py closure_JAM_truth/fit.py returns zero hits: the elaborate design-matrix mock and its inline comment describing 'first fitted normalization changes linear B...' are never read by anything either test calls.",
+      "why_it_matters": "This test occupies a slot (a distinctly-named function, a nontrivial fixture, two suite parametrizations) that reads as covering something test_small_bilinear_closures_configure_joint_affine_vegas does not, when in fact it covers a strict subset of it plus two tautological _closure_sampler calls (see weakness 01). A reader scanning test names would credit this file with more independent coverage of the mixed-mode path than it has.",
+      "proposed_fix": "If _bilinear_normalization_design is meant to affect small-suite dispatch, wire it into _closure_sampler and assert on that; otherwise drop the mock's unused fields and the duplicated getsource checks, keeping only what test_small_bilinear_closures_configure_joint_affine_vegas does not already cover, if anything is left. (Cannot be done by this audit -- docstrings only.)",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_nuts_dispatch-03",
+      "test": "test_autocorrelation_ess_routes_through_the_real_markov_history",
+      "pattern": "W-NAME",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 by test_markov_chain_rejects_a_history_it_cannot_analyze (this is the follow-up the note proposed as M01). The guard is now fed the three inputs that trip it -- a chainless complex history, a 1-D history, and a single-row history -- with a control showing the same object shape with a REAL history is accepted, so it cannot pass against a version that rejects everything. Acceptance: deleting the `if history.ndim != 2 or history.shape[0] < 2 or np.iscomplexobj(history)` line fails only this test (4 failed, 74 passed). tests/test_closure_nuts_dispatch.py:370-415 (docstring + body). The pre-existing docstring said the guard against complex `f` reaching the Gamma method 'would be silently meaningless rather than loudly broken' and framed the test as proving that guard. Measured: (a) substituting a version of _markov_chain with the np.iscomplexobj/weights guard deleted, but .chain-preference intact, returns the identical `chain` object on this exact fixture -- the guard's own True-branch is never exercised here, only the .chain-vs-outer-container preference is; (b) feeding the complex array directly to pixel.infer.gamma_method.autocorrelation_summary raises ValueError today (independent guard in _resolve_chain), i.e. loudly, not silently.",
+      "why_it_matters": "A reader trusting the original docstring would believe this test independently proves the closure suite's own complex-data guard works. It proves a different, real thing (routing prefers .chain over the outer container's own .samples) that happens to make the complex-guard's specific branch unreachable in this fixture. If a future refactor deleted _markov_chain's own guard while leaving .chain-preference intact, no test in this file would notice -- though pixel.infer's own independent guard would still raise.",
+      "proposed_fix": "Docstring corrected in this pass to state precisely what is and is not established (see the file). A follow-up test closing the actual gap is proposed in `missing` (test_closure_nuts_dispatch-M01).",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_nuts_dispatch-04",
+      "test": "test_exact_ratio_closures_use_explicit_direct_nuts",
+      "pattern": "W-LOOSE",
+      "severity": "S4",
+      "evidence": "RESOLVED 2026-08-13. DIRECT_PRIOR_RCOND is now pinned with pytest.approx(1.0e-10, rel=1e-12) instead of the one-sided `<= 1.0e-10`, which sat exactly on the value it bounded. Acceptance: setting DIRECT_PRIOR_RCOND = 1e-11 in both full configs fails it (2 failed, 76 passed); the old bound admits that value by inspection. The rationale is recorded in the docstring: the near-hard closure constraints are very precise pseudo-data that a larger rcond truncates out of the prior. tests/test_closure_nuts_dispatch.py:121, `assert suite.cfg.DIRECT_PRIOR_RCOND <= 1.0e-10`. closure_JAM_truth/config.py:939 sets `DIRECT_PRIOR_RCOND = 1.0e-10` exactly -- the bound is one-sided and currently sits exactly at the boundary.",
+      "why_it_matters": "This catches only a loosening of DIRECT_PRIOR_RCOND past 1e-10 (e.g. someone accidentally setting it to 1e-8). It would not catch the value drifting to a different, still-tight number (e.g. 1e-14), which config.py's own comment ('physics promotion additionally requires the cutoff sweep') suggests is a meaningful, deliberately-chosen number, not just 'small enough'.",
+      "proposed_fix": "If the exact value is load-bearing, pin it exactly (== 1.0e-10) or with pytest.approx; if only 'tight enough' matters, the current bound is fine and this is hygiene-only. Not actioned here -- literal/tolerance changes are out of scope for a docstring-only pass.",
+      "effort": "S"
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_closure_nuts_dispatch-M01",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_markov_chain_rejects_a_history_it_cannot_analyze. Oracle: F1 -- direct calls on the guard's own inputs plus a control (same shape, real history) proving the rejections are about the history and not about the fixture. Acceptance: deleting the ndim/shape/iscomplexobj line fails only this test (4 failed, 74 passed). The docstring keeps the honest scope: no pixel.infer sampler reaches this branch today, so it is defensive completeness. Unit-test _markov_chain's own complex/weights guard on a chainless object",
+      "rationale": "closure_JAM_truth/fit.py:544-569 (and the small-suite equivalent at closure_JAM_truth_small/fit.py:508-535) implement np.iscomplexobj and weights-uniformity rejection inside _markov_chain itself, independent of the .chain-preference routing. No test in this file (or, per the symbol-level search below, anywhere in tests/) ever calls _markov_chain on an object whose .samples is complex AND which has no .chain attribute, so that branch's True path is never exercised. Currently no sampler type in src/pixel/infer/ reaches this code path that way (ContourHMCSamples, ContourNUTSSamples and JointContourHMCSamples all carry a mandatory .chain field per their dataclass definitions in src/pixel/infer/contour.py), so this is defensive completeness rather than a live gap, but the guard is written as if reachable and a hostile reviewer would ask for it to be proven, not assumed.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_nuts_dispatch.py, alongside test_autocorrelation_ess_declines_non_markov_inputs",
+      "searched": [
+        "grep -in 'markov_chain\\|iscomplexobj' $AUDIT/test_index.txt -> 0 hits outside this file",
+        "grep -rln '_markov_chain' /Users/jkarpie-admin/work/building/pixel/tests/test_*.py -> 1 file (this one only)",
+        "grep -rln 'iscomplexobj' /Users/jkarpie-admin/work/building/pixel/tests/test_*.py -> 3 files (test_double_mellin.py, test_dis_dy_closure.py, test_hubbard_evidence.py), none construct a chainless SimpleNamespace with complex .samples for this helper",
+        "grep -i 'markov_chain\\|closure_sampler\\|autocorrelation_ess' $AUDIT/missing_running.tsv -> file empty, no cross-wave duplicate"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_nuts_dispatch-M02",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_effective_sample_size_dispatches_on_the_sample_type (all suites) and test_small_effective_sample_size_prefers_the_nested_vegas_signed_ess (small only). Oracle: A1 arithmetic on each fixture -- PosteriorResult -> 1.0; ess_frac carrier -> 600*0.25 = 150; weights fallback -> 1/sum|w|^2 = 1/0.875 on [0.5, -0.25, 0.75] (signed on purpose, so the abs() inside the sum is load-bearing). The branch-ORDER claim the note names is tested directly: the NestedVegasSamples fixture carries BOTH signed_ess=12.5 and ess_frac=0.9 with n_samples=100, so the correct answer (12.5) and the reordered one (90.0) differ. Acceptance: swapping the NestedVegasSamples and ess_frac branches in the small suite's _effective_sample_size fails only that test (2 failed, 76 passed). Direct unit test of _effective_sample_size's own dispatch branches",
+      "rationale": "closure_JAM_truth/fit.py:531-541 (full) and closure_JAM_truth_small/fit.py:493-505 (small) implement a 3-4 branch dispatch (PosteriorResult -> 1.0; NestedVegasSamples -> signed_ess [small only]; has ess_frac -> n_samples*ess_frac; else -> 1/sum(weights**2)) directly analogous in spirit to _markov_chain and _weights, both of which get direct tests in this file (test_autocorrelation_ess_declines_non_markov_inputs, test_small_closure_reads_nested_vegas_signed_weights). _effective_sample_size has no such direct test anywhere: it is only exercised indirectly through run_fit (not called by this file) and through summarize's source-text pin (which checks the key name, not the branch logic). A wrong branch (e.g. checking `ess_frac` before `NestedVegasSamples` in the small suite, silently using the wrong ESS definition for nested VEGAS) would not be caught by anything in this file.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_nuts_dispatch.py, near test_small_closure_reads_nested_vegas_signed_weights",
+      "searched": [
+        "grep -rln '_effective_sample_size' /Users/jkarpie-admin/work/building/pixel/tests/test_*.py -> 4 files, but test_bayesian_correctness.py/test_infer_samplers.py/test_gamma_method.py all match on the unrelated `analysis.min_effective_sample_size` attribute (pixel.infer.gamma_method.ChainAutocorrelation), not the closure suite's private helper -- confirmed by grep -n in each",
+        "grep -in 'effective_sample_size' $AUDIT/test_index.txt -> 0 hits by test name",
+        "grep -i 'effective_sample_size\\|weighted_mean_vec' $AUDIT/missing_running.tsv -> file empty, no cross-wave duplicate"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_nuts_dispatch-M03",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_dis_t0_predictions_are_sliced_per_dataset. Oracle: F1 -- pixel.map and posterior_predictive stubbed, with a prediction vector whose entries are their own index so each expected slice is distinct and readable. Fixture is non-degenerate on the axis under test: three datasets with the middle one carrying no correlated_systematics and three different-width slices, so a filter applied to datasets but not to layouts shifts every slice. Also asserts MAP runs exactly once for the model, not once per table. Acceptance: slicing with the un-filtered layout list fails it (4 failed, 74 passed). Positive-path test for _dis_predictions actually calling pixel.map",
+      "rationale": "test_no_dis_t0_datasets_skip_map (this file, line 335) only exercises the skip branch (layouts empty). closure_JAM_truth/fit.py:433-457's other branch (layouts non-empty -> calls pixel.map, slices predictions per dataset via layout.data_slice) has no test in this file that exercises it even with a mocked pixel.map return value. tests/test_normalization_nuisances.py tests correlated-systematics folding/reporting broadly but at the pixel-library level, not this closure-suite-specific MAP-dispatch wrapper (different function, different module).",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_nuts_dispatch.py, alongside test_no_dis_t0_datasets_skip_map",
+      "searched": [
+        "grep -in 'dis_predictions\\|correlated_systematics' $AUDIT/test_index.txt -> 2 hits, both in tests/test_normalization_nuisances.py (test_normalization_reference_and_correlated_systematics, test_dis_correlated_systematics_fold_and_report) -- different, pixel-library-level function",
+        "grep -rln '_dis_predictions' /Users/jkarpie-admin/work/building/pixel/tests/test_*.py -> 1 file (this one only)",
+        "grep -n 'correlated_systematics' /Users/jkarpie-admin/work/building/pixel/tests/test_normalization_nuisances.py -> confirms those tests build DIS datasets/covariances directly, not closure_*_truth's _dis_predictions wrapper",
+        "grep -i 'dis_predictions\\|skip_map\\|t0_datasets' $AUDIT/missing_running.tsv -> file empty, no cross-wave duplicate"
+      ],
+      "effort": "M"
+    }
+  ],
+  "unjustified_tolerances": [
+    {
+      "line": 121,
+      "text": "assert suite.cfg.DIRECT_PRIOR_RCOND <= 1.0e-10",
+      "quantity": "prior regularization rcond for the explicit direct-NUTS bilinear-ratio path",
+      "comment_added": "# bound; see docstring (docstring cites config.py's exact 1.0e-10 value and the one-sided-bound caveat)",
+      "provenance": "known"
+    },
+    {
+      "line": 173,
+      "text": "assert suite.cfg.VEGAS_N_ADAPT_INNER_SAMPLES == 128",
+      "quantity": "pilot inner-chain draws per outer VEGAS point",
+      "comment_added": "# pilot inner draws/outer point",
+      "provenance": "known (config.py literal)"
+    },
+    {
+      "line": 174,
+      "text": "assert suite.cfg.VEGAS_N_INNER_SAMPLES == 1",
+      "quantity": "production inner draws per outer VEGAS point",
+      "comment_added": "# production inner draws/outer point",
+      "provenance": "known (config.py literal)"
+    },
+    {
+      "line": 176,
+      "text": "assert suite.cfg.VEGAS_MIN_SIGNED_ESS_FRAC == pytest.approx(0.05)",
+      "quantity": "outer signed-ESS fraction floor below which run_fit raises RuntimeError",
+      "comment_added": "# ESS floor",
+      "provenance": "known (config.py literal)"
+    },
+    {
+      "line": 232,
+      "text": "assert suite.cfg.NUTS_WARMUP > 0",
+      "quantity": "NUTS warmup step count",
+      "comment_added": "# loose: nonzero warmup, not pinned to 100",
+      "provenance": "known but bound is loose (config.py literal is 100; test only checks positivity)"
+    },
+    {
+      "line": 236,
+      "text": "assert suite.cfg.NUTS_ADAPT_MASS is False",
+      "quantity": "whether NUTS re-adapts its mass matrix mid-run",
+      "comment_added": "# Hessian mass is fixed; no re-adaptation",
+      "provenance": "known (config.py comment explains why: avoid rebuilding steppers)"
+    },
+    {
+      "line": 256,
+      "text": "assert suite.cfg.VEGAS_N_BINS == 16",
+      "quantity": "per-dimension VEGAS adaptive-grid resolution",
+      "comment_added": "# per-dimension adaptive-grid resolution",
+      "provenance": "known (config.py literal)"
+    },
+    {
+      "line": 257,
+      "text": "assert suite.cfg.VEGAS_N_ADAPT_ITERATIONS == 5",
+      "quantity": "grid-refinement passes before production sampling",
+      "comment_added": "# grid-refinement passes/production",
+      "provenance": "known (config.py literal)"
+    },
+    {
+      "line": 258,
+      "text": "assert suite.cfg.VEGAS_N_EVAL_PER_ITERATION == 128",
+      "quantity": "function evaluations per grid-refinement pass",
+      "comment_added": "# evaluations/refinement pass",
+      "provenance": "known (config.py literal)"
+    },
+    {
+      "line": 278,
+      "text": "assert 3.0e-3 <= suite.cfg.CONTOUR_SADDLE_TOL <= 1.0e-2",
+      "quantity": "saddle-acceptance Newton-decrement tolerance for contour NUTS initialization",
+      "comment_added": "# floor = stall point",
+      "provenance": "known -- config.py comment: 'stall just below a 3e-3 Newton decrement at floating-point precision'"
+    },
+    {
+      "line": 414,
+      "text": "assert report[\"ess\"] > 0.0",
+      "quantity": "Wolff-method effective sample size on an iid real chain",
+      "comment_added": "# finiteness/positivity only, not a magnitude check",
+      "provenance": "n/a -- deliberately weak, not a tolerance drawn from a reference"
+    },
+    {
+      "line": 504,
+      "text": "assert report[\"tau_int_max\"] > 5.0",
+      "quantity": "Wolff integrated autocorrelation time for a rho=0.95 AR(1) chain",
+      "comment_added": "# true ~19.5; floor is loose, see docstring",
+      "provenance": "known -- analytic AR(1) formula tau_int=0.5+rho/(1-rho), derived in the docstring"
+    }
+  ],
+  "measurements": [
+    {
+      "claim": "closure_JAM_truth_small.fit._closure_sampler ignores both its arguments and always returns \"vegas\"",
+      "command": "OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 .venv/bin/python3 -c \"from closure_JAM_truth_small import fit as suite; from types import SimpleNamespace; print(suite._closure_sampler(SimpleNamespace(has_bilinear=True), 'dy')); print(suite._closure_sampler(SimpleNamespace(has_bilinear=False), 'lattice')); print(suite._closure_sampler(object(), 'not-a-real-mode')); print(suite._closure_sampler(None, None))\"",
+      "result": "vegas / vegas / vegas / vegas (identical regardless of model or mode)"
+    },
+    {
+      "claim": "_bilinear_normalization_design is never referenced by either fit.py (full or small), despite being mocked in two small-suite tests",
+      "command": "grep -n '_bilinear_normalization_design' closure_JAM_truth_small/fit.py closure_JAM_truth/fit.py",
+      "result": "no output (zero matches in both files); confirmed present as a real Model method consumed only by src/pixel/infer/contour.py:1996,3513"
+    },
+    {
+      "claim": "test_autocorrelation_ess_routes_through_the_real_markov_history's `is chain` assertion catches a mutant that drops .chain-preference (returns None instead of chain), but does not catch a mutant that keeps .chain-preference and only deletes the complex/weights guard (returns chain either way)",
+      "command": "scratch script constructing the same contour/chain SimpleNamespace fixture as the test, then calling (a) a mutant _markov_chain that always inspects `samples` directly (ignoring `.chain`), and (b) a mutant that keeps `.chain`-preference but omits the np.iscomplexobj/weights guard entirely; see /private/tmp/.../scratchpad/measure_markov_chain_discriminates.py",
+      "result": "mutant A (no .chain preference): _markov_chain(contour) is chain -> False, is None -> True (test's `is chain` assertion FAILS the mutant, i.e. catches it). mutant B (.chain kept, guard deleted): _markov_chain(contour) is chain -> True (identical to the real implementation; the test's assertion cannot distinguish this mutant)"
+    },
+    {
+      "claim": "Feeding the complex contour array directly to pixel.infer.gamma_method.autocorrelation_summary raises ValueError today, rather than silently succeeding",
+      "command": "autocorrelation_summary(contour) where contour.samples is a complex ndarray and contour has no param_labels, using the real pixel.infer.gamma_method.autocorrelation_summary",
+      "result": "raised ValueError: \"gamma method needs a real series; for a contour result analyze `.chain` or project the complex ratio onto real primaries first\" (from src/pixel/infer/gamma_method.py:944-948, inside _resolve_chain)"
+    },
+    {
+      "date": "2026-08-13",
+      "what": "run_fit driven to its inference call with collaborators stubbed",
+      "result": {
+        "small suites": "sampler='vegas' and auxiliary='marginalize' with 11 option keys for a bilinear model; auxiliary='auto' with 5 keys for a linear one; identical for modes dy/exp/both",
+        "full suites": "linear -> infer_mcmc/'nuts' (no saddle_tol, no caches); bilinear n_ordinary=0 -> infer_mcmc/'nuts' + saddle_tol + both cache paths under INFERENCE_CACHE_ROOT; bilinear n_ordinary=5 -> infer_mcmc/'hmc' + saddle_tol, no caches; nonlinear -> pixel.run_direct_mcmc with prior_rcond=DIRECT_PRIOR_RCOND and no use_hessian_mass",
+        "run kwargs": "n_samples/run_map=False/seed identical on every branch"
+      }
+    }
+  ],
+  "notes_for_readme": "tests/README.md:164 still lists this file as `test_closure_hmc_dispatch.py` (git confirms an R092 rename to test_closure_nuts_dispatch.py at commit aad2a43); the same line's description also covers only the full-suite HMC/NUTS half of this file's content and omits the small-suite VEGAS dispatch tests it also contains."
+}

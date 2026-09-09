@@ -1,0 +1,345 @@
+{
+  "file": "tests/test_closure_pseudoitd_matching.py",
+  "area": "kernels",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "src/pixel/kernels/matching.py (_pseudoitd_nlo_moments, matching_coefficients kind=\"pseudoitd\", MatchingMatrix, VariableQ2MatchingMatrix)",
+    "src/pixel/kernels/pseudoitd_matching.py (_li_vector_quadrature, _li_vector_density_components, li_vector_densities, li_vector_fourier_matrix, CA/CF/TF/ZETA3) -- added by the concurrent NNLO session",
+    "src/pixel/kernels/pqcd/splitting.py (_psi, CF, ZETA2 -- used inside _pseudoitd_nlo_moments)",
+    "src/pixel/kernels/pqcd (MellinContour)",
+    "src/pixel/kernels/evolution/matrices.py (EvolvedPseudoITD, re-exported via pixel.kernels.evolution; its grid-node-at-x=0 guard at matrices.py:1545-1558)",
+    "src/pixel/kernels/base.py (basis_grid_nodes)",
+    "src/pixel/geometry/grid.py (Grid)",
+    "src/pixel/geometry/finite_elements.py (ProductBasis, CubicSplineBasis)",
+    "src/pixel/data/lattice/pseudoitd.py (PseudoITD.from_file, _kernel_for -- reached through build_pseudoitd)",
+    "src/pixel/data/base.py (field_name, systematic_contributions -- reached through PseudoITD.from_file)",
+    "closure_JAM_truth/config.py, closure_JAM_truth/datasets.py (build_pseudoitd, both with_systematics settings), closure_JAM_truth/generate.py (lattice_layout)",
+    "closure_NNPDF_truth/* and both closure_*_small/* twins (generate.lattice_layout in all four; build_pseudoitd in the two full suites, byte-identical apart from one docstring line)"
+  ],
+  "drives_non_pixel": null,
+  "n_tests": 12,
+  "n_parametrized_cases": 18,
+  "tests": [
+    {
+      "name": "test_nlo_matching_moments_reduce_to_the_analytic_constant",
+      "line": 100,
+      "claim": "At lam = 2 e^{-gamma_E - 1/2} the pseudo-ITD NLO matching moments equal CF*L(N) exactly for integer N.",
+      "actual": "Computes _pseudoitd_nlo_moments(orders, lam=that lam) for N=2..5 and compares to a from-scratch harmonic-sum recomputation of L(N) (helper _harmonic, no call to the source's _psi).",
+      "how": "digamma/trigamma-based B(N),L(N) formula (source, mpmath.fp.psi) vs explicit-summation harmonic numbers (test); real and imaginary parts checked separately; a magnitude floor guards against a vacuous zero target.",
+      "oracle": "A1",
+      "bar": "rtol=1e-12, atol=0.0 (real part); atol=1e-12 (imag part)",
+      "strength": "S2",
+      "catches": "a wrong numeric coefficient in B/L (e.g. the 1.5 or a 2.0 prefactor), a sign flip on the log term or on L, an off-by-one in the harmonic-sum order or the N/N-1 argument shift, or a wrong C_F. Would NOT catch an error shared with the B(N)/L(N) derivation itself: that formula is uncited anywhere in this repo (see weaknesses), so the independence is real for the digamma-vs-explicit-sum arithmetic but not for the underlying physics content."
+    },
+    {
+      "name": "test_matching_log_carries_the_lambda_dependence",
+      "line": 145,
+      "claim": "Away from the log-cancelling lam, the moments move by exactly ln(lam^2 e^{2 gamma_E+1}/4) * B(N).",
+      "actual": "Subtracts the log-cancelling reference (lam from test 1) from a second call at lam=1.7 and compares the difference to CF*log_factor*B(N), B recomputed via the same from-scratch harmonic-sum helper.",
+      "how": "reference and got are both outputs of the function under test at two different lam; the lam-independent L(N) term cancels in the subtraction, isolating the log(lam)*B(N) piece against an independently recomputed B(N).",
+      "oracle": "A1",
+      "bar": "rtol=1e-12, no atol= -> np.allclose's default atol=1e-8 applies and dominates (measured this audit: atol=1e-8 exceeds the rtol contribution by ~3075x at these RHS magnitudes, |rhs| in [3.3, 6.4]); true effective bar is ~1e-8 absolute, not 1e-12 relative",
+      "strength": "S2",
+      "catches": "a broken (contour, lam) memoization key (if lam dropped out of the cache key, got would equal reference exactly and the assertion would fail loudly since the RHS is manifestly nonzero); a wrong log_factor argument/exponent; a wrong CF or B(N) coefficient in the lam-dependent term. Does not test the L(N) additive constant (test 1's job) since it cancels; shares the B(N)-formula-uncited caveat with test 1; the true bar is looser than its rtol parameter suggests (see weaknesses)."
+    },
+    {
+      "name": "test_pitd_evolve_constant_reaches_the_built_kernels",
+      "line": 182,
+      "claim": "config.PITD_EVOLVE controls whether build_pseudoitd's main kernel is EvolvedPseudoITD, with matching/matching_order/mu0_2/lam threaded from config.",
+      "actual": "Monkeypatches PITD_EVOLVE True then False and rebuilds the same lattice record both times; on True, checks isinstance(EvolvedPseudoITD) plus four attribute equalities against config constants; on False, checks NOT isinstance(EvolvedPseudoITD).",
+      "how": "closure_JAM_truth/closure_NNPDF_truth's build_pseudoitd -> pixel.data.PseudoITD.from_file -> _kernel_for, driven by a real generated manifest record via _lattice_fixture. Parametrized over both suites, whose datasets.py are byte-identical and whose four checked config constants (PITD_EVOLVE, PITD_MATCHING_ORDER, PITD_MATCHING_LAMBDA, Q0_2) also match, so the two parametrizations exercise identical code against two different generated manifests, not two different implementations.",
+      "oracle": "F1",
+      "bar": "exact isinstance/equality checks; pytest.approx (default rel) on two O(1) float constants",
+      "strength": "S3",
+      "catches": "build_pseudoitd dropping the evolution kwargs again (the historical bug this file exists to pin), a swapped config key, or mu0_2/lam not threaded through. Does NOT catch config.ORDER/config.MODE failing to reach kernel.order/kernel.mode (both flow through the same evolution dict but are never compared -- see weaknesses); the False branch does not pin what type the kernel is instead of EvolvedPseudoITD."
+    },
+    {
+      "name": "test_systematic_nuisances_stay_on_the_bare_transform",
+      "line": 228,
+      "claim": "Lattice-artifact nuisance contributions (ht, chiral, cont_invz, cont_aL, inf_Lz) never become EvolvedPseudoITD, regardless of PITD_EVOLVE, and each has a real coefficient.",
+      "actual": "Builds the dataset with PITD_EVOLVE=True, splits contributions[0] (physical) from the rest, checks the physical kernel IS EvolvedPseudoITD and every nuisance kernel is NOT, with a non-None coefficient.",
+      "how": "Same build_pseudoitd path; PseudoITD.from_file routes systematics through _kernel_for(..., coefficient=coeff) with no mu0_2/evolution_lambda, so the split is structural in the source, not merely conventional.",
+      "oracle": "F1",
+      "bar": "exact isinstance / is-not-None checks",
+      "strength": "S3",
+      "catches": "a change that accidentally threads mu0_2/evolution_lambda into the systematics builder too (which would invent DGLAP scale dependence for lattice artifacts that should not have any), or a coefficient factory silently wired to None. Relies on, unasserted, contributions[0] always being the physical field (true by PseudoITD.from_file's list-literal construction order -- see weaknesses)."
+    },
+    {
+      "name": "test_matching_changes_the_operator_it_is_applied_to",
+      "line": 267,
+      "claim": "Matching must not be a silent no-op on the assembled EvolvedPseudoITD transform.",
+      "actual": "Builds bare (matching=False) and matched (matching=\"NLO\") EvolvedPseudoITD kernels, otherwise identical, and requires their .matrix() outputs to differ by more than 1e-6*scale.",
+      "how": "Direct kernel construction on a 9-point grid + .matrix() call; pure nonzero-difference structural check, no comparison to any expected value.",
+      "oracle": "F1",
+      "bar": "diff.max() > 1e-6 * scale, scale = max|bare_matrix|",
+      "strength": "S3",
+      "catches": "matching wired to nothing (a no-op bug), or an exception silently swallowed leaving matched==bare. Measured this audit: actual diff/scale ~= 0.70 at these kinematics, six orders above the bar, so this test alone cannot distinguish correctly-wired matching from wrong-magnitude matching -- only from completely inert matching. The bit-correct composition (Fourier @ matching(mu2) @ evolution(mu2), row by row) is independently checked to rtol=1e-11 in tests/test_evolution.py::test_evolved_pseudoitd_matching_composes_after_evolution, now cross-referenced in this test's docstring."
+    },
+    {
+      "name": "test_li_vector_density_reduces_to_existing_nlo_mellin_coefficient",
+      "line": 219,
+      "claim": "Li's normalized one-loop QCF plus-density reproduces PIXEL's stored forward Mellin coefficient: the plus-moment equals -_pseudoitd_nlo_moments(N, lam=1.37).",
+      "actual": "Quadrature-integrates li_vector_densities(lam=1.37, nf=3, n_points=128)'s p1 against (z**(N-1) - 1) for N=1..5 and compares to -_pseudoitd_nlo_moments(orders, lam=1.37).real.",
+      "how": "Two independent representations of the same one-loop constant: a z-space HPL density integrated numerically (translated from Li-Ma-Qiu, arXiv:2401.16281) versus a closed-form complex-N digamma/trigamma expression written years earlier for the Mellin route. Neither is derived from the other.",
+      "oracle": "A3",
+      "bar": "rtol=0.0, atol=5e-12",
+      "strength": "S1",
+      "catches": "Added by the concurrent NNLO session; documented here 2026-08-13 while closing weakness -03, because it is the link that carries the external ancillary benchmark onto _pseudoitd_nlo_moments. Measured by mutation 2026-08-13: corrupting the L(N) constant inside _pseudoitd_nlo_moments fails this test AND the harmonic-sum test but NOT the ancillary benchmark; perturbing the Li p10 density by 1e-6 relative fails this test AND the ancillary benchmark but NOT the harmonic-sum tests. Both links are therefore load-bearing in the direction claimed."
+    },
+    {
+      "name": "test_li_vector_formula_matches_authors_ancillary_iA_benchmark",
+      "line": 269,
+      "claim": "PIXEL's translated temporal-vector QCF densities reproduce the authors' own Mathematica output for iA(omega=29.15), nf=3, at both one and two loops.",
+      "actual": "Reconstructs the unnormalized QCF from _li_vector_quadrature(192)'s raw density components and compares the two NLO and three NNLO alpha_s^n L^k coefficients to literals copied from the ancillary notebook.",
+      "how": "The comparison values come from papers/.../Li-Ma-Qiu_Extraction-NNLO-Parton-Distribution-Functions-from-Lattice-QCD/attachedfiels/readme.nb, Out[16] (verified present on disk 2026-08-13). This is an external oracle: nothing in PIXEL produced those numbers. It exercises every positive- and negative-support function before the reduced-ratio normalization, so a transcription error cannot cancel in a shared quotient.",
+      "oracle": "D1",
+      "bar": "rtol=0.0, atol=5e-10 (NLO) and 5e-9 (NNLO)",
+      "strength": "S1",
+      "catches": "Added by the concurrent NNLO session; documented here 2026-08-13 while closing weakness -03. Measured by mutation 2026-08-13: scaling p10 by 1.000001 fails it. It is independent of _pseudoitd_nlo_moments -- corrupting that function's L(N) constant leaves this test passing -- which is exactly why it can serve as the anchor of the chain."
+    },
+    {
+      "name": "test_generation_time_build_matches_the_fitting_time_forward_operator",
+      "line": 418,
+      "claim": "build_pseudoitd(..., with_systematics=False), the generation-time invocation, changes only the nuisance list -- not the forward operator and not the data.",
+      "actual": "Builds the same manifest record both ways and asserts len(contributions) is 1 versus 1 + len(record['systematics']), that the physical kernel is still EvolvedPseudoITD, that the two kernels' _cache_settings() dicts are equal, and that mean/cov/nu are array-equal.",
+      "how": "A3, an identity between two objects this suite builds. _cache_settings() is the twenty-key dict the code itself uses to decide kernel cache identity, so two kernels agreeing on it are the same operator by the code's own definition -- cheaper and no weaker than assembling two 128-node matrices.",
+      "oracle": "A3",
+      "bar": "dict equality; np.testing.assert_array_equal on mean/cov/nu",
+      "strength": "S3",
+      "catches": "Measured by mutation 2026-08-13: a PseudoITD.from_file that drops mu0_2/evolution_lambda/matching when systematics is None -- i.e. the evolution dict made conditional on with_systematics, the coupling the audit named -- leaves the generating build's kernel a bare Cosine and fails both items, while every other test in the file passes."
+    },
+    {
+      "name": "test_evolved_pseudoitd_refuses_a_grid_with_a_node_at_the_origin",
+      "line": 566,
+      "claim": "EvolvedPseudoITD.base_matrix raises on a basis whose first node is exactly 0.0, and the origin node is the whole cause.",
+      "actual": "pytest.raises(ValueError, match='node at x=0') on CubicSplineBasis([0.0, *geomspace(1e-3, 1, 8)]), with a control on CubicSplineBasis(geomspace(1e-3, 1, 8)) run all the way to a finite matrix. The two node arrays are asserted array_equal after the origin.",
+      "how": "F1, structural. Matched on the message rather than the type, because this method raises ValueError from four different guards. Grid's own node placement never lands on 0.0 (checked 2026-08-13: Grid(n_points=9, domain=(0.0, 1.0), spacing='linear') starts at 0.0025), which is why a raw-node CubicSplineBasis is needed.",
+      "oracle": "F1",
+      "bar": "exception type + message substring; control asserts shape, finiteness and a nonzero maximum",
+      "strength": "S3",
+      "catches": "Measured by mutation 2026-08-13: a basis_grid_nodes that silently strips a leading zero (the plausible 'work around it instead of refusing' bug) fails this test and nothing else; so does a guard that raises with a different message, which is what the message match buys. Cost ~0.7 s -- LO with matching off, since the guard fires before matching_scales is called."
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_closure_pseudoitd_matching-01",
+      "test": "test_pitd_evolve_constant_reaches_the_built_kernels",
+      "pattern": "W-NAME",
+      "severity": "S2",
+      "evidence": "RESOLVED 2026-08-13 by test_pitd_evolve_constant_reaches_the_built_kernels. The PITD_EVOLVE=False branch now asserts the concrete class the record's component calls for -- pixel.kernels.PseudoITDReal is Cosine and PseudoITDImag is Sine, checked this pass to be distinct classes with neither a subclass of the other -- together with the negative assertion on the other parity and the alpha that momentum_density selects (compared against the evolved branch's alpha, not a literal). Acceptance: an in-memory _kernel_for wrapper that flips the component on the non-evolved path only fails both items of the hardened test; the pre-fix assertions, run verbatim standalone under the same mutation, all PASS. tests/test_closure_pseudoitd_matching.py:224 `assert not isinstance(plain.contributions[0].kernel, EvolvedPseudoITD)` is the entire PITD_EVOLVE=False check -- no assertion of what the kernel actually is.",
+      "why_it_matters": "the test's docstring claims the flag changes the operator 'alike' on both settings; a real/imag mixup, or any kernel type other than the expected PseudoITDReal/PseudoITDImag, would also satisfy this negative-only assertion on the False branch.",
+      "proposed_fix": "also assert isinstance(plain.contributions[0].kernel, kernels.PseudoITDReal) (or the component-appropriate concrete type).",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_pseudoitd_matching-02",
+      "test": "test_pitd_evolve_constant_reaches_the_built_kernels",
+      "pattern": "W-NAME",
+      "severity": "S2",
+      "evidence": "RESOLVED 2026-08-13 by test_pitd_evolve_constant_reaches_the_built_kernels: assert kernel.order == config.ORDER and assert kernel.mode == config.MODE, closing the last two keys of build_pseudoitd's evolution dict. Acceptance: _kernel_for wrappers forcing order='LO' and mode='iterated' each fail both items of the hardened test, and the pre-fix assertions run standalone PASS under both. closure_JAM_truth/datasets.py:108-116 builds the evolution dict with five keys (mu0_2, evolution_lambda, order, mode, matching); tests/test_closure_pseudoitd_matching.py:211-215 checks only matching/matching_order/mu0_2/lam. config.ORDER and config.MODE (-> EvolvedPseudoITD.order/.mode, src/pixel/kernels/evolution/matrices.py:1259,1261) are never compared.",
+      "why_it_matters": "a build_pseudoitd edit that hardcoded evolution order or mode (e.g. always \"LO\"/\"truncated\" regardless of config) would pass every assertion in this test.",
+      "proposed_fix": "add assert kernel.order == config.ORDER and assert kernel.mode == config.MODE.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_pseudoitd_matching-03",
+      "test": "test_nlo_matching_moments_reduce_to_the_analytic_constant, test_matching_log_carries_the_lambda_dependence",
+      "pattern": "W-TRANS",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 -- not by an edit here, but by two tests the concurrent NNLO session added to this file, whose combination the audit predates. The claim 'there is currently no independent physics oracle for this formula anywhere in the repository' is now FALSE. The chain is test_li_vector_formula_matches_authors_ancillary_iA_benchmark (literals copied from the authors' own Mathematica ancillary readme.nb, Out[16], verified present on disk) -> the p10/p11 densities -> p1 = CF*(p10 + ell*p11) in li_vector_densities -> test_li_vector_density_reduces_to_existing_nlo_mellin_coefficient -> _pseudoitd_nlo_moments. Acceptance, both links measured by in-memory mutation 2026-08-13: (a) corrupting the L(N) constant inside _pseudoitd_nlo_moments fails the bridge test AND the harmonic-sum test but leaves the ancillary benchmark passing, proving the benchmark is independent of the function under test; (b) scaling the Li p10 density by 1.000001 fails the ancillary benchmark AND the bridge test but leaves the harmonic-sum tests passing, proving the bridge is what transfers the anchor. STILL OPEN, and out of scope for a test file: matching.py:382-414 still carries no literature citation, unlike its neighbour _pitd_gluon_finite_moments. That is a src/ docstring edit. src/pixel/kernels/matching.py:382-414 (_pseudoitd_nlo_moments) carries no literature citation, unlike its neighbor _pitd_gluon_finite_moments (matching.py:421-459), which cites Balitsky-Morris-Radyushkin PRD 105, 014008 (2022) Eq. (4.13) by equation number. Checked this audit: neither fitpack_legacy nor pdf_fitter implement a pseudo-ITD matching kernel (grep for pseudoitd/pseudo_itd/reduced_itd in both repos, 0 hits each).",
+      "why_it_matters": "both tests recompute the identical B(N)/L(N) algebraic combination via harmonic sums, independent of the source's digamma calls but not of the underlying formula; a transcription error in the physics content (as opposed to the digamma bookkeeping) would reproduce identically in the harmonic-sum recomputation and pass both tests. There is currently no independent physics oracle for this formula anywhere in the repository.",
+      "proposed_fix": "cite the source paper/equation for the non-singlet pseudo-ITD one-loop matching constant in matching.py's docstring (out of scope for this file); once a citation exists, add a value copied directly from the paper as a third check.",
+      "effort": "L"
+    },
+    {
+      "id": "test_closure_pseudoitd_matching-04",
+      "test": "test_matching_log_carries_the_lambda_dependence",
+      "pattern": "W-LOOSE",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 by adding the explicit atol=0.0 to test_matching_log_carries_the_lambda_dependence's np.allclose, so the coded rtol=1e-12 is now the operative bar rather than numpy's default atol=1e-8. Measured this pass with the tightening in place: |rhs| = 3.25, 5.08, 6.38 and max abs(lhs/rhs - 1) = 2.22e-16 (one ULP), so the real bar clears by four orders and the change masks nothing. The docstring's earlier prose describing the looser effective bar was replaced rather than left to contradict the code. tests/test_closure_pseudoitd_matching.py:178 `np.allclose((got - reference).real, cf * log_factor * b, rtol=1e-12)` has no atol=, so numpy's default atol=1e-8 applies. Measured this audit: for orders=[2,3,4], lam=1.7, |cf*log_factor*b| is in [3.3, 6.4], so the rtol=1e-12 term contributes only ~3.3-6.4e-12 while atol=1e-8 dominates by a factor of ~3075.",
+      "why_it_matters": "a reader would take 'rtol=1e-12' at face value as a 12-significant-figure bar; the true effective bar is ~1e-8 absolute (~3000x looser). Not currently masking anything -- the achieved agreement is 2.22e-16, four orders inside even the true floor -- but the discriminating power is far weaker than the literal parameter suggests.",
+      "proposed_fix": "add atol=0.0 explicitly to state the intended pure-relative bar.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_pseudoitd_matching-05",
+      "test": "test_matching_changes_the_operator_it_is_applied_to",
+      "pattern": "W-LOOSE",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 as DOCUMENTATION-ONLY (no strengthening, and none was proposed: this weakness's own proposed_fix concluded no code change was required). VERIFIED present in the file this pass -- tests/test_closure_pseudoitd_matching.py:38-41 (module) and :639-640 (per-test) both name tests/test_evolution.py::test_evolved_pseudoitd_matching_composes_after_evolution (rtol=1e-11) as the tight composition check this 1e-6*scale bar defers to. Recorded here because the JSON was left unannotated when the documentation landed; a reader of the report alone would have counted this as outstanding work. The underlying limitation is unchanged and is stated in the file. UNCHANGED 2026-08-13 (re-reviewed, no action taken; the cross-referenced tight check in tests/test_evolution.py remains the right answer and this file's docstring still points at it). tests/test_closure_pseudoitd_matching.py:301 `assert np.abs(matched_matrix - bare_matrix).max() > 1e-6 * scale`. Measured this audit by reproducing the test's construction directly: diff.max()=0.483, scale=0.686, diff/scale=0.704 -- six orders above the 1e-6 bar.",
+      "why_it_matters": "this test cannot distinguish correctly-wired matching from matching wired at a wildly wrong magnitude; it only catches matching being completely inert. Mitigated: tests/test_evolution.py::test_evolved_pseudoitd_matching_composes_after_evolution independently checks the exact composition to rtol=1e-11, and this file's docstring now cross-references it.",
+      "proposed_fix": "none required given the cross-referenced tight check exists elsewhere; documented this pass.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_pseudoitd_matching-06",
+      "test": "test_systematic_nuisances_stay_on_the_bare_transform",
+      "pattern": "W-ORDER",
+      "severity": "S4",
+      "evidence": "RESOLVED 2026-08-13 by test_systematic_nuisances_stay_on_the_bare_transform. The positional split `physical, *nuisances = dataset.contributions` is replaced by a lookup keyed on Contribution.field, compared against str() of the exact stand-ins _lattice_fixture handed in (self-consistent, not a hardcoded repr, since field_name falls back to str() for the SimpleNamespace stand-ins). The check is set EQUALITY, so it also pins that every systematic key in the manifest record reached the dataset and none was invented; contributions[0] being the physical field is still asserted, but now as a separate, clearly-failing claim rather than an unstated assumption. Acceptance: an in-memory systematic_contributions that returns one fewer entry fails the hardened test (and the new with_systematics test), while the pre-fix assertions run standalone PASS under the same mutation -- the original finding reproduced. tests/test_closure_pseudoitd_matching.py:259 `physical, *nuisances = dataset.contributions` relies on src/pixel/data/lattice/pseudoitd.py:441-468 always list-constructing the main Contribution first, with no assertion (e.g. on contribution.field) confirming that positionally here.",
+      "why_it_matters": "if PseudoITD.from_file's contribution order ever changed, this test would fail confusingly (isinstance checks on the wrong contribution) rather than clearly; low risk in practice since the source's list-literal construction makes the order structurally obvious to a reader of that file.",
+      "proposed_fix": "match by contribution.field instead of position, or leave as is given the low practical risk.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_pseudoitd_matching-07",
+      "test": "test_pitd_evolve_constant_reaches_the_built_kernels, test_systematic_nuisances_stay_on_the_bare_transform",
+      "pattern": "W-DEAD",
+      "severity": "S4",
+      "evidence": "RESOLVED 2026-08-13 as DOCUMENTATION-ONLY (no strengthening, and none was proposed: this weakness's own proposed_fix concluded no code change was required). VERIFIED present in the file this pass -- tests/test_closure_pseudoitd_matching.py:743 documents both pytest.skip conditions (:752, :763) and records that both manifests currently carry 117 qualifying records, so no case is skipped today. Recorded here because the JSON was left unannotated when the documentation landed; a reader of the report alone would have counted this as outstanding work. The underlying limitation is unchanged and is stated in the file. UNCHANGED 2026-08-13 (re-reviewed, no action; both manifests still carry 117 qualifying records, re-counted this pass, so no case is skipped today). tests/test_closure_pseudoitd_matching.py:319,330 (_lattice_fixture) pytest.skip on a missing manifest or a manifest with no systematic-bearing pseudo-ITD record; used by all 4 parametrized cases of these two tests. Checked this audit: both closure_JAM_truth/data/truthQ_2/manifest.json and closure_NNPDF_truth/data/truthQ_2/manifest.json currently carry 117 qualifying records each, so no case is currently skipped.",
+      "why_it_matters": "a generate.py regression that stopped attaching systematics to the pseudo-ITD records, or a checkout without generated truth, would silently skip these 4 cases rather than fail them; per this repo's own tests/README.md rule, a skip is easy to miss in a summary line the way a hard failure is not.",
+      "proposed_fix": "none required now; the skip conditions and current non-triggering are documented in _lattice_fixture's docstring this pass.",
+      "effort": "S"
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_closure_pseudoitd_matching-M01",
+      "topic": "lattice-pitd",
+      "title": "Exercise EvolvedPseudoITD's grid-node-at-x=0 guard",
+      "rationale": "RESOLVED 2026-08-13 by test_evolved_pseudoitd_refuses_a_grid_with_a_node_at_the_origin, written in this file rather than tests/test_coverage_edges.py (out of the batch's edit scope). Oracle: F1, matched on the guard's MESSAGE rather than its type, because base_matrix raises ValueError from four different guards. The control is half the test: the accepted basis differs in exactly one node (asserted array_equal after the origin) and is run all the way through base_matrix to a finite, nonzero matrix. Acceptance: an in-memory basis_grid_nodes that silently strips a leading zero fails this test and nothing else; so does one that raises with a different message. NOTE, correcting the line reference below: the guard is now at matrices.py:1545-1558, not 1463-1476 -- the concurrent NNLO work moved it. src/pixel/kernels/evolution/matrices.py:1463-1476 raises ValueError when the basis's first node is exactly 0.0, because EvolvedPseudoITD needs a square grid->grid evolution operator (unlike plain evolution_matrix, which tolerates a non-square (n-1,n) result for an origin node per tests/test_evolution.py:914-925). Line 1471 is proven never executed by any test in the suite (coverage_index.txt: src/pixel/kernels/evolution/matrices.py uncovered lines 1471,1661,1663,1677).",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_coverage_edges.py (alongside the other EvolvedPseudoITD guard checks at lines 896-905, using a raw-node basis like tests/test_evolution.py:918's np.linspace(0.0, ...) pattern, since Grid(...)'s own node placement never lands exactly on 0.0)",
+      "searched": [
+        "grep -in \"node.*zero|zero.*node|node_at_origin\" $AUDIT/test_index.txt -> 1 hit, unrelated (not EvolvedPseudoITD/pseudoitd)",
+        "grep -rn 'cannot use a grid with a node at x=0' tests/test_*.py -> 0 hits anywhere in the suite",
+        "grep -rln EvolvedPseudoITD tests/test_*.py -> 8 files; read each EvolvedPseudoITD-related pytest.raises in tests/test_coverage_edges.py:896-905 -> only 'component', 'positive separations', and 'separations' (z/nu length mismatch) are exercised, confirmed by tracing base_matrix's guard order that the x=0-node branch is unreachable from that test's inputs",
+        "grep -i 'x=0|zero.node|node.*origin' $AUDIT/missing_running.tsv -> 0 hits (file empty)"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_pseudoitd_matching-M02",
+      "topic": "kernels-parallel",
+      "title": "Exercise EvolvedPseudoITD's parallel worker path with matching enabled",
+      "rationale": "OBSOLETE, RE-VERIFIED 2026-08-14 against the current source; no test written, and the item's own 2026-08-13 annotation is confirmed rather than inherited. _evolved_pseudoitd_scale_task (src/pixel/kernels/evolution/matrices.py) has NO matching branch: its docstring states 'Projection-dependent Li matching is assembled in the parent process on the corresponding Fourier rows; this worker returns only the evolution matrix', and its body calls evolution_matrix and returns (scale, T) with nothing else. The parallel arm (matrices.py:1665) and the serial arm (:1693) then run the byte-identical line `out[local_rows] = projected_fourier(local_rows, scale) @ np.asarray(T)`, so matching sits OUTSIDE the parallel/serial fork entirely and a matching=True serial-vs-parallel identity test would exercise strictly less per second than tests/test_evolution.py::test_parallel_rowwise_evolution_wrappers_match_serial, which already covers that fork. The coverage_index line numbers this item cites (1661/1663/1677) refer to code that no longer exists. OBSOLETE 2026-08-13, not written, and the reason is a source change rather than a judgement call. _evolved_pseudoitd_scale_task no longer has a matching branch: the concurrent NNLO refactor moved projection-dependent Li matching into the parent process (matrices.py:1763-1783, whose docstring now says so explicitly), and the worker returns only the evolution matrix. Both the serial and parallel branches then run the identical line `out[local_rows] = projected_fourier(local_rows, scale) @ np.asarray(T)`, so matching is outside the parallel/serial fork entirely and a matching=True serial-vs-parallel identity test would exercise strictly less per second than the existing tests/test_evolution.py::test_parallel_rowwise_evolution_wrappers_match_serial, which already covers that fork. Two things worth passing on: the worker's `settings` dict still carries matching/matching_order/pseudoitd_*/lam/alphas keys that _evolved_pseudoitd_scale_task never reads (dead payload, harmless, but a reader will assume the worker matches); and this item's coverage_index claim about lines 1661/1663/1677 refers to code that no longer exists. _evolved_pseudoitd_scale_task's matching branch (src/pixel/kernels/evolution/matrices.py:1660-1677) is reached only when workers>1 and more than one distinct mu2 is requested. tests/test_evolution.py:1337-1394 (test_parallel_rowwise_evolution_wrappers_match_serial) exercises the parallel path for EvolvedPseudoITD with 3 distinct z (hence 3 distinct mu2) but leaves matching at its default False, so the matching branch inside the worker is never entered; tests/test_kernel_parallel.py's dedicated worker-invariance tests (lines 474-546) cover VariableQ2MatchingMatrix/VariableQ2NonSingletEvolutionMatrix/VariableQ2SingletEvolutionMatrix but never construct EvolvedPseudoITD at all. Coverage confirms lines 1661/1663/1677 (inside the matching branch) are never executed by any test in the suite.",
+      "proposed_oracle": "A3",
+      "proposed_location": "tests/test_evolution.py (extend test_parallel_rowwise_evolution_wrappers_match_serial's EvolvedPseudoITD case, or add a sibling, with matching=True/\"NLO\" so serial-vs-parallel bit-identity is checked with the matching branch active)",
+      "searched": [
+        "grep -in parallel $AUDIT/test_index.txt | grep -i 'pseudo|itd' -> 0 hits",
+        "grep -rln _evolved_pseudoitd_scale_task tests/test_*.py -> 0 hits (the worker function is never referenced by name in any test)",
+        "grep -rn parallel_workers tests/test_evolution.py tests/test_kernel_parallel.py -> tests/test_evolution.py:1362,1390 (EvolvedPseudoITD, no matching=); tests/test_kernel_parallel.py:482,502,512,539 (VariableQ2* kernels only, read directly)",
+        "grep -i parallel $AUDIT/missing_running.tsv -> 0 hits (file empty)"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_pseudoitd_matching-M03",
+      "topic": "closure-suite",
+      "title": "Exercise build_pseudoitd(..., with_systematics=False), the generation-time invocation",
+      "rationale": "RESOLVED 2026-08-13 by test_generation_time_build_matches_the_fitting_time_forward_operator (parametrized over both full suites). Oracle: A3, the same manifest record built both ways, compared through EvolvedPseudoITD._cache_settings() -- the dict the code itself uses for kernel cache identity, so agreement on it IS operator identity by the code's own definition -- plus array-equality on mean/cov/nu, which catches a flag that also dropped a covariance block. Acceptance: an in-memory PseudoITD.from_file that drops mu0_2/evolution_lambda/matching when systematics is None (the coupling this item worried about) leaves the generating build's kernel a bare Cosine and fails both items, and nothing else in the file notices. closure_JAM_truth/datasets.py's module docstring (lines 1-22) states generation builds physical-only datasets (with_systematics=False) and injects systematics separately, while fitting uses with_systematics=True; both must produce the identical forward operator for the closure to be meaningful. Every call in this file (e.g. tests/test_closure_pseudoitd_matching.py line 205's datasets.build_pseudoitd(record, path, fields, None)) leaves with_systematics at its True default. Reading the source shows the evolution dict construction (closure_JAM_truth/datasets.py:108-116) is unconditional on with_systematics, so no coupling bug currently exists, but that decoupling is not verified by any test.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_pseudoitd_matching.py (a with_systematics=False variant of test_pitd_evolve_constant_reaches_the_built_kernels checking the main kernel is still EvolvedPseudoITD with the same attributes, and that len(contributions) == 1)",
+      "searched": [
+        "grep -in with_systematics $AUDIT/test_index.txt -> 0 hits",
+        "grep -rn with_systematics tests/test_*.py | grep -i pseudo -> 0 hits",
+        "grep -rn build_pseudoitd tests/test_*.py closure_JAM_truth/*.py closure_NNPDF_truth/*.py -> only tests/test_closure_pseudoitd_matching.py (3 call sites, all default with_systematics=True) and the _LATTICE_BUILDERS dispatch dict in both suites' datasets.py (internal use by generate.py/fit.py, not exercised by any test directly)",
+        "grep -i with_systematics $AUDIT/missing_running.tsv -> 0 hits (file empty)"
+      ],
+      "effort": "S"
+    }
+  ],
+  "unjustified_tolerances": [
+    {
+      "line": 137,
+      "text": "assert np.allclose(got.real, expected, rtol=1e-12, atol=0.0)",
+      "quantity": "pseudo-ITD NLO moment vs from-scratch harmonic-sum recomputation, at the log-cancelling lam",
+      "comment_added": "Bar's margin over the arithmetic floor stated in the docstring and as an inline comment: measured this audit, achieved agreement is 2.22e-16 (machine epsilon), four orders inside the rtol=1e-12 bar.",
+      "provenance": "known (measured this audit; command in the measurements array)"
+    },
+    {
+      "line": 140,
+      "text": "assert np.allclose(got.imag, 0.0, atol=1e-12)",
+      "quantity": "imaginary part of the moment at real integer N (must vanish)",
+      "comment_added": "Inline comment states what a nonzero value would mean (a branch cut or complex-argument bug).",
+      "provenance": "known (structural: real N must give a real moment; no separate measurement needed)"
+    },
+    {
+      "line": 214,
+      "text": "assert np.allclose((got - reference).real, cf * log_factor * b, rtol=1e-12, atol=0.0)",
+      "quantity": "lam-dependent slope of the pseudo-ITD NLO moment vs an independently recomputed B(N)*log_factor",
+      "comment_added": "atol=0.0 added 2026-08-13 (weakness -04): the bar is now the stated pure-relative 1e-12, not numpy's default atol=1e-8. Docstring and inline comment record why the explicit zero is load-bearing and the measured agreement with it in place (2.22e-16, one ULP).",
+      "provenance": "measured 2026-08-13"
+    },
+    {
+      "line": 301,
+      "text": "assert np.abs(matched_matrix - bare_matrix).max() > 1e-6 * scale",
+      "quantity": "matched-vs-bare EvolvedPseudoITD assembled-matrix difference, as a minimum-required (not maximum-tolerated) threshold",
+      "comment_added": "Inline comment and docstring state the measured actual ratio (diff/scale ~= 0.70, this audit) and that the bar only proves matching is not completely inert, cross-referencing the tight composition check in tests/test_evolution.py.",
+      "provenance": "known (measured this audit; command in the measurements array)"
+    },
+    {
+      "line": 227,
+      "text": "np.testing.assert_allclose(li_moments, expected, rtol=0.0, atol=5e-12)",
+      "quantity": "Li plus-density moment vs -_pseudoitd_nlo_moments -- the bridge that carries the external ancillary benchmark onto the Mellin coefficient",
+      "comment_added": "Not modified this pass; recorded here because weakness -03's resolution rests on it. The absolute bar is appropriate: the moment passes through zero near N=1.",
+      "provenance": "concurrent NNLO session; independence measured 2026-08-13"
+    },
+    {
+      "line": 304,
+      "text": "np.testing.assert_allclose(nlo, [...], rtol=0.0, atol=5e-10) and the NNLO counterpart at 5e-9",
+      "quantity": "reconstructed QCF coefficients vs the authors' ancillary Mathematica output at omega=29.15",
+      "comment_added": "Not modified this pass. External oracle (D1); a 1e-6 relative perturbation of p10 breaks it, measured 2026-08-13.",
+      "provenance": "external literal, from readme.nb Out[16]"
+    }
+  ],
+  "measurements": [
+    {
+      "claim": "test_nlo_matching_moments_reduce_to_the_analytic_constant: got.real vs the harmonic-sum expected agree to machine precision",
+      "command": "OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 python3 -c reproducing the test's own got/expected arithmetic and computing max(abs(got.real/expected - 1))",
+      "result": "2.220e-16"
+    },
+    {
+      "claim": "test_matching_log_carries_the_lambda_dependence: (got-reference).real vs cf*log_factor*b agree to machine precision",
+      "command": "same script, reproducing the test's lhs/rhs arithmetic directly and computing max(abs(lhs/rhs - 1))",
+      "result": "2.220e-16"
+    },
+    {
+      "claim": "test_matching_log_carries_the_lambda_dependence's rtol=1e-12 (no atol=) is dominated by numpy's default atol=1e-8",
+      "command": "computed rhs=cf*log_factor*b for orders=[2,3,4], lam=1.7 directly; compared 1e-8 to rtol=1e-12 * min(abs(rhs))",
+      "result": "min|rhs|=3.252; rtol contributes 3.252e-12; atol=1e-8 exceeds it by a factor of 3074.8"
+    },
+    {
+      "claim": "test_matching_changes_the_operator_it_is_applied_to's matched-vs-bare relative difference at its own kinematics",
+      "command": "OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 python3 -c reproducing the test's ProductBasis/EvolvedPseudoITD construction and .matrix() calls directly, computing diff.max()/scale (~20s wall time)",
+      "result": "scale=0.686, diff=0.483, diff/scale=0.704 (bar is 1e-6*scale)"
+    },
+    {
+      "claim": "weakness -04: with the explicit atol=0.0 the stated rtol=1e-12 is the operative bar and still clears",
+      "command": "reproduce the test's lhs/rhs directly; print |rhs| and max abs(lhs/rhs - 1)",
+      "result": "|rhs| = 3.25, 5.08, 6.38; max abs(lhs/rhs - 1) = 2.22e-16; np.allclose(rtol=1e-12, atol=0.0) is True"
+    },
+    {
+      "claim": "PseudoITDReal/PseudoITDImag really do discriminate the Fourier parity",
+      "command": "python -c on pixel.kernels: identity and issubclass checks",
+      "result": "PseudoITDReal is common.Cosine, PseudoITDImag is common.Sine; distinct; neither a subclass of the other"
+    },
+    {
+      "claim": "the pre-fix assertions of the two hardened tests still pass under the four mutations that the hardened versions fail",
+      "command": "the pre-fix bodies copied verbatim into a scratch test file, run under -p mut_pitd for hardcode_order, hardcode_mode, flip_bare_parity, drop_one_systematic",
+      "result": "4 passed in every case; the hardened file fails 2-4 items in every case"
+    },
+    {
+      "claim": "weakness -03: the ancillary benchmark is independent of _pseudoitd_nlo_moments, and the bridge test is what links them",
+      "command": "in-memory mutation flip_L_sign (shifts _pseudoitd_nlo_moments' lam-independent constant) and perturb_p10 (scales the Li p10 density by 1.000001)",
+      "result": "flip_L_sign -> fails the harmonic-sum test and the bridge test, ancillary benchmark PASSES. perturb_p10 -> fails the ancillary benchmark and the bridge test, harmonic-sum tests PASS."
+    },
+    {
+      "claim": "M02's target no longer exists",
+      "command": "read _evolved_pseudoitd_scale_task (matrices.py:1763) and both branches of base_matrix's per-scale loop",
+      "result": "the worker returns only the evolution matrix; both branches share the line projected_fourier(local_rows, scale) @ T, so matching sits outside the parallel fork"
+    },
+    {
+      "claim": "Grid never places a node at exactly 0.0, so the origin guard needs a raw-node basis",
+      "command": "basis_grid_nodes(ProductBasis(Grid(n_points=9, domain=(0.0, 1.0), spacing='linear')))",
+      "result": "first node 0.0025"
+    },
+    {
+      "claim": "cost of the origin-guard control",
+      "command": "time EvolvedPseudoITD(order='LO', matching=False).base_matrix on the 8-node positive basis",
+      "result": "0.73 s cold, 0.07 s warm; the raising case is 0.000 s (the guard precedes matching_scales)"
+    }
+  ],
+  "notes_for_readme": "SUPERSEDED 2026-08-13. The earlier note said the pseudo-ITD one-loop matching constant had no independent physics oracle anywhere in the suite or in fitpack_legacy/pdf_fitter. That was true when written and is no longer: the concurrent NNLO session's Li-vector work supplies one, anchored on the authors' own Mathematica ancillary output and carried onto _pseudoitd_nlo_moments by the Li-to-Mellin bridge test in this file. Both links were verified independent by mutation (see weakness -03). What remains missing is a literature CITATION in matching.py's docstring, which is a src/ edit, not a test."
+}

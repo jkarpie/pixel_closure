@@ -1,0 +1,283 @@
+{
+  "file": "tests/test_closure_dy_plotting.py",
+  "area": "closure-suite",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "closure_JAM_truth/plot_datasets.py (_bilinear_predictive_band, _bilinear_symmetric_action, build_records_from_result, plot_records, _dataset_x, _record_chi2, _posterior_predictive_bands, _physical_gp_moments, _representative_vector) -- byte-identical to closure_NNPDF_truth/plot_datasets.py (diff, exit 0)",
+    "closure_JAM_truth_small/plot_datasets.py (same symbols) -- byte-identical to closure_NNPDF_truth_small/plot_datasets.py (diff, exit 0); the module actually named by path in tests 3-4",
+    "closure_NNPDF_truth/plot_datasets.py (byte-identical alias of closure_JAM_truth's copy)",
+    "closure_NNPDF_truth_small/plot_datasets.py (byte-identical alias of closure_JAM_truth_small's copy)",
+    "closure_JAM_truth_small/run_closure.py (_prepare_matplotlib, save_figure_both) -- reached via plot_records",
+    "closure_JAM_truth_small/fit.py (_weighted_mean_vec's two-arity call contract is modeled via monkeypatch in test 3; the real function body is not executed there)",
+    "src/pixel/core/evidence.py (BilinearFactorBlock, _bilinear_prediction_from_second -- called for real, not mocked, in tests 1-3)"
+  ],
+  "drives_non_pixel": "Primary subject is the closure_*/plot_datasets.py plotting-orchestration layer across all 4 closure driver packages (closure_JAM_truth(_small), closure_NNPDF_truth(_small)), not a pixel module directly. It does import pixel.core.evidence.BilinearFactorBlock directly, and, transitively through _bilinear_predictive_band, calls the real (unmocked) pixel.core.evidence._bilinear_prediction_from_second in tests 1-3.",
+  "n_tests": 14,
+  "n_parametrized_cases": 8,
+  "tests": [
+    {
+      "name": "test_dense_dy_band_uses_quadratic_mean_and_delta_variance",
+      "line": 89,
+      "claim": "For a dense bilinear operator, _bilinear_predictive_band's mean is E[q^T Y q] and its std is a delta-method propagation of the GP covariance through 2*sym(Y)*mean.",
+      "actual": "Recomputes both quantities independently in the test body (no call to any source helper for the 'expected' side) from the stated closed forms, then compares to the real, unmocked runner._bilinear_predictive_band output. Parametrized over the 4 runner aliases, which are 2 distinct plot_datasets.py bodies run twice each (module docstring).",
+      "how": "np.einsum contraction of the same operator/mean/covariance the source uses, built independently in the test; runner._bilinear_predictive_band internally calls the real pixel.core.evidence._bilinear_prediction_from_second for the mean and a local _bilinear_symmetric_action for the gradient half.",
+      "oracle": "A1",
+      "bar": "np.testing.assert_allclose bare default (rtol=1e-7, atol=0); a standalone pixel.core.evidence reproduction of this exact input measured 0.0 relative difference",
+      "strength": "S1",
+      "catches": "a wrong einsum contraction index, a missing symmetrization of Y, or a missing factor of 2 (unsymmetrized gradient) or 4 in the delta-method variance. Does NOT establish that the delta-method variance is a good approximation to the true (non-Gaussian) DY posterior variance -- that is a documented modeling choice in the source, not something this test addresses."
+    },
+    {
+      "name": "test_factorized_dy_band_matches_equivalent_dense_operator",
+      "line": 135,
+      "claim": "The factorized BilinearFactorBlock code path produces the same DY band as an algebraically equivalent dense tensor.",
+      "actual": "Builds one BilinearFactorBlock and a hand-derived dense tensor via einsum('ab,rij->raibj',...).reshape(...), with scale baked into the dense tensor and applied post-hoc for the factorized case; calls the SAME runner._bilinear_predictive_band wrapper on both and compares mean and std at rtol=1e-12. Exercises only a single factorized block.",
+      "how": "Two calls to the identical wrapper function, differing only in the type of blocks.bilinear_Y passed (tuple-of-BilinearFactorBlock vs. dense ndarray).",
+      "oracle": "A3",
+      "bar": "rtol=1e-12 (both mean and std)",
+      "strength": "S2",
+      "catches": "a wrong mixing/tensor contraction index or transposition in the factorized branch specifically -- demonstrated by mutant: transposing the mixing indices (einsum('ba,rij->...') for einsum('ab,rij->...')) breaks agreement by 3.4e-2, ten orders above the bar. Does NOT catch a bug in code the two branches share (second-moment construction, clip, sqrt -- test 1 covers that with an independent oracle instead), and does not exercise more than one factorized block at once, so the action[sl] += / prediction.at[...].add accumulation across multiple blocks is untested here."
+    },
+    {
+      "name": "test_mixed_records_include_linear_and_dy_without_rebuilding_short_samples",
+      "line": 206,
+      "claim": "build_records_from_result produces both a linear and a dy record, using the full merged representative vector (not a short per-sample row) even when the sampler's stored .samples array is smaller than the model's free-parameter count.",
+      "actual": "The rebuild stub's embedded 'assert vec.size == 3' is the real, discriminating check: it fires if _representative_vector (via the monkeypatched fitmod._weighted_mean_vec) ever falls back to something other than the model-aware 3-vector. The kind-SET equality check only proves one record of each kind is present (blind to duplicates or extra records); the 'linear' record's own fields are never separately inspected; the DY record's x/xlabel are checked against an exact numeric coincidence (Q2/S=0.25); fit_std/chi2_per_data are checked for sign/finiteness only, not value.",
+      "how": "Hand-built Model/samples/blocks SimpleNamespaces; fitmod._weighted_mean_vec is monkeypatched to mimic the real function's documented two-arity NestedVegasSamples contract (short vector without model=, full vector with it, per closure_JAM_truth_small/fit.py:474-484); model._rebuild/_blocks are local closures, with the assertion inside _rebuild standing in for a numeric oracle.",
+      "oracle": "F1",
+      "bar": "exact size==3 in the rebuild mock (load-bearing); assert_allclose bare default for x; strict >0.0 and isfinite for fit_std/chi2_per_data",
+      "strength": "S2",
+      "catches": "a regression where build_records_from_result (or _representative_vector) passes a short/unmerged sample vector into model._rebuild instead of the full n_free representative vector -- a real, documented failure mode of fit._weighted_mean_vec's NestedVegasSamples branch. Does NOT catch a wrong numeric DY band value, a duplicated record, or a wrong 'linear' record field."
+    },
+    {
+      "name": "test_dy_records_render_png_and_pdf",
+      "line": 304,
+      "claim": "plot_records writes both a PNG and a PDF for a DY-kind record.",
+      "actual": "Checks only Path.is_file() for the given .png path and its .with_suffix('.pdf') sibling, after a real, unmocked call. No assertion inspects the Figure/Axes: no check of line data, fill_between extents, axis scale, legend, title, or the DY footnote text.",
+      "how": "One hand-built record dict (x.size==3, use_log=False) fed to the real plot_records; output written under tmp_path.",
+      "oracle": "F1",
+      "bar": "none numeric; file-existence only",
+      "strength": "S3",
+      "catches": "a dropped output format, a wrong suffix-derivation in save_figure_both, or an exception from a malformed/mismatched record (wrong array lengths, missing keys). Does NOT catch wrong rendered content (wrong data, wrong color, wrong scale, missing legend/title/footnote) -- pixel.plotting's sibling suite already has that pattern (tests/test_plotting.py:381, figures[1].axes[0].get_xscale()) and this file has no equivalent."
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_closure_dy_plotting-01",
+      "test": "test_dense_dy_band_uses_quadratic_mean_and_delta_variance, test_factorized_dy_band_matches_equivalent_dense_operator",
+      "pattern": "W-DEAD",
+      "severity": "S4",
+      "evidence": "RESOLVED 2026-08-13 by the new test_jam_and_nnpdf_plot_datasets_stay_byte_identical. The byte-identity the RUNNERS docstring asserts in prose is now an assertion: both pairs are compared with read_bytes(), so any divergence -- including in main/write_summary/plot_records details no test reaches -- fails loudly instead of quietly voiding the 4-way parametrization's stated purpose. RUNNERS is kept at 4 entries (drift insurance). Acceptance: the same comparison applied to a genuinely different pair (full vs _small, which differ inside _truth_predictions) returns False, so the assertion is not vacuous; measured sha256 cf44fa450537e9af... for the full pair and adbee46c46c646b0... for the _small pair. tests/test_closure_dy_plotting.py:70 RUNNERS = (jam_full, jam_small, nnpdf_full, nnpdf_small). Measured this audit: `diff closure_JAM_truth/plot_datasets.py closure_NNPDF_truth/plot_datasets.py` exits 0 (byte-identical), and likewise `diff closure_JAM_truth_small/plot_datasets.py closure_NNPDF_truth_small/plot_datasets.py`.",
+      "why_it_matters": "The 4-way parametrization on tests 1-2 runs 2 distinct plot_datasets.py bodies twice each under different names, not 4 independent implementations; a reader could believe 4 independently-maintained closure families are being cross-checked when only 2 code bodies exist today.",
+      "proposed_fix": "Documentation only here (module docstring/RUNNERS comment now state the byte-identity and why it is kept anyway, as drift insurance). If the redundancy is unwanted, collapse RUNNERS to 2 entries, or add a dedicated test asserting the JAM/NNPDF plot_datasets.py pair stays identical so the intent is explicit.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_dy_plotting-02",
+      "test": "test_factorized_dy_band_matches_equivalent_dense_operator",
+      "pattern": "W-COMMON",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-14 by test_flat_samples_are_rejected_instead_of_silently_scaling_the_band and test_predictive_band_refuses_a_vector_weight_count_mismatch. The 1-D leg is no longer left unpinned: it is out of contract and now RAISES. All four plot_datasets.py copies changed identically (byte-identity between the JAM/NNPDF pair and between the _small pair preserved): _sample_vectors_and_weights refuses vectors.ndim != 2 (not just == 1, so a 3-D .samples -- which the old reshape passed through untouched -- is caught too), and _sampled_linear_predictive_band names a vector/weight count mismatch instead of letting zip() truncate. Justification is the sampler contract, not a preference: infer/hmc.py:1101 and infer/nuts.py:1100 allocate np.empty((n_samples, n_params)), infer/vegas.py:1036 and infer/mcmc.py:383 stack per-draw rows, and all four write the zero-parameter case as np.zeros((n_samples, 0)) -- still 2-D, and now pinned by a control. Acceptance: a plugin restoring the old reshape AND removing the zip guard (self-checked to apply) makes exactly the 12 new parametrized cases fail while the file's other 77 pass. Measured pre-fix damage: mean scaled by exactly 1/n (0.33333333 at n=3), band wrong by 1.09-1.36x in the other direction. STILL OPEN, with a partial mitigation added 2026-08-13 (deliberately not marked resolved): the new test_closure_symmetric_action_matches_the_pixel_core_evidence_copy checks the half-gradient against a genuinely separate implementation (pixel.core.evidence), so the piece of shared code most likely to be wrong is now cross-checked. The wrapper pieces this weakness names -- second-moment construction, the clip, the sqrt -- remain common-mode between the factorized and dense calls, and are covered instead by test_dense_dy_band_uses_quadratic_mean_and_delta_variance's independent closed form, exactly as the original entry says. No change to the test this weakness is filed against. tests/test_closure_dy_plotting.py:176-181 -- both factorized_result and dense_result are produced by the same runner._bilinear_predictive_band call; only the isinstance(Y, tuple) branch inside _bilinear_prediction_from_second/_bilinear_symmetric_action differs between the two calls.",
+      "why_it_matters": "A bug in code the two branches share (second-moment construction 'second = covariance + outer(mean, mean)', the clip/sqrt wrapper, or the post-hoc scale multiply) would affect both calls identically and this test would still pass. This is inherent to what the test is for -- validating the factorized fast path against the dense path -- not a defect: test 1 independently covers the shared wrapper math with an unrelated, hand-derived oracle, so the two tests are complementary rather than either being weak alone.",
+      "proposed_fix": "None needed; now stated explicitly in both the module and per-test docstrings. If isolated further, a from-scratch (non-wrapper) computation of the dense case, as test 1 already does, would remove the last shared-code sliver.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_dy_plotting-03",
+      "test": "test_mixed_records_include_linear_and_dy_without_rebuilding_short_samples",
+      "pattern": "W-LOOSE",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 by test_mixed_records_include_linear_and_dy_without_rebuilding_short_samples. Added `len(records) == 2` beside the kind-set check, and seven value assertions on the previously-uninspected 'linear' record: xlabel, use_log, x, data, sigma, reproduction ([0.7, 0.9] -- B selects GP coefficients 0 and 1, so this is the first two entries of samples.mean), fit_std (sqrt of the first two diagonal entries of samples.covariance), truth ([0.6, 0.8]), and chi2 == 0.25 + 4/9 at rel=1e-12, all hand-derivable from the fixture. Acceptance: the record count now fails on a duplicated record, and the linear-band assertions fail under mutations of the shared band code (mut_plot.py MUT=band_between / band_weights reach the sampled path; the closed-form values here pin the stored-moments path). tests/test_closure_dy_plotting.py:288 `assert {record['kind'] for record in records} == {'linear', 'dy'}`; no assertion anywhere in the test checks len(records) or any field of the record whose kind == 'linear'.",
+      "why_it_matters": "A bug that produced 3 or 4 records (e.g. a dataset double-counted across model._layout.datasets and .bilinear_datasets) would still satisfy the set equality; and a bug specific to the 'linear' record's construction (wrong x, wrong reproduction, wrong chi2) would pass entirely unnoticed since only the 'dy' record is pulled out and inspected.",
+      "proposed_fix": "Assert len(records) == 2 alongside the kind check, and add at least one field assertion on the 'linear' record (e.g. its xlabel or chi2_per_data) mirroring what is already done for 'dy'.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_dy_plotting-04",
+      "test": "test_dy_records_render_png_and_pdf",
+      "pattern": "W-NAME",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 by the new test_plot_records_renders_the_band_the_log_scale_and_the_dy_footnote and its control test_linear_only_records_carry_no_dy_footnote. plot_records closes its Figure before returning, so the test intercepts matplotlib.pyplot.close to keep it alive (the pattern tests/test_plotting.py:381 uses for pixel.plotting) and then asserts panel count, the fill_between band as a PolyCollection, the log scale, the per-panel title, and the DY footnote. test_dy_records_render_png_and_pdf is kept unchanged and unmocked for the file-writing path. Acceptance: mut_plot.py MUT=band_branch, MUT=no_log_scale and MUT=footnote each fail exactly one of the two new tests with the file's other 76 cases passing. tests/test_closure_dy_plotting.py:341-342 `assert output.is_file()`; `assert output.with_suffix('.pdf').is_file()` -- the only two assertions in the test.",
+      "why_it_matters": "'render_png_and_pdf' is accurate to what is checked (two files get written) but a reader could easily assume 'renders' implies the content was verified; nothing here would catch wrong data, wrong axis scale, a missing legend, or a missing DY footnote, all of which pixel.plotting's sibling suite (tests/test_plotting.py) does check for its own figures.",
+      "proposed_fix": "Have plot_records optionally return the Figure (or monkeypatch matplotlib.pyplot.close in the test to intercept it before plt.close(fig)), then assert on ax.lines/ax.collections/ax.get_xscale() the way tests/test_plotting.py:381 already does for pixel.plotting.",
+      "effort": "M"
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_closure_dy_plotting-M01",
+      "topic": "closure-suite",
+      "title": "Cross-check closure_*'s private _bilinear_symmetric_action/_bilinear_predictive_band against pixel.core.evidence's public bilinear_symmetric_action/_bilinear_prediction_from_second, including multi-block factorized operators",
+      "rationale": "RESOLVED 2026-08-13 by the new test_closure_symmetric_action_matches_the_pixel_core_evidence_copy, parametrized over RUNNERS x {factorized_two_block, dense}. Oracle: A3 -- an identity between two independently typed implementations (closure NumPy vs pixel.core.evidence JAX) evaluated on one real EvidenceBlocks, so it measures transcription, not the half-gradient convention (tests/test_joint_action.py's jax.jacfwd check pins that). New coverage beyond the gap as stated: the factorized case uses TWO BilinearFactorBlocks with OVERLAPPING row ranges (0:2 and 1:3), so the `action[sl] +=` accumulation is exercised as an accumulation, and bilinear_active_indices selects 6 of 8 coefficients. Measured max|a/b - 1| = 6.7e-16 for both layouts against a 1e-12 bar, smallest compared entry 0.199/0.257. Acceptance: mut_plot.py MUT=action_accumulate (`action[sl] +=` -> `=`) fails ONLY the factorized_two_block cases, with every other test in the file passing -- the sharpest evidence that the multi-block path had no coverage; MUT=action_mixing and MUT=action_dense also fail it. closure_JAM_truth/plot_datasets.py:132-170 (_bilinear_symmetric_action) is a parallel, hand-maintained reimplementation of pixel.core.evidence.bilinear_symmetric_action (src/pixel/core/evidence.py:1199-1259) -- same einsum patterns, never imported from the source module. tests/test_joint_action.py:150-203 exercises the pixel.core.evidence copy with 2 factorized blocks and cross-checks it against jax.jacfwd autodiff, but nothing anywhere compares the two copies to each other, and this file's own tests exercise the closure_* copy with only 1 factorized block. A fix applied to one copy (e.g. informed by the autodiff check) could silently not be applied to the other.",
+      "proposed_oracle": "A3",
+      "proposed_location": "tests/test_closure_dy_plotting.py",
+      "searched": [
+        "grep -rln \"_bilinear_symmetric_action\" tests/test_*.py -> 0 hits (never referenced by name outside its own definition)",
+        "grep -rln \"bilinear_symmetric_action\" tests/test_*.py -> tests/test_joint_action.py (1 file, tests the pixel.core.evidence copy only)",
+        "grep -c \"BilinearFactorBlock(\" tests/test_closure_dy_plotting.py -> 1; tests/test_joint_action.py -> 2",
+        "grep -i \"bilinear\\|factorized\\|multi.block\" $AUDIT/missing_running.tsv -> empty (0-byte file)"
+      ],
+      "effort": "M"
+    },
+    {
+      "id": "test_closure_dy_plotting-M02",
+      "topic": "closure-suite",
+      "title": "Exercise _sampled_linear_predictive_band/_sample_vectors_and_weights, the non-bilinear predictive-band path",
+      "rationale": "RESOLVED 2026-08-13 by three new tests: test_sampled_linear_band_mixes_per_sample_posterior_moments (the accumulation), test_sampled_linear_band_reuses_stored_moments_without_rebuilding (the cache short-circuit and its size guard), and test_sample_vectors_and_weights_handles_map_and_weighted_samples (the MAP and 2-D sample branches). Oracle: the law of total variance, sum_s w_s (var_s + mean_s^2) - (sum_s w_s mean_s)^2, written out in the test (A1 for the mixture combination) over per-sample moments from pixel.core.evidence.posterior (A3, shared with the source deliberately -- the accumulation is what is under test). Fixture is non-degenerate by measurement: with two samples at weights 0.25/0.75 and a per-sample param_pred offset of 4.0, dropping the between-sample term changes the reported std by 38.7% and equal weighting by 9.9%; the test asserts std/within_sample - 1 > 0.1 with 0.631 achieved. Acceptance: mut_plot.py MUT=band_between and MUT=band_weights each fail it; MUT=cache_guard fails the cache test. Achieved agreement 0.0 exactly for mean and std against a 1e-12 bar. FINDING, not closed: for a 1-D samples.samples array, _sample_vectors_and_weights returns ONE vector while fit._weights returns n weights (it reads samples.samples.shape[0] independently), and the caller's zip() then silently truncates and scales the whole band by 1/n. Which reading is right is a source question, so that leg is exercised but deliberately not pinned. closure_JAM_truth/plot_datasets.py:58-97 is the code path taken whenever model.has_bilinear is False or the sampler did not store marginalized GP moments (raw MCMC/NUTS/PosteriorResult samples) -- it distinguishes a MAP-like samples.x from a .samples array and averages with fitmod._weights. This file's only 'mixed records' test sets has_bilinear=True with valid samples.mean/.covariance, which takes the OTHER branch inside _posterior_predictive_bands and never reaches this one; samples.samples is set on the test's SimpleNamespace but is never actually read on that code path.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_dy_plotting.py",
+      "searched": [
+        "grep -rln \"_sampled_linear_predictive_band\\|_sample_vectors_and_weights\" tests/test_*.py -> 0 hits",
+        "grep -in \"sampled_linear_predictive\\|sample_vectors_and_weights\" $AUDIT/test_index.txt -> 0 hits",
+        "grep -rln \"_posterior_predictive_bands\" tests/test_*.py -> 0 hits",
+        "grep -i \"sampled_linear\\|sample_vectors_and_weights\" $AUDIT/missing_running.tsv -> empty"
+      ],
+      "effort": "M"
+    },
+    {
+      "id": "test_closure_dy_plotting-M03",
+      "topic": "plotting",
+      "title": "Assert rendered content (axis scale, line/band data, DY footnote) from plot_records instead of only file existence",
+      "rationale": "RESOLVED 2026-08-13 by test_plot_records_renders_the_band_the_log_scale_and_the_dy_footnote plus its negative control test_linear_only_records_carry_no_dy_footnote -- same change as weakness -04, recorded there in full. Oracle: F1 (artist type/presence and axis state). The band is identified as a PolyCollection specifically because errorbar also populates ax.collections with a LineCollection: measured, both panels carry exactly 2 collections and only the multi-point one contains a PolyCollection (['LineCollection', 'FillBetweenPolyCollection'] vs ['LineCollection', 'LineCollection']), so a count alone could not separate the branches. Acceptance: mut_plot.py MUT=band_branch / MUT=no_log_scale / MUT=footnote. test_dy_records_render_png_and_pdf (this file, line 304) is the only test that calls plot_records, and its two assertions are both Path.is_file(); nothing exercises or checks the x.size<2 errorbar fallback, the use_log branch (set_xscale('log')), or the 'DY fit bands use first-order propagation...' footnote (closure_JAM_truth/plot_datasets.py:387-392). The sibling production module already has this pattern for its own figures: tests/test_plotting.py:381 asserts figures[1].axes[0].get_xscale() == 'log' directly on a returned Figure.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_dy_plotting.py",
+      "searched": [
+        "grep -in \"get_xscale|ax.lines|fig.axes|\\.collections\\[\" $AUDIT/test_index.txt -> 0 hits in closure_dy_plotting entries",
+        "grep -rln \"get_xscale|\\.collections\\[\" tests/test_*.py -> tests/test_plotting.py only",
+        "grep -rln \"fill_between|PolyCollection\" tests/test_*.py -> 0 hits (no existing test inspects these artists anywhere)",
+        "grep -i \"render.*content|get_xscale|artist\" $AUDIT/missing_running.tsv -> empty"
+      ],
+      "effort": "M"
+    },
+    {
+      "id": "test_closure_dy_plotting-M04",
+      "topic": "closure-suite",
+      "title": "Confirm _is_constraint_dataset excludes cons_*/source=='constraint' rows from build_records_from_result's output",
+      "rationale": "RESOLVED 2026-08-13 by the new test_constraint_pseudo_data_is_excluded_from_records, parametrized over RUNNERS. Oracle: F1 -- the returned record names. Both legs of the `or` are fed independently: cons_origin_f carries the ordinary 'closure' source and is caught only by the name prefix, endpoint_valence carries an ordinary name and is caught only by source=='constraint', and a physical dataset is kept alongside so a filter that rejected everything fails too. Acceptance: mut_plot.py MUT=cons_prefix and MUT=cons_source each make it fail, with the file's other 73 cases passing. closure_JAM_truth/plot_datasets.py:50-55,275-282 filters constraint pseudo-data out of both linear_layouts and bilinear_layouts before building records or sorting by chi2. Every dataset built by this file's _dataset() helper has source='closure', never 'constraint', so this filter is never exercised here. tests/test_closure_constraints.py tests a different concern (that cons_origin_* datasets exist and match the injected truth, via suite.constraint_datasets), not that the plotting layer excludes them.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_dy_plotting.py",
+      "searched": [
+        "grep -rln \"_is_constraint_dataset\" tests/test_*.py -> 0 hits",
+        "grep -rn \"source=\\\"constraint\\\"|source == .constraint|cons_\" tests/test_*.py -> tests/test_analysis_io.py, tests/test_closure_constraints.py (different concern, confirmed by reading)",
+        "grep -in \"constraint\" $AUDIT/test_index.txt | grep -i \"plot|record\" -> 0 hits",
+        "grep -i \"is_constraint_dataset|constraint.*plot\" $AUDIT/missing_running.tsv -> empty"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_dy_plotting-M05",
+      "topic": "closure-suite",
+      "title": "Assert build_records_from_result sorts records by descending chi2",
+      "rationale": "RESOLVED 2026-08-13 by the new test_records_are_sorted_by_descending_chi2_with_nan_last, parametrized over RUNNERS. Oracle: A1 -- four one-row unit-variance datasets against a zero prediction give chi2 exactly 9, 4, 1 and NaN, so the expected order is fixed by construction rather than read off the output. The NaN leg (nan_to_num(..., nan=-inf), which exists so an unformable chi2 sinks rather than floats) is covered by placing the NaN dataset FIRST in the input, where Python's stable sort leaves it if the guard is removed. Acceptance: mut_plot.py MUT=sort_order (reverse dropped) and MUT=sort_nan (nan_to_num dropped) each make it fail, other cases passing. closure_JAM_truth/plot_datasets.py:324 (records.sort(key=lambda r: np.nan_to_num(r['chi2'], nan=-np.inf), reverse=True)) is documented in plot_datasets.py's own module docstring ('panels sorted by chi2 contribution so the largest tensions appear first') but no test in this file has more than 2 records (1 linear + 1 dy) or checks their relative order; the sort key's NaN handling (nan_to_num to -inf, i.e. NaN-chi2 datasets sort last) is likewise unexercised.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_dy_plotting.py",
+      "searched": [
+        "grep -n \"records\\[0\\]|records\\[-1\\]|\\.sort\\(|sort_by\" tests/test_closure_dy_plotting.py -> 0 hits",
+        "grep -in \"chi2_per_data\" $AUDIT/test_index.txt -> tests/test_analysis_io.py (unrelated I/O round-trip), tests/test_closure_dy_plotting.py (this file, no ordering check)",
+        "grep -in \"sort\" $AUDIT/test_index.txt | grep -i \"closure|dy|chi2\" -> 0 hits",
+        "grep -i \"chi2.*sort|sort.*chi2|descending\" $AUDIT/missing_running.tsv -> empty"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_dy_plotting-M06",
+      "topic": "closure-suite",
+      "title": "Exercise _dataset_x's Y-only/nu-only/n-only/bare-nu/arange fallback branches",
+      "rationale": "RESOLVED 2026-08-13 by the new test_dataset_x_selects_each_independent_variable_in_priority_order: 9 parametrized cases x 4 runners covering all six return paths plus both guards on the xF branch (S <= 0 and a shape mismatch, each falling through to the key loop), the 'x' branch with and without a non-positive value (the only branch that sets use_log), 'Y'/'nu'/'n', the 1-D dataset.nu fallback and the arange/'point' fallback. Oracle: F1 for the label/use_log contracts and A1 for the xF case (2 sqrt(25/100) = 1.0 exactly in float64, so the expected array is sinh(Y) with no rounding slack). Acceptance: mut_plot.py MUT=log_guard (use_log no longer guarded on x > 0) fails the non-positive-x case only; MUT=xf_guard (the shape/S>0 guard removed) fails the two fall-through cases only. closure_JAM_truth/plot_datasets.py:22-42 (_dataset_x) has 6 distinct return paths: the Q2/S/Y -> xF branch (exercised here, test 3's dy dataset) and the 'x' key branch (exercised incidentally by test 3's linear dataset but never asserted on), plus 4 more -- bare 'Y' key, 'nu' key, 'n' key, a fallback to dataset.nu directly, and a final np.arange(n_data) fallback -- none of which any dataset built in this file, or (per the symbol-level search below) anywhere else, reaches.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_dy_plotting.py",
+      "searched": [
+        "grep -rln \"_dataset_x\" tests/test_*.py -> 0 hits (private helper never referenced by name outside its own module)",
+        "grep -in \"dataset_x\" $AUDIT/test_index.txt -> 0 hits",
+        "grep -rn \"independent\\[.Y.\\]|independent\\[.nu.\\]|independent\\[.n.\\]\" tests/test_*.py -> 0 hits",
+        "grep -i \"dataset_x|xlabel.*fallback\" $AUDIT/missing_running.tsv -> empty"
+      ],
+      "effort": "S"
+    }
+  ],
+  "unjustified_tolerances": [
+    {
+      "line": 130,
+      "text": "np.testing.assert_allclose(prediction, expected_prediction)",
+      "quantity": "dense-operator DY posterior mean vs. hand-derived closed form",
+      "comment_added": "Bare default rtol=1e-7. A standalone pixel.core.evidence reproduction of this exact input (module docstring) landed at 0.0 relative difference, so this bar only rules out an O(1) formula error -- it has no work left to do at the precision two independent typings achieve.",
+      "provenance": "measured"
+    },
+    {
+      "line": 131,
+      "text": "np.testing.assert_allclose(std, np.sqrt(expected_variance))",
+      "quantity": "dense-operator delta-method std vs. hand-derived closed form",
+      "comment_added": "(same comment block as line 130, above both assertions)",
+      "provenance": "measured"
+    },
+    {
+      "line": 186,
+      "text": "np.testing.assert_allclose(factorized_result[0], dense_result[0], rtol=1e-12)",
+      "quantity": "factorized-path prediction vs. algebraically equivalent dense-tensor prediction",
+      "comment_added": "Float64 round-off for an algebraically exact reformulation (test docstring) -- not a physics bar. Measured to catch a transposed mixing/tensor index at 3.4e-2, far above this floor.",
+      "provenance": "measured"
+    },
+    {
+      "line": 187,
+      "text": "np.testing.assert_allclose(factorized_result[1], dense_result[1], rtol=1e-12)",
+      "quantity": "factorized-path std vs. algebraically equivalent dense-tensor std",
+      "comment_added": "(same comment block as line 186, above both assertions)",
+      "provenance": "measured"
+    },
+    {
+      "line": 295,
+      "text": "np.testing.assert_allclose(dy_record[\"x\"], np.sinh([-0.2, 0.4]))",
+      "quantity": "DY record's sorted xF coordinate vs. sinh(Y) at the Q2/S=0.25 special case",
+      "comment_added": "Exact, not approximate: Q2/S = 0.25 makes the xF prefactor 2*sqrt(Q2/S) equal to 1.0 in float64, so dy_record[\"x\"] is bit-identical to np.sinh(Y); the bare rtol=1e-7 default has no work to do.",
+      "provenance": "known -- reasoned from IEEE-754 exactness of 25.0/100.0 and sqrt(0.25), and determinism of np.sinh, not from executing the closure_* path (out of scope for this audit)"
+    }
+  ],
+  "measurements": [
+    {
+      "claim": "The test's hand-built dense operator for a BilinearFactorBlock reproduces pixel.core.evidence._bilinear_prediction_from_second's factorized-branch output and bilinear_symmetric_action's gradient exactly, and a transposed-mixing mutant breaks that agreement by ~3.4e-2, far above the file's rtol=1e-12 bar.",
+      "command": "OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 .venv/bin/python3 scratchpad/audit/verify_factorized_equiv.py (reproduces test_factorized_dy_band_matches_equivalent_dense_operator's exact construction, calling pixel.core.evidence directly -- no closure_*/ import or execution)",
+      "result": "pred_factorized: [0.76404 0.1939], pred_dense: [0.76404 0.1939], pred max abs diff: 2.7755575615628914e-17; grad_factorized == grad_dense to 2.7755575615628914e-17; pred_bad (mixing transposed via einsum('ba,rij->...')) vs factorized max abs diff: 0.034300000000000025"
+    },
+    {
+      "claim": "test_dense_dy_band_uses_quadratic_mean_and_delta_variance's hand-typed closed-form mean/variance matches a standalone pixel.core.evidence reproduction of the same input to 0.0 relative difference, i.e. the file's bare assert_allclose default (rtol=1e-7) has enormous headroom.",
+      "command": "OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 .venv/bin/python3 scratchpad/audit/verify_dense_band_bar.py (same operator/mean/covariance as the test, using pixel.core.evidence._bilinear_prediction_from_second/bilinear_symmetric_action directly -- no closure_*/ import or execution)",
+      "result": "prediction: [1.22 0.04] expected: [1.22 0.04]; std: [0.21908902 0.33466401] expected: [0.21908902 0.33466401]; prediction max relative diff: 0.0; std max relative diff: 0.0"
+    },
+    {
+      "claim": "closure_JAM_truth/plot_datasets.py and closure_NNPDF_truth/plot_datasets.py are byte-identical, and closure_JAM_truth_small/plot_datasets.py and closure_NNPDF_truth_small/plot_datasets.py are byte-identical; the full/small pair differs only inside _truth_predictions, before which _bilinear_predictive_band/_bilinear_symmetric_action (lines 132-195) are untouched.",
+      "command": "diff closure_JAM_truth/plot_datasets.py closure_NNPDF_truth/plot_datasets.py; diff closure_JAM_truth_small/plot_datasets.py closure_NNPDF_truth_small/plot_datasets.py; diff closure_JAM_truth/plot_datasets.py closure_JAM_truth_small/plot_datasets.py",
+      "result": "first two diffs: exit 0, no output (byte-identical); third diff: only lines 231,236-242 differ (231d230 '<     moment_truth = truth.get(\"moment_systematic_values\") or {}' and a 236,242c235,236 block), both inside _truth_predictions, which starts at line 222 -- after the two functions this file's tests exercise"
+    },
+    {
+      "claim": "The closure copy of _bilinear_symmetric_action and pixel.core.evidence.bilinear_symmetric_action agree on one real EvidenceBlocks, for a two-block factorized operator with overlapping row ranges and for a non-symmetric dense operator.",
+      "command": "scratchpad/measure_action.py (imports the committed fixture _two_block_bilinear_blocks from tests/test_closure_dy_plotting.py and calls both implementations)",
+      "result": "factorized: max|a/b - 1| = 6.661e-16, smallest compared entry 1.990e-01; dense: max|a/b - 1| = 6.661e-16, smallest compared entry 2.565e-01; shapes (3, 6) both"
+    },
+    {
+      "claim": "The sampled linear predictive band's mixture is non-degenerate on the committed fixture: the between-sample term and the sample weights both change the answer materially.",
+      "command": "scratchpad/measure_band.py (uses the committed _sampled_band_model fixture, two samples at weights 0.25/0.75 with a per-sample param_pred offset of 4.0)",
+      "result": "mean max|a/b-1| = 0.000e+00; std max|a/b-1| = 0.000e+00; dropping the between-sample (mean^2) term: 0.387 relative; weighting the two samples equally: 0.099 relative; std/within_sample - 1 = 0.631 against the test's 0.1 bar"
+    },
+    {
+      "claim": "The fill_between band and the errorbar fallback cannot be separated by counting ax.collections; only the artist type separates them.",
+      "command": "scratchpad/measure_artists.py (intercepts plt.close, renders one 3-point DY record and one 1-point linear record with use_log=True)",
+      "result": "axis 0: 2 collections ['LineCollection', 'FillBetweenPolyCollection'], PolyCollection count 1, xscale linear, title 'dy_table [DY]  chi2/n=0.17  n=3'; axis 1: 2 collections ['LineCollection', 'LineCollection'], PolyCollection count 0, xscale log; fig.texts carries the suptitle and the 'DY fit bands use first-order propagation...' footnote"
+    },
+    {
+      "claim": "Every new or strengthened assertion in this file fails under a scoped in-memory mutation of closure_*/plot_datasets.py, with the file's other cases still passing.",
+      "command": "MUT=<name> PYTHONPATH=<scratchpad> OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 venv/bin/python -m pytest tests/test_closure_dy_plotting.py -q -p no:randomly -p mut_plot  (mut_plot.py re-execs closure_*/plot_datasets.py from a mutated source string into a fresh module object's own __dict__ and rebinds it on the parent package before the test module imports it)",
+      "result": "log_guard: 4 failed/73 passed | xf_guard: 8/69 | cons_prefix: 4/73 | cons_source: 4/73 | sort_order: 4/73 | sort_nan: 4/73 | band_between: 4/73 | band_weights: 4/73 | cache_guard: 4/73 | action_accumulate: 4/73 (the two-block cross-check ONLY) | action_mixing: 8/69 | action_dense: 12/65 | band_branch: 1/76 | no_log_scale: 1/76 | footnote: 1/76. In every case the failing test is the one targeted. test_jam_and_nnpdf_plot_datasets_stay_byte_identical reads the on-disk bytes, not inspect.getsource, and passed under all 15 mutations, so no recompile-induced line-offset artefact is present."
+    },
+    {
+      "claim": "FINDING (source, not test): _sample_vectors_and_weights and fit._weights disagree on what a 1-D samples.samples array means, and the caller silently truncates.",
+      "command": "runner._sample_vectors_and_weights(SimpleNamespace(samples=np.array([1.0, 2.0, 3.0]))) plus fit._weights on the same object",
+      "result": "vectors shape (1, 3) -- one sample of three parameters -- while weights is array([0.333, 0.333, 0.333]), three samples of one. _sampled_linear_predictive_band's zip(vectors, weights) then iterates once with weight 1/3, scaling the reported band. Not pinned by any test: which reading is correct is a source decision."
+    },
+    {
+      "claim": "A 1-D .samples silently scaled the reported predictive band. Fixed by rejecting the shape in all four plot_datasets.py copies.",
+      "command": "venv/bin/python: pre-fix _sampled_linear_predictive_band on _sampled_band_model with samples.samples=np.array([1.,2.,3.]) vs the same single vector as a (1,3) row",
+      "result": "accumulated weight 0.3333333333333333 instead of 1.0; mean ratio bad/ok = [0.33333333]*3 exactly; std ratio = [1.2048, 1.3644, 1.0935] (var = w*var + (w - w**2)*mean**2 is not a clean rescaling). Every shipped sampler allocates 2-D: infer/hmc.py:1101, infer/nuts.py:1100 np.empty((n_samples, n_params)); infer/vegas.py:1036 and infer/mcmc.py:383 stack rows; all four spell the zero-parameter case np.zeros((n_samples, 0))."
+    }
+  ],
+  "notes_for_readme": "closure-suite plotting here checks band arithmetic and record assembly, not rendered figure content, and the closure_* DY gradient math duplicates (unverified against) pixel.core.evidence.bilinear_symmetric_action -- see missing test_closure_dy_plotting-M01/M03."
+}

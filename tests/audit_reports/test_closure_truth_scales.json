@@ -1,0 +1,153 @@
+{
+  "file": "tests/test_closure_truth_scales.py",
+  "area": "closure-suite",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "closure_JAM_truth/pdf_guidance.py (jam_truth_curves, dump_jam, project_basis)",
+    "closure_JAM_truth/generate.py (ensemble_curves, _ensemble_cache_path)",
+    "closure_JAM_truth/config.py (TRUTH_Q_CHOICES, ALL_FIELDS, JAM_QMIN, FIXED_TRUTH_MEMBER, REFERENCE_DIR)",
+    "closure_JAM_truth_small/pdf_guidance.py, generate.py, config.py (same symbols)",
+    "closure_NNPDF_truth/pdf_guidance.py (nnpdf_truth_curves, dump_nnpdf, project_basis)",
+    "closure_NNPDF_truth/generate.py (ensemble_curves, _ensemble_cache_path)",
+    "closure_NNPDF_truth/config.py (TRUTH_Q_CHOICES, ALL_FIELDS, NNPDF_QMIN)",
+    "closure_NNPDF_truth_small/pdf_guidance.py, generate.py, config.py (same symbols)"
+  ],
+  "drives_non_pixel": "This file imports nothing from pixel. It drives the four closure_*_truth*/ driver packages exclusively: pdf_guidance.py's LHAPDF-scale-to-truth-curve step and generate.py's replica-ensemble cache. No pixel/src code executes anywhere in this file (dump_jam/dump_nnpdf, the only functions that would touch LHAPDF, are monkeypatched out in every test).",
+  "n_tests": 5,
+  "n_parametrized_cases": 22,
+  "tests": [
+    {
+      "name": "test_truth_curves_use_requested_scale_without_qmin_clamp",
+      "line": 108,
+      "claim": "jam_truth_curves/nnpdf_truth_curves use the requested Q without clamping to the LHAPDF set's advertised QMin, across 6 cases (full/small JAM at q_key=\"1\"; full/small NNPDF at q_key=\"1\" and \"mc\").",
+      "actual": "With dump_jam/dump_nnpdf monkeypatched to a recording fake, checks: the real q forwarded to the dumper equals cfg.TRUTH_Q_CHOICES[q_key] unclamped; nodes pass through unchanged; curves' key SET equals cfg.ALL_FIELDS (values never checked); meta['q_original']/['q_effective'] equal the unclamped q; meta['below_set_qmin'] is True (true for all 6 chosen cases, never False); 'clamped_to_qmin' is absent from meta; guidance has no clamp_scale attribute. jam_truth_curves/nnpdf_truth_curves and project_basis run for real; only the LHAPDF-shelling function is mocked.",
+      "how": "Monkeypatch replaces exactly the one function that calls subprocess; everything downstream (meta construction, project_basis) executes as shipped.",
+      "oracle": "A3",
+      "bar": "exact == on the scale/meta fields (no float tolerance); pytest.approx with library defaults (rel=1e-6, abs=1e-12) only on the untransformed `nodes` array, used as a float-safety net for an identity, not a physics tolerance",
+      "strength": "S3",
+      "catches": "Reintroduction of the clamp_scale helper removed in commit 6c5857b (confirmed via git log -p -S\"clamp_scale\"), which silently substituted Q -> QMin for any requested scale below the set's advertised minimum and mislabeled the result under a clamped_to_qmin key. Three independent assertions would each catch it on their own (the recorded q, meta['q_effective'], and the hasattr check). Does not check project_basis's flavor-combination arithmetic (only its key set), and never exercises below_set_qmin's False branch or the QMin-is-None guard."
+    },
+    {
+      "name": "test_ensemble_cache_rejects_old_clamped_scale",
+      "line": 187,
+      "claim": "The on-disk replica-ensemble cache correctly rejects (does not trust) a cache file whose recorded q_effective matches the old clamp_scale-era output rather than the actually-requested scale, across 4 cases (full/small JAM, full/small NNPDF).",
+      "actual": "Writes an adversarial .npz cache to a monkeypatched cfg.REFERENCE_DIR with q_effective = the set's QMin (standing in for the pre-fix clamp_scale output) while node array and member count exactly match the live call -- isolating q_effective as the one mismatching field. Calls generate.ensemble_curves with guidance.<curves_name> mocked to a distinguishable fresh stub (returns np.ones + correct meta, vs. the cached np.zeros). Asserts the stub was called exactly once with the right (q_key, member) -- proving the cache was not used at all -- that curves[cfg.ALL_FIELDS[0]] equals the fresh np.ones (not the cached np.zeros), and that meta['q_effective'] is the corrected value.",
+      "how": "Real cache-validity gate in generate.py (closure_JAM_truth/generate.py:356-373, byte-identical logic in the other three driver modules at their own offsets); only the underlying truth-curve function is mocked.",
+      "oracle": "A3",
+      "bar": "exact == on the call record and on the 0-vs-1 sentinel arrays; pytest.approx with library defaults only on the ones sentinel",
+      "strength": "S3",
+      "catches": "A cache-validity check that stops comparing q_effective (e.g. keying acceptance only on node count and member count), which would silently serve a cache written under any past or future scale bug, including the specific clamp_scale bug fixed in commit 6c5857b. Does not check that a VALID (matching) cache is ever accepted -- so the full-suite-only legacy-key migration on a cache hit (generate.py:369-372, popping a stale truth_kind key in favour of uncertainty_kind) is never exercised anywhere in the suite. Checks only cfg.ALL_FIELDS[0], and the mock returns identical content for every field, so a bug that mixed up which stacked replica array lands under which field key would pass silently -- filed as weakness 01."
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_closure_truth_scales-01",
+      "test": "test_ensemble_cache_rejects_old_clamped_scale",
+      "pattern": "W-LOOSE",
+      "severity": "S2",
+      "evidence": "RESOLVED 2026-08-13 by test_ensemble_cache_rejects_old_clamped_scale (same test, strengthened). The recompute mock now returns a distinct value per field (100 + index) instead of np.ones for all nine, and the test asserts set(curves) == set(cfg.ALL_FIELDS) plus every field's values at rel=1e-12. Acceptance: rotating the field keys by one in ensemble_curves -- in BOTH the fresh-compute and the cache-hit dict comprehensions -- makes it fail; the pre-fix body, extracted verbatim into a standalone module and run under the identical mutation, PASSES (1 passed), so the blindness was measured rather than argued. tests/test_closure_truth_scales.py:250 checks only curves[cfg.ALL_FIELDS[0]]; the mock at :237 (`curves = {field: np.ones(nodes.size) for field in cfg.ALL_FIELDS}`) returns bit-identical content for all 9 fields, so nothing in this test can distinguish per-field content from a per-field mixup.",
+      "why_it_matters": "A specific plausible bug in closure_JAM_truth/generate.py:375-381 (or the identical logic in the other 3 modules) -- e.g. `curves = {f: np.asarray(stacks[f]) for f in cfg.ALL_FIELDS[:1]}` silently dropping 8 of 9 fields, or a permuted field-to-stack assignment -- would still pass every assertion in this test, because field 0 is the only one inspected and every field's expected value is identical by construction of the mock.",
+      "proposed_fix": "Give each field distinct content in the mock (e.g. an index-keyed value per field) and assert `set(curves) == set(cfg.ALL_FIELDS)` plus at least one non-first field's values.",
+      "effort": "S"
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_closure_truth_scales-M01",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_project_basis_builds_the_su4_flavor_combinations. Oracle: A1 -- the standard SU(4) definitions evaluated by hand on a fixture and written out as literal integers, so a coefficient change in project_basis cannot propagate into the expectation. Fixture chosen non-degenerate: (g,u,ubar,d,dbar,s,sbar,c,cbar) = (23,11,3,7,5,13,2,17,19) gives outputs 2, -4, 77, -67, 23, 6, -12, 19, 27, pairwise distinct in magnitude, so no swap or sign flip lands on another output's value; the second row is the first scaled by -2, which catches a row/column transposition. Acceptance: flipping T8's strange coefficient (up+dp-2sp -> up+dp+2sp) fails it (4 failed, 18 passed); nothing else in the file notices. Assert project_basis's flavor-combination arithmetic against hand-computed values",
+      "rationale": "project_basis (closure_{JAM,NNPDF}_truth{,_small}/pdf_guidance.py:132-154, identical in all four modules) computes t3=up-dp, t8=up+dp-2sp, sigma=up+dp+sp+cp, t15=up+dp+sp-3cp, g=g, and the four C-odd valence combinations from raw per-flavor xf columns. test_closure_truth_scales.py exercises this function for real in both tests (the fake dump feeds it real column data) but never inspects curves' VALUES, only its key set. A wrong sign or coefficient in any of the 9 combinations would pass both existing tests silently.",
+      "proposed_oracle": "A1",
+      "proposed_location": "tests/test_closure_truth_scales.py",
+      "searched": [
+        "grep -in \"project_basis\" $AUDIT/test_index.txt -> 0 hits",
+        "grep -rln \"project_basis\" tests/test_*.py -> 0 files",
+        "grep -rn \"up - dp|um - dm|xf(x,Q)\" tests/test_*.py -> 0 hits",
+        "grep -i \"project_basis\" $AUDIT/missing_running.tsv -> empty"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_truth_scales-M02",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_truth_curves_report_a_scale_above_the_set_minimum. Oracle: A3 -- the comparison is re-derived in the test from cfg.TRUTH_Q_CHOICES and the set's own QMin (both off the vendored .info), and the case's premise (requested_q > QMin) is asserted before the flag is read. Cases: JAM 'mc' = 1.28 > 1.14 and NNPDF '2' = 2.0 > 1.65, full and small. The QMin-is-None guard is driven by monkeypatching the constant to None and checking the flag comes back False rather than None or an exception. Acceptance: hardcoding 'below_set_qmin': True fails only this test (4 failed, 18 passed). Cover below_set_qmin's False branch and the QMin-is-None guard",
+      "rationale": "Every q_key actually used by TRUTH_SCALE_CASES sits below that config's QMin (measured: JAM QMin=1.14 GeV, NNPDF QMin=1.65 GeV, both read directly from the vendored lhapdf/*.tar.gz .info members), so meta['below_set_qmin'] is asserted True in all 6 cases and never False. JAM's own untested q_key='mc' (Q=1.28) sits ABOVE JAM's QMin=1.14 and would naturally give False; TRUTH_Q_CHOICES' '2'..'5' entries do too for both sets. The `cfg.JAM_QMIN is not None` guard clause is also unexercised (would need `monkeypatch.setattr(cfg, \"JAM_QMIN\", None)` to hit, simulating an absent LHAPDF set).",
+      "proposed_oracle": "A3",
+      "proposed_location": "tests/test_closure_truth_scales.py",
+      "searched": [
+        "grep -in \"below_set_qmin|qmin_clamp\" $AUDIT/test_index.txt -> only this file's own 2 defs",
+        "grep -rln \"below_set_qmin\" tests/test_*.py -> only tests/test_closure_truth_scales.py",
+        "grep -rn \"q_effective|QMIN\" tests/test_*.py -> only this file's own lines",
+        "grep -i \"qmin\" $AUDIT/missing_running.tsv -> empty"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_truth_scales-M03",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_ensemble_cache_accepts_a_matching_scale_and_migrates_legacy_meta. Oracle: A3, mirroring its reject-side sibling -- the cache is written by the test with q_effective equal to what the live request computes and a per-field sentinel row, and the recompute stub RAISES, so any miss fails loudly. The full-suite legacy migration (truth_kind -> uncertainty_kind, generate.py:369-372) is asserted on the full suites and its absence asserted on the _small ones. Acceptance: two mutations -- disabling the cache-accept gate entirely, and dropping the cached_meta.pop('truth_kind') line -- each fail only this test (4 failed / 2 failed). Exercise a valid ensemble-cache hit, including the full-suite legacy-key migration",
+      "rationale": "test_ensemble_cache_rejects_old_clamped_scale only ever constructs a cache whose q_effective mismatches the live request, so ensemble_curves always takes the recompute branch. The ACCEPT branch (closure_JAM_truth/generate.py:356-368, identical in the other 3 modules) is never reached by any test, including its call-avoidance behavior (no call to guidance.<curves_name> at all on a hit). For the two full-suite modules specifically, the accept branch also runs a legacy-format migration (generate.py:369-372: `cached_meta.pop(\"truth_kind\", None); cached_meta[\"uncertainty_kind\"] = ...`) that exists precisely to normalize a cache written before the truth_kind->uncertainty_kind rename -- this is dead code from the test suite's perspective.",
+      "proposed_oracle": "A3",
+      "proposed_location": "tests/test_closure_truth_scales.py",
+      "searched": [
+        "grep -in \"ensemble_cache|cache_hit|cache_accept|legacy_cache\" $AUDIT/test_index.txt -> only unrelated hits (test_cache_provenance.py, test_kernel_cache.py) plus this file's own reject test",
+        "grep -rln \"uncertainty_kind|cached_meta\" tests/test_*.py -> 0 files",
+        "grep -rn \"cache.*hit|cache_valid|accepts.*cache\" tests/test_*.py -> hits only in test_cache_provenance.py/test_kernel_cache.py/test_contour_hmc_mass_comparison.py, all about the unrelated pixel.kernels cache",
+        "grep -i \"ensemble_cache|uncertainty_kind|cache_hit\" $AUDIT/missing_running.tsv -> empty"
+      ],
+      "effort": "M"
+    }
+  ],
+  "unjustified_tolerances": [
+    {
+      "line": 144,
+      "text": "assert calls[0][0] == pytest.approx(nodes)",
+      "quantity": "the x-node array as forwarded to the (mocked) LHAPDF dumper, compared to the array passed in",
+      "comment_added": "`pytest.approx` here is a float-safety net for an exact passthrough (`nodes` is never transformed before reaching the dumper), not a physics tolerance; default rel=1e-6/abs=1e-12 is far tighter than any plausible transformation bug.",
+      "provenance": "known -- library default (rel=1e-6, abs=1e-12); the compared quantity is an identity, not a converged numerical result, so no accuracy floor applies"
+    },
+    {
+      "line": 250,
+      "text": "assert curves[cfg.ALL_FIELDS[0]] == pytest.approx(np.ones((1, nodes.size)))",
+      "quantity": "the recomputed field-0 curve, compared to the mock's hardcoded np.ones sentinel",
+      "comment_added": "Fresh `1`s, not the cached `0`s: the returned payload came from recomputation.",
+      "provenance": "known -- library default; the expected value is a sentinel constant defined two lines above in the same test, not a physics result"
+    }
+  ],
+  "measurements": [
+    {
+      "claim": "JAM24_PDF_proton_nlo's advertised QMin (read from the vendored tarball, the same file closure_JAM_truth/config.py's JAM_SET_INFO reads) is 1.14 GeV",
+      "command": "tar -xzOf closure_JAM_truth/lhapdf/JAM24_PDF_proton_nlo.tar.gz JAM24_PDF_proton_nlo/JAM24_PDF_proton_nlo.info | grep -i qmin",
+      "result": "QMin:            1.14e+00"
+    },
+    {
+      "claim": "NNPDF40_nnlo_as_01180_1000's advertised QMin (read from the vendored tarball) is 1.65 GeV",
+      "command": "tar -xzOf closure_NNPDF_truth/lhapdf/NNPDF40_nnlo_as_01180_1000.tar.gz NNPDF40_nnlo_as_01180_1000/NNPDF40_nnlo_as_01180_1000.info | grep -i qmin",
+      "result": "QMin: 1.6500000e+00"
+    },
+    {
+      "claim": "Every q_key this file's TRUTH_SCALE_CASES actually uses (JAM q=1.0; NNPDF q=1.0 and q=1.28) is below that config's own QMin, while JAM's untested q_key='mc' (q=1.28) sits above JAM's QMin -- confirming the below_set_qmin=False branch is reachable via an existing TRUTH_Q_CHOICES entry but never selected by this file's parametrization",
+      "command": "python3 -c \"jam_qmin=1.14; nnpdf_qmin=1.65; mc=1.28\\nprint('JAM mc above QMin:', mc>jam_qmin); print('NNPDF mc above QMin:', mc>nnpdf_qmin)\\nfor q in [1.0,2.0,3.0,4.0,5.0]: print(q,'JAM below:',q<jam_qmin,'NNPDF below:',q<nnpdf_qmin)\"",
+      "result": "JAM mc above QMin: True (below_set_qmin would be False); NNPDF mc above QMin: False (stays True); q=1.0 below both; q=2.0..5.0 above both QMins for both sets"
+    },
+    {
+      "date": "2026-08-13",
+      "what": "QMin values and the sign of each parametrized case",
+      "result": {
+        "JAM_QMIN": 1.14,
+        "NNPDF_QMIN": 1.65,
+        "TRUTH_Q_CHOICES": {
+          "mc": 1.28,
+          "1": 1.0,
+          "2": 2.0,
+          "3": 3.0,
+          "4": 4.0,
+          "5": 5.0
+        },
+        "note": "JAM 'mc' (1.28) is above JAM's QMin but below NNPDF's, which is why the False-branch cases are JAM 'mc' and NNPDF '2'"
+      }
+    }
+  ],
+  "notes_for_readme": "Pure metadata/cache-flow regression tests (LHAPDF calls always mocked); incidentally documents that the full and _small closure suites build the truth by genuinely different methods (fixed member vs. ensemble mean) though ensemble_curves's code is shared."
+}

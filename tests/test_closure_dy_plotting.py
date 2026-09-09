@@ -100,12 +100,24 @@ RUNNERS = (nnpdf_full, nnpdf_small)
 
 
 def _blocks(operator, *, scale=None, linear_rows=0):
-    """Minimal stand-in for ``EvidenceBlocks``, carrying only the fields
-    ``_bilinear_predictive_band``/``_bilinear_symmetric_action`` read.
+    """A real ``EvidenceBlocks`` carrying one bilinear operator.
+
+    Built as the real NamedTuple rather than a ``SimpleNamespace`` stand-in, for
+    the same reason ``_two_block_bilinear_blocks`` below is: a hand-listed
+    stand-in silently goes stale the moment ``EvidenceBlocks`` grows a field that
+    the code under test reads.  It did -- ``bilinear_offset``/``bilinear_B`` (the
+    constant and linear parts of a *quadratic* prediction) were added for the DVCS
+    case, ``evidence._quadratic_parts`` reads both unconditionally, and every test
+    through this helper failed with ``AttributeError: 'types.SimpleNamespace'
+    object has no attribute 'bilinear_offset'``.  The NamedTuple supplies its own
+    defaults for anything not named here, so a future field cannot repeat that.
     """
-    return SimpleNamespace(
-        g=np.zeros(4),
+    return EvidenceBlocks(
+        M=np.zeros(linear_rows),
+        C=np.zeros((linear_rows, linear_rows)),
         B=np.zeros((linear_rows, 4)),
+        g=np.zeros(4),
+        K=np.eye(4),
         param_pred=np.zeros(linear_rows),
         bilinear_Y=operator,
         bilinear_M=np.zeros(2),
@@ -176,7 +188,14 @@ def test_dense_dy_band_uses_quadratic_mean_and_delta_variance(runner):
             [[0.0, 1.0], [1.0, 0.0]],
         ]
     )
-    blocks = SimpleNamespace(
+    # Real ``EvidenceBlocks``, not a hand-listed stand-in -- see ``_blocks``.
+    blocks = EvidenceBlocks(
+        M=np.zeros(0),
+        C=np.zeros((0, 0)),
+        B=np.zeros((0, 2)),
+        g=np.zeros(2),
+        K=np.eye(2),
+        param_pred=np.zeros(0),
         bilinear_Y=operator,
         bilinear_M=np.zeros(2),
         bilinear_active_indices=None,
@@ -566,9 +585,13 @@ def _linear_only_result(runner, datasets, monkeypatch, *, n_grid=2):
     its stored-moments branch without adding any DY rows.
     """
     rows = sum(int(dataset.n_data) for dataset in datasets)
-    blocks = SimpleNamespace(
-        g=np.zeros(n_grid),
+    # Real ``EvidenceBlocks``, not a hand-listed stand-in -- see ``_blocks``.
+    blocks = EvidenceBlocks(
+        M=np.zeros(rows),
+        C=np.zeros((rows, rows)),
         B=np.zeros((rows, n_grid)),
+        g=np.zeros(n_grid),
+        K=np.eye(n_grid),
         param_pred=np.zeros(rows),
         bilinear_Y=np.zeros((0, n_grid, n_grid)),
         bilinear_M=np.zeros(0),

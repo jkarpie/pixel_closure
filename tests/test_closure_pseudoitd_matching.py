@@ -52,7 +52,7 @@ The physics oracles are deliberately layered:
 The grid used for the direct ``EvolvedPseudoITD`` construction
 (``test_matching_changes_the_operator_it_is_applied_to``) is deliberately tiny
 (9 points): only a nonzero-difference sanity check is wanted there, not an
-accuracy measurement.  The production grid (128 points, cubic-spline
+accuracy measurement.  The production grid (146 points, piecewise-quintic
 elements) is ``closure_JAM_truth.config.make_grid``/``closure_NNPDF_truth.
 config.make_grid``, exercised by the parametrized closure-wiring tests via
 ``_lattice_fixture``.
@@ -76,6 +76,7 @@ from pixel.kernels.matching import (
     VariableQ2MatchingMatrix,
     _pseudoitd_nlo_moments,
 )
+from pixel.kernels.evolution.contour import adaptive_contour
 from pixel.kernels.pqcd import MellinContour
 from pixel.kernels.pseudoitd_matching import (
     CA,
@@ -722,7 +723,18 @@ def test_evolved_pseudoitd_refuses_a_grid_with_a_node_at_the_origin():
         order="LO",
         channel="minus",
         matching=False,
-        contour=MellinContour(c=0.8, zmax=8.0, panel=2.0, npts=16),
+        # Built by PIXEL's own sizing rule rather than hand-numbered.  The
+        # hand-built ``MellinContour(c=0.8, zmax=8.0, panel=2.0, npts=16)`` this
+        # replaces predated ``validate_vertical_contour``'s resolution bar and
+        # stopped satisfying it (``x_min=0.001, c=0.8`` requires
+        # ``panel <= 0.275053``; it supplied ``panel=2``), so the *control* leg
+        # raised on the contour instead of returning a finite matrix.  Dropping
+        # in the then-current number would only requeue the same break for the
+        # next tightening; ``adaptive_contour`` is the builder the validator
+        # accepts by construction.  Both bases share their positive nodes, so
+        # both legs get the same contour, and the origin guard under test still
+        # fires ahead of any contour check.
+        contour=adaptive_contour(without_origin),
     )
     with pytest.raises(ValueError, match="node at x=0"):
         EvolvedPseudoITD(**shared).base_matrix(nu, with_origin)

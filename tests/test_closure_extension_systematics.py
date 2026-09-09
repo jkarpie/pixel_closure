@@ -521,8 +521,28 @@ def test_real_vanishes_at_nu0_imag_vanishes_at_nu0(
         real_kernel_row = np.asarray(real_k.matrix(np.array([0.0]), basis)).reshape(-1)
         real_ind_row = independent_row(alpha, gamma)
         ratio = np.abs(real_ind_row / real_kernel_row - 1.0)
-        # cols >= 1: 1.16e-14 (alpha=-1) / 1.31e-14 (alpha=0), measured.
-        assert np.max(ratio[1:]) < 1e-12, f"{field} cols>=1 {np.max(ratio[1:]):.3e}"
+        # cols >= 1 are compared **relative to the row's own scale**, not entrywise.
+        #
+        # Entrywise ``|ind/kernel - 1|`` is not a well-posed metric here, and the
+        # basis decides whether that shows: a quintic Lagrange element has negative
+        # lobes, so the pw5 moment row passes through zero (measured on the shipped
+        # 146-node pw5 grid, ``sigma``: 14 negative and 7 near-zero entries, against
+        # 0 and 0 for the old 128-node cubic_spline).  Dividing by a near-zero entry
+        # manufactures a large ratio out of nothing -- ``sigma`` col 28
+        # (``x = 8.8e-05``) reads 2.67e-11 entrywise while the two quadratures differ
+        # there by 1.7e-19 *absolute*, against a row max of 1.7e-02.
+        #
+        # Scaled, the claim the test actually makes -- two independent quadratures of
+        # the same integral agree -- is unchanged and in fact tighter under pw5.
+        # Measured 2026-09-09, worst over all nine fields:
+        #
+        #     146 pw5           7.52e-15
+        #     128 cubic_spline  1.15e-14
+        #
+        # Bar 1e-13, ~13x above the worse of the two.
+        row_scale = np.max(np.abs(real_kernel_row))
+        scaled = np.abs(real_ind_row - real_kernel_row)[1:] / row_scale
+        assert np.max(scaled) < 1e-13, f"{field} cols>=1 {np.max(scaled):.3e}"
         # col 0 is the low-x head: exact for the alpha=0 closed form (4.4e-16),
         # 8.56e-04 off for the alpha=-1 quadrature fallback -- see
         # test_nulled_counting_moment for the direct measurement of that error, and

@@ -1,0 +1,283 @@
+{
+  "file": "tests/test_closure_prior_ties.py",
+  "area": "closure-suite",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "closure_JAM_truth/fit.py (_gp_prior, build_analysis)",
+    "closure_JAM_truth/config.py",
+    "closure_NNPDF_truth/fit.py (_gp_prior, build_analysis)",
+    "closure_NNPDF_truth/config.py",
+    "closure_JAM_truth_small/fit.py (_gp_prior, build_analysis)",
+    "closure_JAM_truth_small/config.py",
+    "closure_NNPDF_truth_small/fit.py (_gp_prior, build_analysis)",
+    "closure_NNPDF_truth_small/config.py",
+    "src/pixel/api/analysis.py (Analysis.tie, Analysis.prior_params)",
+    "src/pixel/core/model.py (Model.tie, Model.__init__, Model.parameter_table, Model.apply_parameter_overrides, Model.n_free)",
+    "src/pixel/core/params.py (normalize_ties, apply_ties, ravel, LogNormal.neg2_logpdf)",
+    "src/pixel/priors/means.py (Const)",
+    "src/pixel/priors/covariances.py (LogRBF)",
+    "src/pixel/priors/prior.py (GaussianProcess)"
+  ],
+  "drives_non_pixel": "This file's own imports are closure_NNPDF_truth.fit / closure_JAM_truth_small.fit / closure_NNPDF_truth_small.fit (plus jax.numpy/numpy/pytest; closure_JAM_truth.fit was imported too until the 2026-08-14 SUITES trim) -- no direct 'import pixel' anywhere in the file. Those four fit.py modules are what import pixel.api.analysis / pixel.core.model / pixel.core.params / pixel.priors, and it is that machinery (Analysis.tie, Model.tie, normalize_ties, apply_ties, parameter_table) this file actually exercises, reached only through each suite's _gp_prior/build_analysis rather than imported directly. Treated as pixel-adjacent, not purely non-pixel.",
+  "n_tests": 11,
+  "n_parametrized_cases": 43,
+  "tests": [
+    {
+      "name": "test_one_amplitude_drives_both_mean_and_sigma",
+      "line": 58,
+      "claim": "One amplitude drives both the prior mean and the kernel sigma.",
+      "actual": "Checks cfg.gp_mean(name)==cfg.gp_sigma(name)==cfg.gp_amplitude(name) (both gp_mean/gp_sigma are literally 'return gp_amplitude(field)', config.py:904-911) and that four retired constants (GP_MEAN_HIGH etc.) are absent.",
+      "how": "Pure cfg-level function calls; never touches _gp_prior, Parameter, or analysis.tie.",
+      "oracle": "A3",
+      "bar": "exact equality (==); hasattr guard",
+      "strength": "W1",
+      "catches": "Reintroduction of the pre-tie four-separate-constants layout (hasattr loop). Catches nothing about _gp_prior's actual construction: repo-wide grep finds gp_mean/gp_sigma have no caller anywhere except config.py's own definitions and this test -- _gp_prior (fit.py:122) calls cfg.gp_amplitude directly."
+    },
+    {
+      "name": "test_high_tier_is_singlet_gluon_charm",
+      "line": 86,
+      "claim": "The high-amplitude tier is exactly {sigma, g, t15}; 9 fields total.",
+      "actual": "Computes the set of fields where gp_amplitude(n)==GP_AMPLITUDE_HIGH and compares to a hardcoded set; checks len(ALL_FIELDS)==9.",
+      "how": "cfg-level only; the expected set is the tier list documented in config.py's own HIGH_PRIOR_FIELDS comment.",
+      "oracle": "D1",
+      "bar": "exact set/count equality (==)",
+      "strength": "S3",
+      "catches": "HIGH_PRIOR_FIELDS gaining/losing a field, or ALL_FIELDS changing count. Says nothing about whether 5.0/1.0 are the physically right amplitudes."
+    },
+    {
+      "name": "test_gp_prior_starts_at_a_plus_minus_a",
+      "line": 105,
+      "claim": "The GP prior built by _gp_prior starts at a +- a (mean == sd == amplitude).",
+      "actual": "Builds prior = suite._gp_prior(name) directly (never calls build_analysis/analysis.tie) and checks prior_mean(nodes)==amplitude and sqrt(diag(prior_cov(nodes)))==amplitude, both read once, at construction.",
+      "how": "mean and sd both trace to the single cfg.gp_amplitude(name) call inside _gp_prior (fit.py:122-135); no tie is ever attached in this code path.",
+      "oracle": "A3",
+      "bar": "rtol 1e-12 (mean), rtol 1e-9 (sd)",
+      "strength": "W1",
+      "catches": "A transcription bug where _gp_prior passes different values to Const vs LogRBF's sigma. Catches nothing about a missing or broken analysis.tie: demonstrated by mutation (see measurements) that these exact assertions pass unchanged when the tie is never attached at all; test_build_ties_mean_to_sigma below is the test that actually would catch that."
+    },
+    {
+      "name": "test_build_ties_mean_to_sigma",
+      "line": 145,
+      "claim": "analysis.tie(mean.N, to=cov.sigma), as wired into build_analysis, actually keeps mean following sigma.",
+      "actual": "Builds a real Model via build_analysis; checks len(model.ties)==9 and n_free==0; for each field checks parameter_table()'s tied_to string, then calls apply_parameter_overrides to set cov.sigma to moved=3.7 (neither tier value) and reads mean/sd back from the rebuilt model's prior, asserting both now read 3.7.",
+      "how": "apply_parameter_overrides reconstructs Model (_with_theta -> __init__), which reruns pixel.core.params.normalize_ties/apply_ties (model.py:1036-1037) -- the same code ravel's rebuild runs under jit/grad. This is a real post-move readback, not a construction-time coincidence.",
+      "oracle": "A3",
+      "bar": "rtol 1e-12 (mean), rtol 1e-9 (sd); exact len()/== on ties/n_free",
+      "strength": "S3",
+      "catches": "A dropped analysis.tie(...) call (len(model.ties) would be 0), a tie declared to the wrong source/target, or apply_ties/normalize_ties failing to propagate a moved value through a full Model rebuild. Confirmed by source reading of Model.__init__ (ties defaults to (), no identity-based auto-tie-detection exists) that a dropped tie call is caught here, not silently passed."
+    },
+    {
+      "name": "test_nuisance_fields_are_not_tied",
+      "line": 195,
+      "claim": "Lattice-systematic nuisance fields are never tied; their zero-mean prior has no mean parameter to tie.",
+      "actual": "Builds a real Model via build_analysis(mode='lattice'); for every model field not in cfg.ALL_FIELDS, checks no tied_to selector starts with its prefix and no prior.mean selector exists for it. Skips entirely if the suite registers zero nuisance fields.",
+      "how": "Structural key-set membership over model.parameter_table().",
+      "oracle": "F1",
+      "bar": "exact membership/prefix check; skip if no nuisance fields",
+      "strength": "S3",
+      "catches": "The physical-field tie loop in build_analysis over-matching a nuisance selector, or _nuisance_prior's Zero mean growing an accidental Parameter. 2 of 4 parametrized suites (small_jam, small_nnpdf) always pytest.skip: neither _small config.py defines nuisance_specs, confirmed by grep, so only full_jam/full_nnpdf run real assertions here."
+    },
+    {
+      "name": "test_prior_stays_fully_fixed",
+      "line": 229,
+      "claim": "The tie does not add a sampled hyper-parameter; the prior is fully fixed.",
+      "actual": "Asserts suite.cfg.N_HYPERPARAMS==0 and suite.cfg.FROZEN_COV_PARAMS==('sigma','length','x_reg'). No Model is built.",
+      "how": "Two literal comparisons against cfg constants; N_HYPERPARAMS reduces to 0 unconditionally whenever GP_AMPLITUDE_FREE is False, by the ternary that defines it.",
+      "oracle": "F1",
+      "bar": "exact equality (==) on two cfg constants",
+      "strength": "S3",
+      "catches": "A new cov parameter added without extending FROZEN_COV_PARAMS, or GP_AMPLITUDE_FREE's default flipped without updating the derived count. Declaration-only: test_build_ties_mean_to_sigma's model.n_free==0 is the corresponding outcome check on a real compiled model."
+    },
+    {
+      "name": "test_amplitude_is_frozen_and_unpenalised_by_default",
+      "line": 251,
+      "claim": "By default the tied amplitude is frozen and carries no hyper-prior, so the evidence is unshifted.",
+      "actual": "Calls suite._gp_prior(name).cov.sigma directly (bypasses build_analysis) and checks .frozen is True, .prior is None, .bounds == (GP_AMPLITUDE_FLOOR, None).",
+      "how": "Parameter-metadata structural check on _gp_prior's own construction logic, which is appropriately where this property lives (does not need the tie/build_analysis machinery).",
+      "oracle": "F1",
+      "bar": "exact equality/identity checks on Parameter metadata",
+      "strength": "S3",
+      "catches": "_gp_prior losing the frozen=not cfg.GP_AMPLITUDE_FREE / prior=cfg.gp_amplitude_prior(field) wiring for the default (frozen) branch."
+    },
+    {
+      "name": "test_floor_sits_strictly_below_every_starting_amplitude",
+      "line": 275,
+      "claim": "GP_AMPLITUDE_FLOOR sits strictly below every field's starting amplitude, so the inverse-softplus transform stays finite.",
+      "actual": "Checks 0.9 < GP_AMPLITUDE_FLOOR < 1.0, and per field that gp_amplitude(name) > GP_AMPLITUDE_FLOOR and that the closed-form inv_softplus(offset) is finite.",
+      "how": "inv_softplus(offset) = offset + log(-expm1(-offset)) is finite iff offset > 0 exactly, a closed-form numerical fact, evaluated directly.",
+      "oracle": "A1",
+      "bar": "0.9 < FLOOR < 1.0 (literal range); np.isfinite",
+      "strength": "S3",
+      "catches": "GP_AMPLITUDE_FLOOR set at or above GP_AMPLITUDE_LOW (1.0), which sends eta to -inf for the low tier under the sampler's transform. The 0.9 lower literal itself is an unmeasured sanity range, not a derived bound."
+    },
+    {
+      "name": "test_floating_attaches_the_floor_and_a_centred_hyper_prior",
+      "line": 301,
+      "claim": "Floating GP_AMPLITUDE_FREE attaches the floor and a hyper-prior centred on each field's own tier value.",
+      "actual": "monkeypatches GP_AMPLITUDE_FREE=True; per field checks sigma.frozen is False, bounds unchanged, prior is not None, and neg2_logpdf at the tier value is below neg2_logpdf at 10x/0.1x; sums neg2_logpdf at centre over all 9 fields and checks the total against a hardcoded 13.7209.",
+      "how": "Structural (frozen/bounds/prior-not-None) + shape (centred-minimum ordering, true for any centred LogNormal at this sigma, so it mainly confirms log_center is per-field) + closed-form total.",
+      "oracle": "F1",
+      "bar": "strict < ordering; pytest.approx(13.7209, rel=1e-4)",
+      "strength": "S3",
+      "catches": "log_center hardcoded to one tier instead of math.log(gp_amplitude(field)) (caught by the centred-minimum check, A2) or GP_AMPLITUDE_PRIOR_SIGMA changed without updating the literal (caught by the A1 total, independently verified against pixel.core.params.LogNormal.neg2_logpdf to 2.05e-06 relative -- see measurements). Weakest load-bearing part is the plain structural trio, hence F1/S3 as the primary code; the total is the strongest part of this test and is A1-grade."
+    },
+    {
+      "name": "test_prior_and_accessors_all_follow_one_patched_amplitude",
+      "line": 142,
+      "claim": "cfg.gp_amplitude is the single source: patch it and both accessors AND the built prior follow it, per field.",
+      "actual": "monkeypatches cfg.gp_amplitude to nine DISTINCT per-field probe values (2.5 + 0.37*i, asserted distinct from each other, from GP_AMPLITUDE_HIGH/LOW, and above GP_AMPLITUDE_FLOOR), then requires cfg.gp_mean(name), cfg.gp_sigma(name), float(_gp_prior(name).mean.N.value) and float(_gp_prior(name).cov.sigma.value) all to equal that field's probe EXACTLY.",
+      "how": "One patched source, four exact == per field. Separates DELEGATION from a hand-copied tier table (which every other check in the file accepts), pins that _gp_prior reads the accessor at call time rather than an import-time snapshot, and breaks the file's tier degeneracy -- gp_amplitude returns only 2 distinct values over 9 fields, so a within-tier cross-wire is invisible to every other test here.",
+      "oracle": "A3",
+      "bar": "exact ==; probe non-degeneracy asserted, not assumed",
+      "strength": "S2",
+      "catches": "gp_mean/gp_sigma re-implementing the tier table instead of delegating to gp_amplitude (mutation gp_mean_duplicates_tier_table); _gp_prior inlining the tier table or snapshotting it at import instead of calling cfg.gp_amplitude (mutation gp_prior_inlines_tier_table); _gp_prior(name) reading another same-tier field's amplitude. Does NOT establish that gp_mean/gp_sigma have any production caller -- they have none; see weakness -02."
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_closure_prior_ties-01",
+      "test": "test_one_amplitude_drives_both_mean_and_sigma",
+      "pattern": "W-TAUT",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_one_amplitude_drives_both_mean_and_sigma. The two alias comparisons are kept (they still fail an alias hand-edit) but are no longer the whole check: the test now also requires the values that actually reach priors.Const and priors.LogRBF -- _gp_prior(name).mean.N.value and .cov.sigma.value -- to equal gp_mean(name)/gp_sigma(name) EXACTLY. The accessors therefore describe the prior that is built rather than their own body, and the exact `==` is strictly stronger than any other bar in the file. Acceptance: perturbing only the covariance amplitude in _gp_prior by 1e-11 relative (mut_ties.py MUT=sigma_epsilon, fit.py re-exec'd from mutated source) fails this test alone -- `assert 1.00000000001 == 1.0` at line 100 -- with the file's other 36 cases passing, including test_gp_prior_starts_at_a_plus_minus_a, whose rtol=1e-9 sd bar absorbs that same drift. Note this does not make gp_mean/gp_sigma non-orphaned; see -02. tests/test_closure_prior_ties.py:76-77 (assert cfg.gp_mean(name) == amplitude / assert cfg.gp_sigma(name) == amplitude) against closure_JAM_truth/config.py:904-911 (gp_mean and gp_sigma are each literally 'return gp_amplitude(field)')",
+      "why_it_matters": "Both asserts reduce to gp_amplitude(name) == gp_amplitude(name) at the Python level -- calling the same pure function twice under two names can only fail if one alias's body is hand-edited to disagree with the other; there is no implementation of 'the prior' this can catch a bug in.",
+      "proposed_fix": "Documented in the per-test docstring (done, this audit). If the maintainer wants this half of the test to mean something operationally, either make _gp_prior consume gp_mean/gp_sigma instead of gp_amplitude, or retire the two aliases; see weakness -02.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_prior_ties-02",
+      "test": "test_one_amplitude_drives_both_mean_and_sigma, test_prior_and_accessors_all_follow_one_patched_amplitude",
+      "pattern": "W-DEAD",
+      "severity": "S2",
+      "evidence": "PARTIALLY RESOLVED -- STILL OPEN on the source side, re-verified for the third time 2026-08-14 (evening) and NOT closed. The tests/-side half stays closed by test_prior_and_accessors_all_follow_one_patched_amplitude. What is new this pass is that ONE OF THE TWO PROPOSED RESOLUTIONS IS NOW MEASURED TO BE A NON-FIX, so the owner has a decision with one live option rather than two. RE-VERIFICATION, current source, line by line: gp_mean and gp_sigma are each still exactly `return gp_amplitude(field)`, at closure_JAM_truth/config.py:1000-1002 and 1005-1007, closure_NNPDF_truth/config.py:998-1000 and 1003-1005, closure_JAM_truth_small/config.py:717-719 and 722-724, and closure_NNPDF_truth_small/config.py:720-722 and 725-727 -- every line number unchanged from the 2026-08-13 finding. Repo-wide grep (excluding venv/ and the stale worktree at .claude/worktrees/optimistic-snyder-81bd34, which predates the refactor): `gp_amplitude(` has exactly two kinds of caller, fit.py:122 (`value = cfg.gp_amplitude(field)`, identical in all four suites) and each config.py's own gp_amplitude_prior (line 996/994/713/716); `gp_mean(` and `gp_sigma(` have callers ONLY in their own definitions and in tests/test_closure_prior_ties.py. Zero production callers, unchanged. THE NEW MEASUREMENT, which decides between the two options: option (2) -- point fit.py:122 at the accessors -- DOES NOT RESTORE A CONSUMER FOR gp_mean. build_analysis ties the mean to the covariance amplitude (`analysis.tie(params.mean.N, to=params.cov.sigma)`, fit.py:228 in both full suites and fit.py:179 in both _small ones), and a tie DISCARDS the target's declared value at compile time rather than constraining it afterwards. Measured directly (scratchpad/mut_JK/probe_tie_overwrites_mean.py: pixel.Analysis with priors.Const(N=7.0) and priors.RBF(sigma=2.0, length=0.3), then analysis.tie(p.mean.N, to=p.cov.sigma), read back through model.parameter_table()): mean.N = 2.0, cov.sigma = 2.0, tied_to = 'fields.q.prior.cov.sigma', frozen = True -- the declared 7.0 is gone. The same behaviour is already asserted in-repo by tests/test_parameter_ties.py::test_compiled_model_reports_the_tie_and_drops_one_coordinate ('mean.N value == approx(2.0) # inherited from sigma', declared 1.0). CONSEQUENCE: under option (2), cfg.gp_mean(field)'s value would be handed to priors.Const and overwritten before any fit saw it, so gp_mean would gain a CALL SITE and still have no consumer -- strictly worse than today's orphan, because it would read as wired while a gp_mean that drifted from gp_sigma would still change nothing anyone fits. That is the same non-detectability this weakness records. It also sharpens the earlier argument (that option 2 re-creates the two-independent-constants arrangement analysis.tie replaced) from a design objection into a measured one. SO THE SOURCE-SIDE FIX, stated for the owner: DELETE gp_mean and gp_sigma from all four config.py copies at the line ranges above. Collateral, checked: in tests/, drop the two `==` asserts in test_one_amplitude_drives_both_mean_and_sigma (tests/test_closure_prior_ties.py:129-130) and the two in test_prior_and_accessors_all_follow_one_patched_amplitude (:211-212), and re-point that test's `prior.mean.N.value == cfg.gp_mean(name)` / `.cov.sigma.value == cfg.gp_sigma(name)` pair (:135-136) at cfg.gp_amplitude(name); NOTHING OPERATIONAL IS LOST, because both tests' remaining assertions are against _gp_prior's output, and test 11's three claims (delegation aside) -- call-time reading, per-field traceability, and one number reaching both Const and LogRBF -- are all asserted through the built prior rather than through the accessors. Outside tests/, two prose references go stale and should be updated in the same pass: plans/closure_plan.md:307 ('Grouping lives in config.HIGH_PRIOR_FIELDS / gp_mean / gp_sigma') and the gp_mean/gp_sigma columns of the table at plans/lambda_guard_and_doc_defects.md:258-280. No docs consequence: the closure packages are not in the built docs (docs/source/apidoc has no closure_* entry, and no .rst mentions either accessor). The test file's docstring now carries this measurement so the next reader meets it at the assertion rather than in a report. THE ITEM STAYS OPEN: the edit is inside the owner's hold on the closure packages and this agent may not make it. tests/test_closure_prior_ties.py 23 passed in 15.78s before the docstring update and 78 passed in 17.44s together with tests/test_parameter_ties.py after it. PARTIALLY RESOLVED 2026-08-14 -- the tests/-side half is now CLOSED by test_prior_and_accessors_all_follow_one_patched_amplitude (new); the source-side half is RE-CONFIRMED against current source and remains a maintainer edit inside the owner's held closure packages, so this item stays open. RE-VERIFICATION (2026-08-14, current source): gp_mean and gp_sigma are each still exactly `return gp_amplitude(field)`, at closure_JAM_truth/config.py:1000-1002 and 1005-1007, closure_NNPDF_truth/config.py:998-1000 and 1003-1005, closure_JAM_truth_small/config.py:717-719 and 722-724, and closure_NNPDF_truth_small/config.py:720-722 and 725-727. A repo-wide grep for 'gp_amplitude(' finds exactly two kinds of production caller -- fit.py:122 ('value = cfg.gp_amplitude(field)', identical in all four suites) and each config.py's own gp_amplitude_prior -- and neither accessor is called by either. ZERO production callers, unchanged since the 2026-08-13 finding. THE SOURCE-SIDE FIX, stated precisely for the owner: either (1) delete gp_mean and gp_sigma from all four config.py copies at the line ranges above, and drop the two `cfg.gp_mean(name) == amplitude` / `cfg.gp_sigma(name) == amplitude` asserts in test_one_amplitude_drives_both_mean_and_sigma; or (2) change fit.py:122 in all four suites so the mean is built from cfg.gp_mean(field) and the covariance amplitude from cfg.gp_sigma(field) instead of one cfg.gp_amplitude(field) call. Only (2) preserves test 1's assurance level, BUT it also makes the a+-a invariant depend on two accessors agreeing -- the arrangement analysis.tie was introduced here to replace -- so (1) is the better of the two. This audit does not make that call. WHAT THE NEW TEST CLOSES, and it is not cosmetic: every pre-existing check compares cfg.gp_mean(name) to cfg.gp_amplitude(name), i.e. one function called twice under two names, so it passes whether the accessor DELEGATES to gp_amplitude or RE-IMPLEMENTS the tier table by hand and happens to agree today. Those are the same assertion and very different code; the second is a silent second source of truth, which is the arrangement plans/lambda_guard_and_doc_defects.md 5b/5c records going stale twice in these very files. Monkeypatching cfg.gp_amplitude to nine per-field probe values separates them. The same patch also breaks a fixture degeneracy nothing else in this file breaks: gp_amplitude returns only TWO distinct numbers across nine fields (5.0 for sigma/g/t15, 1.0 for the other six), so every other per-field check here is blind to a WITHIN-TIER CROSS-WIRE -- _gp_prior('t3') reading v3's amplitude satisfies test_gp_prior_starts_at_a_plus_minus_a exactly, both being 1.0. Nine distinct probes make each field's prior traceable to its own amplitude, and the patch simultaneously pins that _gp_prior reads the accessor AT CALL TIME rather than closing over an import-time snapshot of the tier constants. ACCEPTANCE: two in-memory mutations (scratchpad/mut_WA/mut_ties_wa.py), each PRESERVING EVERY VALUE the suites produce today and changing only where the value comes from -- so the file's pre-existing assertions all still pass and only the new test can see the difference. (a) gp_mean_duplicates_tier_table: cfg.gp_mean/cfg.gp_sigma replaced in all four suites by a hand-copied 'GP_AMPLITUDE_HIGH if field in HIGH_PRIOR_FIELDS else GP_AMPLITUDE_LOW'. (b) gp_prior_inlines_tier_table: fit._gp_prior rebuilt with that same inlined tier table in place of cfg.gp_amplitude(field), character-identical otherwise. The plugin self-checks both that the attribute changed AND that a probe patch of cfg.gp_amplitude is genuinely no longer followed, so a no-op mutation cannot be recorded as evidence. MEASURED: Both mutations give 4 failed / 39 passed -- ONLY the four test_prior_and_accessors_all_follow_one_patched_amplitude cases fail, and every other test in the file passes, including the three build_analysis tests. gp_prior_inlines_tier_table fails at line 204 with 'assert 1.0 == 2.5' (the prior's mean.N carries the inlined tier value instead of the patched amplitude), 21.82s. gp_mean_duplicates_tier_table fails at line 200 with cfg.gp_mean('t3') returning 1.0 against a probe of 2.5, 20.57s. DECISIVE: under gp_mean_duplicates_tier_table, test_one_amplitude_drives_both_mean_and_sigma PASSES -- its 'cfg.gp_mean(name) == amplitude' and 'prior.mean.N.value == cfg.gp_mean(name)' asserts cannot distinguish a delegating accessor from a hand-copied tier table, which is the blindness this new test removes. Baseline, same file content, no mutation: 43 passed in 20.07s (warm kernel cache). Original evidence follows. PARTIALLY RESOLVED 2026-08-13 -- the dead-accessor finding is CONFIRMED, not closed, and closing it requires a source edit this agent is not permitted to make (the closure_*_truth packages are the owner's hold). Re-verified by repo-wide grep 2026-08-13: gp_mean/gp_sigma still have no caller anywhere except their own definitions in the four config.py copies and this test file. What changed is that the test no longer pins the two orphans against each other only: it now pins them against the prior _gp_prior really builds (see -01), so the assertion has operational content even while the accessors stay unused. The maintainer choice recorded in proposed_fix is unchanged and still open: delete them, or wire _gp_prior to call them. Repo-wide grep for 'gp_mean(' and 'gp_sigma(' across the whole tree finds callers only in each config.py's own definition and in this test (tests/test_closure_prior_ties.py:76-77). git log -p shows commit ed65ac6 ('Updated many data types and implementation') both rewrote closure_JAM_truth/fit.py::_gp_prior from 'mean=priors.Const(N=cfg.gp_mean(field))' / 'cov=priors.LogRBF(sigma=cfg.gp_sigma(field), ...)' to the current single cfg.gp_amplitude(field) + analysis.tie form, AND added tests/test_closure_prior_ties.py (186 lines, new file) -- in the same commit. A stale worktree at .claude/worktrees/optimistic-snyder-81bd34 (commit 958ef5f) still has the old fit.py calling gp_mean/gp_sigma directly, confirming this was the pre-refactor pattern.",
+      "why_it_matters": "gp_mean/gp_sigma were already orphaned by the same commit that added this test -- not a later drift. The 'constants' section reads as if it pins what _gp_prior consumes, but as of its own introduction it pinned a parallel accessor pair with zero production callers instead.",
+      "proposed_fix": "TESTS-SIDE HALF DONE 2026-08-14. SOURCE-SIDE HALF OPEN, and now a ONE-OPTION decision rather than a choice: DELETE gp_mean/gp_sigma at closure_JAM_truth/config.py:1000-1007, closure_NNPDF_truth/config.py:998-1005, closure_JAM_truth_small/config.py:717-724 and closure_NNPDF_truth_small/config.py:720-727. The alternative (point fit.py:122 at them) was measured on 2026-08-14 to be a non-fix: analysis.tie at fit.py:228 (:179 in the _small suites) discards the mean's declared value at compile time -- measured 7.0 in, 2.0 (the sigma) out -- so gp_mean would acquire a call site and still no consumer. Collateral for the deletion: tests/test_closure_prior_ties.py:129-130 and :211-212 (drop), :135-136 (re-point at gp_amplitude), plans/closure_plan.md:307 and plans/lambda_guard_and_doc_defects.md:258-280 (prose). No docs impact. Owner's call; the closure packages are held.",
+      "effort": "M"
+    },
+    {
+      "id": "test_closure_prior_ties-03",
+      "test": "test_gp_prior_starts_at_a_plus_minus_a",
+      "pattern": "W-COMMON",
+      "severity": "S1",
+      "evidence": "RESOLVED-AS-DOCUMENTED 2026-08-13, with the companion's decisiveness now MEASURED rather than asserted. The recorded proposed_fix ('none needed; test_build_ties_mean_to_sigma is the decisive companion') was verified by mutation: deleting the analysis.tie call from build_analysis in all four suites (mut_ties.py MUT=drop_tie) fails test_build_ties_mean_to_sigma (`assert 0 == 9` on len(model.ties), line 189) and the new test_floating_the_amplitude_reaches_the_compiled_model, while test_gp_prior_starts_at_a_plus_minus_a PASSES -- which is exactly this weakness, demonstrated end to end on the real build_analysis rather than on a scratch reconstruction. The construction-time test keeps its place (it is the only check on the starting values) and its docstring states what it does not establish. tests/test_closure_prior_ties.py:126-138 (as edited; originally 60-68). mean and sd both trace to the one cfg.gp_amplitude(name) call at fit.py:122, fed independently into priors.Const(N=value) and Parameter(value, ...) for cov.sigma, with no analysis.tie anywhere in this code path (_gp_prior never calls it; only build_analysis does, at fit.py:228).",
+      "why_it_matters": "This is the CLAUDE.md-documented failure mode itself: two values that look tied because they share a construction-time source, checked only before anything could make them diverge. Demonstrated by mutation (see measurements): a scratch reconstruction of _gp_prior's exact pattern with sigma moved and mean left alone reproduces mean=5.0, sd=3.7 -- exactly the silent a+-a violation -- while this test's own assertion shape (read mean, read sd, compare to a shared source value, at one point in time) would not see it, because it is never re-run after a value moves. The test's own pre-existing NOTE comment (lines 119-123) already says as much; this weakness entry gives it a formal code and a demonstrated mutation.",
+      "proposed_fix": "None needed as a fix -- test_build_ties_mean_to_sigma already is the decisive companion check and does the move-and-reread correctly. Kept as documentation (done, this audit's docstring) so a reader does not mistake this test for that one.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_prior_ties-04",
+      "test": "test_nuisance_fields_are_not_tied",
+      "pattern": "W-DEAD",
+      "severity": "S4",
+      "evidence": "RESOLVED 2026-08-13 by test_nuisance_fields_are_not_tied. The unconditional pytest.skip for the two _small suites is replaced by an assertion: `assert bool(nuisance) is hasattr(cfg, 'nuisance_specs')`, then an early return. Both directions now mean something -- a _small suite growing nuisance fields without declaring nuisance_specs fails, and a full suite silently losing its nuisance registration fails instead of turning into a green skip. That matters here because this repo has no CI, so a permanent skip is total absence. Acceptance: mut_ties.py MUT=drop_nuisance (cfg.nuisance_specs/moment_nuisance_specs stubbed to []) fails the two full-suite cases -- `assert False is True` at line 248 -- with the other 38 passing; under the previous form those two cases would have reported as skips. closure_JAM_truth_small/config.py and closure_NNPDF_truth_small/config.py define no nuisance_specs/moment_nuisance_specs (grep confirms zero hits in both, versus both present in the two full configs), so model.fields carries no lattice nuisance fields under mode='lattice' for those two suites and pytest.skip fires at tests/test_closure_prior_ties.py:216.",
+      "why_it_matters": "The file's 9x4=36-case parametrization overstates this specific test's real coverage: only 2 of the 4 SUITES (full_jam, full_nnpdf) ever execute the assertion body; small_jam/small_nnpdf contribute a guaranteed skip every run.",
+      "proposed_fix": "Cosmetic only; the skip reason string is already self-documenting. Could parametrize this one test over (full_jam, full_nnpdf) only, trading an explicit skip for a shorter, equally honest case list.",
+      "effort": "S"
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_closure_prior_ties-M01",
+      "topic": "closure-suite",
+      "title": "Exercise build_analysis with GP_AMPLITUDE_FREE floated, not just _gp_prior in isolation",
+      "rationale": "RESOLVED 2026-08-13 by the new test_floating_the_amplitude_reaches_the_compiled_model, parametrized over all four SUITES as they then were -- the NNPDF pair only since 2026-08-14 (build_analysis costs 3.6-4.0 s per full suite and 0.1-0.4 s per _small suite with a warm kernel cache; the 264 s recorded in tests/test_durations.json was a cold-cache run). Oracles: F1 for n_free, the free selector set, has_prior and tied_to; A1 for the bounds array (every lower bound at GP_AMPLITUDE_FLOOR, every upper inf) and for the gradient -- jax.grad through model._rebuild (the same closure ravel hands the sampler under jit) of sum_i mean.N_i**2 must return 2*sigma_i at every free coordinate, which is elementary calculus and the closure analogue of tests/test_parameter_ties.py::test_gradient_flows_through_the_tie_to_the_source. Measured: n_free 9, ties 9, x0 = [1, 1, 5, 5, 5, 1, 1, 1, 1], bounds lower 0.99 upper inf, max|grad/(2*x0) - 1| = 0.0 exactly. Acceptance: removing the freeze loop's `if attr == 'sigma' and cfg.GP_AMPLITUDE_FREE: continue` (mut_ties.py MUT=refreeze_sigma) fails it alone -- `assert 0 == 9` at line 382, 4 failed/36 passed -- and MUT=drop_tie fails it too. NOTE recorded in the test docstring: cfg.N_HYPERPARAMS is evaluated at import time from the module-level GP_AMPLITUDE_FREE, so monkeypatching the flag cannot move it; asserting n_free == N_HYPERPARAMS under a monkeypatch would have been a test that could only fail. n_free is compared to len(cfg.ALL_FIELDS) instead. closure_JAM_truth/fit.py:229-235 (build_analysis's freeze loop) contains 'if attr == \"sigma\" and cfg.GP_AMPLITUDE_FREE: continue', whose own comment says re-freezing here 'would silently override cfg.GP_AMPLITUDE_FREE'. No test in this file (or anywhere in tests/) calls build_analysis with GP_AMPLITUDE_FREE patched True: test_floating_attaches_the_floor_and_a_centred_hyper_prior only calls suite._gp_prior(name) directly, never build_analysis. So the actual integration point -- does the compiled Model really leave cov.sigma free (model.n_free == len(cfg.ALL_FIELDS), matching cfg.N_HYPERPARAMS) when floated, and does a real evidence gradient flow through the tie to the floated source the way test_parameter_ties.py::test_gradient_flows_through_the_tie_to_the_source proves for the toy fixture -- is untested for the closure suites specifically.",
+      "proposed_oracle": "A3",
+      "proposed_location": "tests/test_closure_prior_ties.py",
+      "searched": [
+        "grep -in 'amplitude_free|gp_amplitude_free|floating_attaches|build_analysis.*free' $AUDIT/test_index.txt -> 1 hit, only the existing _gp_prior-level test_floating_attaches_the_floor_and_a_centred_hyper_prior name",
+        "grep -rln 'GP_AMPLITUDE_FREE' tests/test_*.py -> 1 file, tests/test_closure_prior_ties.py only",
+        "grep -rn 'GP_AMPLITUDE_FREE' tests/test_closure_prior_ties.py -> 3 hits (lines 136 header comment, 142, 171 monkeypatch), none call build_analysis afterward",
+        "grep -i 'amplitude_free|floating.*amplitude|floated.*tie|n_free.*amplitude' $AUDIT/missing_running.tsv -> 0 hits (empty file at time of search)"
+      ],
+      "effort": "M"
+    }
+  ],
+  "unjustified_tolerances": [
+    {
+      "line": 133,
+      "text": "np.testing.assert_allclose(mean, amplitude, rtol=1e-12, atol=0.0)",
+      "quantity": "prior_mean(nodes) vs cfg.gp_amplitude(name), at construction",
+      "comment_added": "rtol 1e-12: mean is a bare float carried through priors.Const with no kernel or jitter term, so this bounds float64 round-trip only.",
+      "provenance": "known"
+    },
+    {
+      "line": 138,
+      "text": "np.testing.assert_allclose(sd, mean, rtol=1e-9)",
+      "quantity": "sqrt(diag(prior_cov(nodes))) vs prior_mean(nodes), at construction (LogRBF diagonal jitter margin)",
+      "comment_added": "Measured (sqrt(1 + jitter/a**2) - 1): 5.0e-11 at a=1.0, 2.0e-12 at a=5.0 -- rtol=1e-9 carries 20x-500x margin over the jitter itself.",
+      "provenance": "known"
+    },
+    {
+      "line": 188,
+      "text": "np.testing.assert_allclose(mean, moved, rtol=1e-12)",
+      "quantity": "prior_mean(nodes) vs moved=3.7, read back after apply_parameter_overrides",
+      "comment_added": "Same float round-trip bar as test_gp_prior_starts_at_a_plus_minus_a; here it is the read after the override, which is what makes it decisive rather than a construction-time coincidence.",
+      "provenance": "known"
+    },
+    {
+      "line": 191,
+      "text": "np.testing.assert_allclose(sd, moved, rtol=1e-9)",
+      "quantity": "sqrt(diag(prior_cov(nodes))) vs moved=3.7, read back after apply_parameter_overrides",
+      "comment_added": "At moved=3.7, jitter/moved**2 = 7.3e-12 relative on sd -- rtol=1e-9 keeps about 270x margin (same LogRBF jitter as the NOTE above).",
+      "provenance": "known"
+    },
+    {
+      "line": 292,
+      "text": "assert 0.9 < cfg.GP_AMPLITUDE_FLOOR < 1.0",
+      "quantity": "GP_AMPLITUDE_FLOOR literal range",
+      "comment_added": "The 0.9 lower literal is a sanity range, not a derived bound -- see docstring.",
+      "provenance": "unrecorded"
+    },
+    {
+      "line": 337,
+      "text": "assert total == pytest.approx(13.7209, rel=1e-4)",
+      "quantity": "sum of LogNormal.neg2_logpdf at each field's own tier centre, over 9 fields",
+      "comment_added": "Each per-field value is the closed form at its own centre (z=0): 2*log(a) + log(2*pi) + 2*log(sigma). rel=1e-4 covers the literal's 4-decimal rounding (measured 2.05e-06 actual), nothing looser.",
+      "provenance": "known"
+    }
+  ],
+  "measurements": [
+    {
+      "claim": "test_gp_prior_starts_at_a_plus_minus_a's assertions pass unchanged with no tie anywhere in the construction, and the same construction with sigma moved (no tie) leaves mean stale while sd tracks the move -- demonstrating the W-COMMON/W1 finding on that test by mutation.",
+      "command": "python3 script mirroring _gp_prior's exact construction (priors.Const/priors.LogRBF/Parameter only, no closure_*/ import): build mean=Const(N=5.0), cov=LogRBF(sigma=Parameter(5.0)); read mean/sd (both 5.0); rebuild cov with sigma=Parameter(3.7) and mean left at Const(N=5.0); read mean/sd again. Separately, build a toy _GP/_Mean/_Cov eqx.Module pytree and run pixel.core.params.normalize_ties + ravel on it (the same functions Model.__init__ calls) to show the contrast when a real tie IS declared.",
+      "result": "No tie: at construction mean[0]=5.0, sd[0]=5.00000000001 (test's check would pass). After moving sigma alone: mean[0]=5.0 (stale), sd[0]=3.700000000013514 -- diverged, a+-a broken, invisible to a construction-only re-check. With a real tie (P.normalize_ties + P.ravel, ties=(('mean.N','cov.sigma'),)): after moving the source to 3.7, mean.N=3.7, cov.sigma=3.7 -- correctly propagated. Also confirmed mean.N is cov.sigma is False even in the untied case (not even literal object-sharing, just independently seeded)."
+    },
+    {
+      "claim": "test_floating_attaches_the_floor_and_a_centred_hyper_prior's hardcoded 13.7209 total is the closed-form LogNormal(log_center=log(a), sigma=0.5, loc=0).neg2_logpdf(a) at z=0, i.e. 2*log(a) + log(2*pi) + 2*log(sigma), not an unverifiable regression pin.",
+      "command": "python3, importing pixel.core.params.LogNormal directly (no closure_*/ import): for a in (5.0, 1.0), compare float(LogNormal(log_center=math.log(a), sigma=0.5).neg2_logpdf(jnp.asarray(a))) against the hand closed form 2*math.log(a)+math.log(2*math.pi)+2*math.log(0.5); then total = 3*value(a=5) + 6*value(a=1).",
+      "result": "a=5.0: code=3.6704585301576556 closed_form=3.6704585301576547 (diff 8.9e-16). a=1.0: code=0.45158270528945477 closed_form=identical (diff 0). total=13.720871822209695 vs the file's literal 13.7209, relative difference 2.054e-06 -- well inside the assertion's rel=1e-4 bar, consistent with a 4-decimal-rounded literal, not a loose bar."
+    },
+    {
+      "claim": "LogRBF's default 1e-10 diagonal jitter contributes a relative sd/mean deviation of 5.0e-11 at a=1.0, 2.0e-12 at a=5.0, and 3.65e-12 at a=3.7 (the values this file actually uses), all far under the rtol=1e-9 bars at lines 138 and 191.",
+      "command": "python3 -c: for a in (1.0, 5.0, 3.7): dev = sqrt(1 + 1e-10/a**2) - 1; margin = 1e-9/dev",
+      "result": "a=1.0: sd/mean=1.00000000005, dev=5.000e-11, margin=20.0x. a=5.0: sd/mean=1.000000000002, dev=2.000e-12, margin=500.0x. a=3.7: sd/mean=1.0000000000036522, dev=3.652e-12, margin=273.8x. The a=1.0 row matches guides/tying_parameters.md's own published table (1.00000000005) exactly."
+    },
+    {
+      "claim": "Floating GP_AMPLITUDE_FREE through the real build_analysis leaves exactly one free amplitude per field, keeps the tie, keeps the floor in the bounds array, and lets a real autodiff gradient reach the floated source.",
+      "command": "scratchpad/probe_free.py -- build_analysis('1', 'lattice') on closure_JAM_truth_small with cfg.GP_AMPLITUDE_FREE set True, then jax.grad through model._rebuild",
+      "result": "n_free=9, len(model.ties)=9, x0=[1, 1, 5, 5, 5, 1, 1, 1, 1], free selectors are exactly the nine fields.*.prior.cov.sigma, bounds=[[0.99, inf]] x 9, grad=[2, 2, 10, 10, 10, 2, 2, 2, 2], max|grad/(2*x0) - 1| = 0.000e+00"
+    },
+    {
+      "claim": "Each strengthened or added assertion in this file fails under a scoped in-memory mutation of the closure fit driver, with the file's other cases still passing.",
+      "command": "MUT=<name> PYTHONPATH=<scratchpad> OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 venv/bin/python -m pytest tests/test_closure_prior_ties.py -q -p no:randomly -p mut_ties --tb=line  (mut_ties.py re-execs closure_*/fit.py from a mutated source string into a fresh module object's own __dict__ and rebinds it on the parent package; drop_nuisance instead stubs the config accessors)",
+      "result": "sigma_epsilon: 4 failed/36 passed, 'assert 1.00000000001 == 1.0' (line 100, test_one_amplitude_drives_both_mean_and_sigma only) | refreeze_sigma: 4/36, 'assert 0 == 9' (line 382, test_floating_the_amplitude_reaches_the_compiled_model only) | drop_tie: 8/32, 'assert 0 == 9' (line 189) -- test_build_ties_mean_to_sigma and the new floated test, with test_gp_prior_starts_at_a_plus_minus_a still passing | drop_nuisance: 2/38, 'assert False is True' (line 248, the two full suites only). No test in this file reads repository source as text or uses inspect.getsource, so the recompile cannot produce a spurious line-offset failure."
+    },
+    {
+      "claim": "build_analysis is not the 264 s operation tests/test_durations.json records; that entry was a cold-kernel-cache run.",
+      "command": "OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 venv/bin/python -m pytest 'tests/test_closure_prior_ties.py::test_build_ties_mean_to_sigma[closure_NNPDF_truth.fit]' -q -p no:randomly --durations=3",
+      "result": "STALE NODE ID CORRECTED 2026-08-14: this measurement was recorded against test_build_ties_mean_to_sigma[closure_JAM_truth.fit], which was ALREADY UNCOLLECTABLE when it was written down -- the full JAM leg had been dropped from _TIE_REBUILD_SUITES the same day, before SUITES itself was trimmed. The command above now names the NNPDF case, which is the equivalent node the file collects today; the 5.69 s below is the ORIGINAL JAM measurement carried forward, not a re-run of the NNPDF node. || 5.69 s warm, against 264.43 s in tests/test_durations.json. The whole file was '10 tests x 4 suites = 40 cases' at the time and ran in about 30 s warm, which is why the new build_analysis test was parametrized over all four suites rather than the _small pair alone. As of 2026-08-14 SUITES is the NNPDF pair only (owner's instruction; see the entry's Cost section) and the file is 23 cases in 14.93 s warm."
+    },
+    {
+      "claim": "The pre-existing gp_mean/gp_sigma checks cannot distinguish an accessor that delegates to gp_amplitude from one that re-implements the tier table, and no test in the file could see a within-tier cross-wire; test_prior_and_accessors_all_follow_one_patched_amplitude closes both.",
+      "command": "for m in gp_mean_duplicates_tier_table gp_prior_inlines_tier_table; do MUT=$m OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1 PYTHONPATH=scratchpad/mut_WA venv/bin/python -m pytest tests/test_closure_prior_ties.py -q -p no:randomly -p mut_ties_wa; done (serial, one at a time)",
+      "result": "Both mutations give 4 failed / 39 passed -- ONLY the four test_prior_and_accessors_all_follow_one_patched_amplitude cases fail, and every other test in the file passes, including the three build_analysis tests. gp_prior_inlines_tier_table fails at line 204 with 'assert 1.0 == 2.5' (the prior's mean.N carries the inlined tier value instead of the patched amplitude), 21.82s. gp_mean_duplicates_tier_table fails at line 200 with cfg.gp_mean('t3') returning 1.0 against a probe of 2.5, 20.57s. DECISIVE: under gp_mean_duplicates_tier_table, test_one_amplitude_drives_both_mean_and_sigma PASSES -- its 'cfg.gp_mean(name) == amplitude' and 'prior.mean.N.value == cfg.gp_mean(name)' asserts cannot distinguish a delegating accessor from a hand-copied tier table, which is the blindness this new test removes. Baseline, same file content, no mutation: 43 passed in 20.07s (warm kernel cache)."
+    },
+    {
+      "claim": "Wiring fit.py:122 back to gp_mean/gp_sigma would not give gp_mean a consumer: analysis.tie discards the target's declared value at compile time, so the mean the accessor supplies never reaches a fit.",
+      "command": "OMP_NUM_THREADS=1 PYTHONPATH=. venv/bin/python scratchpad/mut_JK/probe_tie_overwrites_mean.py  (pixel.Analysis, Const(N=7.0) + RBF(sigma=2.0, length=0.3), analysis.tie(p.mean.N, to=p.cov.sigma), read back via model.parameter_table())",
+      "result": "Before the tie: mean.N = 7.0, cov.sigma = 2.0. After: mean.N = 2.0, cov.sigma = 2.0, tied_to = 'fields.q.prior.cov.sigma', frozen = True -- the declared 7.0 is discarded, not merely constrained. Corroborated in-repo by tests/test_parameter_ties.py::test_compiled_model_reports_the_tie_and_drops_one_coordinate (declared 1.0, inherited 2.0). Repo-wide grep re-run the same day: gp_mean/gp_sigma still have zero callers outside their four definitions and tests/test_closure_prior_ties.py; all eight line ranges unchanged."
+    }
+  ],
+  "notes_for_readme": "SUPERSEDED 2026-08-14 (owner's instruction): SUITES is now the NNPDF pair only, and the two JAM legs were removed as duplication. The original note read: 'test_closure_prior_ties.py's SUITES parametrization is 4 independently-maintained fit.py/config.py copies, not 4 physics variants of one code path -- worth stating in the area index so readers don't discount the x4 as redundant.' The reasoning that overrode it: nothing in this file reads the truth PDF set, so each JAM leg re-ran the identical normalize_ties/apply_ties path against a second copy of the same constants. What is genuinely given up is the per-copy drift guard on the two JAM config.py/fit.py files; small_jam is kept in _TIE_REBUILD_SUITES as the canary for it."
+}

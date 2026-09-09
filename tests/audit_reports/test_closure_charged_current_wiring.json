@@ -1,0 +1,252 @@
+{
+  "file": "tests/test_closure_charged_current_wiring.py",
+  "area": "closure-suite",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "closure_NNPDF_truth/generate.py (exp_layout, lines 528-566)",
+    "closure_NNPDF_truth/config.py (EVEN_MAP, ODD_MAP, ORDER, TEST_MODES, CC_SIGMA_R_IDX)",
+    "closure_NNPDF_truth/datasets.py (_EXP_BUILDERS, _experimental_builder, build_sigma_r_cc, _even_map, _odd_map)",
+    "closure_JAM_truth/{generate,config,datasets}.py (CC logic byte-identical to closure_NNPDF_truth's, diffed)",
+    "closure_NNPDF_truth_small/{generate,config,datasets}.py (EXP_SPECS instead of CC_SIGMA_R_IDX; build_sigma_r_cc lacks with_systematics)",
+    "closure_JAM_truth_small/{generate,config,datasets}.py (CC logic byte-identical to closure_NNPDF_truth_small's, diffed)",
+    "src/pixel/data/experimental/charged_current.py (ChargedCurrentSigmaR.from_file -- referenced only as a monkeypatch target in test 4; its real body never executes in this file)"
+  ],
+  "drives_non_pixel": "This file imports nothing from pixel (only importlib/json/numpy/pytest). All four tests import {suite}.generate/{suite}.config/{suite}.datasets via importlib.import_module for suite in SUITES and call real, unmocked closure-driver functions (exp_layout, _experimental_builder) or a driver function whose only pixel call (ChargedCurrentSigmaR.from_file) is monkeypatched out (build_sigma_r_cc). See module docstring lines 1-34.",
+  "n_tests": 6,
+  "n_parametrized_cases": 4,
+  "tests": [
+    {
+      "name": "test_cc_layout_keeps_beam_and_rowwise_inelasticity",
+      "line": 54,
+      "claim": "exp_layout() preserves a manifest table's kind/beam and computes a per-row inelasticity y = Q2/(x*RS**2), for every suite in SUITES.",
+      "actual": "Writes a one-table, two-row sigma_r_cc manifest fixture to a temp path, points cfg.DIS_MANIFEST_PATH at it via monkeypatch, calls the real generate.exp_layout(), and checks record count, kind, beam, and the y array (atol=1e-15, rtol=0.0) against the same formula regrouped. The fixture's two rows are numerically degenerate (Q2/x=1e5 and RS=318.0 on both), so the y check cannot distinguish a correctly-rowwise computation from a single-row broadcast -- demonstrated by mutation (see measurements).",
+      "how": "Real closure-driver call, not mocked: generate.exp_layout() at closure_NNPDF_truth/generate.py:528-566 (the RS-branch at :558-564 is byte-identical in the other three suites). Expected y is q2/(x*rs*rs) regrouped as (q2/x)/rs**2, evaluated on the identical Python floats the source uses.",
+      "oracle": "A1",
+      "bar": "atol=1.0e-15, rtol=0.0 (np.testing.assert_allclose)",
+      "strength": "S2",
+      "catches": "a dropped square or swapped x/Q2 in the y formula, or a wrong kind/beam passthrough -- each moves the result by orders of magnitude for this fixture. Does NOT catch a per-row-broadcast bug: measured (mutation_y_broadcast.py) that a mutant computing row 0 only and broadcasting it to every row reproduces the array bit-for-bit (max abs diff 0.0), because Q2/x and RS are both constant across the fixture's two rows."
+    },
+    {
+      "name": "test_cc_builder_is_in_ordinary_dis_route",
+      "line": 115,
+      "claim": "sigma_r_cc is registered as an ordinary experimental builder (not a synthetic special case), and dataset indices 10031/10032 are tagged sigma_r_cc in each suite's own registry.",
+      "actual": "Checks 'sigma_r_cc' in datasets._EXP_BUILDERS (key presence only), 'synthetic_cc' not in config.TEST_MODES, and per-suite-family index registration: EXP_SPECS[idx].kind for the _small suites, CC_SIGMA_R_IDX tuple equality for the full suites.",
+      "how": "F1 structural: dict/tuple membership and attribute equality against each suite's own live config/datasets modules, imported fresh per parametrized suite via importlib.",
+      "oracle": "F1",
+      "bar": "none (membership / equality)",
+      "strength": "S3",
+      "catches": "sigma_r_cc falling out of _EXP_BUILDERS entirely, a regression reintroducing 'synthetic_cc' into TEST_MODES, or 10031/10032 losing their sigma_r_cc tag in one suite's config while another keeps it. Does NOT catch _EXP_BUILDERS['sigma_r_cc'] being bound to the wrong builder function (e.g. build_sigma_r via a copy-paste in the dict literal): 'x in dict' checks keys only, never the bound value. No test in this file or elsewhere (searched) checks _EXP_BUILDERS['sigma_r_cc'] is build_sigma_r_cc."
+    },
+    {
+      "name": "test_stale_f3_proxy_manifest_is_rejected_with_regeneration_instruction",
+      "line": 148,
+      "claim": "A manifest record still tagged the retired 'f3_proxy' kind is rejected with a RuntimeError naming the fix, not silently misrouted to a stale or default builder.",
+      "actual": "Calls datasets._experimental_builder('f3_proxy') directly (not through exp_layout or a manifest file) and checks pytest.raises(RuntimeError, match='--remake-data').",
+      "how": "F1 structural: exception type + regex substring against the real closure-driver function, byte-identical across all four suites.",
+      "oracle": "F1",
+      "bar": "none (exception type + message substring)",
+      "strength": "S3",
+      "catches": "_experimental_builder silently falling through to a stale or default builder for 'f3_proxy' instead of raising, or the raised message losing its --remake-data regeneration instruction. Scope: only exercises this file's closure_*/datasets.py::_experimental_builder; src/pixel/api/manifest.py's separate closure-manifest translator (_closure_record, api/manifest.py:171) still recognizes 'f3_proxy' and has no 'sigma_r_cc' branch at all -- a different, apparently un-migrated code path this test does not touch (see notes_for_readme)."
+    },
+    {
+      "name": "test_cc_dataset_builder_receives_even_valence_beam_and_y",
+      "line": 172,
+      "claim": "build_sigma_r_cc forwards beam charge, y, the even/odd basis maps, and order to ChargedCurrentSigmaR.from_file.",
+      "actual": "Monkeypatches ChargedCurrentSigmaR.from_file with a kwarg-capturing fake, calls datasets.build_sigma_r_cc on a hand-built record (no rel_norm, no correlated_file, no sqrt_s; with_exp_nuisances=False), and checks captured beam_charge/y/order by value and maps_to/valence_maps_to by key set (set(dict)==set(dict)).",
+      "how": "F1 structural: captured-kwarg equality/set-membership against the fake's recorded call. No src/pixel code executes (from_file is replaced).",
+      "oracle": "F1",
+      "bar": "none (equality / set membership)",
+      "strength": "S2",
+      "catches": "a wrong-value passthrough of beam_charge, y, or order (each checked against a literal the test itself set). Does NOT catch _even_map/_odd_map binding a basis key to the wrong field object: measured (mutation_maps_to_keyset.py) that binding every one of the 5 EVEN_MAP keys to the same wrong field still satisfies set(mutant)==set(EVEN_MAP). Also does not meaningfully exercise with_exp_nuisances=False: measured (mutation_exp_nuisance_kwargs.py) that this rec (no rel_norm/correlated_file, t0=None) yields the identical empty captured-kwargs dict whether with_exp_nuisances is True or False. Nor the 'elif sqrt_s in rec' branch of build_sigma_r_cc (rec always supplies 'y'), nor a kwarg renamed in the real from_file/from_arrays signature (the fake absorbs arbitrary kwargs; that path is exercised unmocked, but not through this builder, in tests/test_charged_current_dis.py)."
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_closure_charged_current_wiring-01",
+      "test": "test_cc_layout_keeps_beam_and_rowwise_inelasticity",
+      "pattern": "W-LOOSE",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_cc_layout_keeps_beam_and_rowwise_inelasticity. The fixture's two rows now differ in every row-varying input (x=[0.01,0.10], Q2=[300,5000], RS=[318,300]), so Q2/x is 3e4 then 5e4 and the two rows' y are 0.2967 and 0.5556. Acceptance: mutating exp_layout's y line to a row-0 broadcast (mut_cc.py MUT=y_broadcast, generate.py re-exec'd from mutated source) makes it fail by 2.5889e-01 and a row-mean broadcast (MUT=y_mean) by 1.2945e-01, against the atol=1e-15 bar; before the fix both mutants reproduced the expected array bit-for-bit (max abs diff 0.0). Under each mutation the file's other 24 cases still pass. The atol=1e-15 bar itself is unchanged and still pure headroom (regrouped reference measured to agree at exactly 0.0). tests/test_closure_charged_current_wiring.py:89-91 (fixture: Q2=[1000,2000], x=[0.01,0.02] so Q2/x=1e5 both rows; RS=[318.0,318.0]) and :106-111 (assertion). Measured (mutation_y_broadcast.py, this audit, run standalone -- no closure_*/ import): a mutant using row 0's value broadcast to every row, and a second mutant using the row mean broadcast to every row, both reproduce the correct rowwise array with max absolute difference 0.0 (bit-exact, not merely within atol=1e-15).",
+      "why_it_matters": "A regression that collapsed exp_layout's per-row y computation to a single scalar broadcast (e.g. computing q2[0]/(x[0]*rs[0]**2) once and filling the whole array) would pass this test unchanged, because the fixture's two rows are numerically degenerate. The effect this test's name claims to establish ('rowwise') is exactly zero for this input, so no tolerance, however tight, could catch that specific bug class.",
+      "proposed_fix": "Give the fixture two rows with different Q2/x or RS (e.g. RS=[318.0, 300.0], or a third row) so a broadcast mutant produces a numerically different array from the correct rowwise one.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_charged_current_wiring-02",
+      "test": "test_cc_dataset_builder_receives_even_valence_beam_and_y",
+      "pattern": "W-NEVER",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_cc_dataset_builder_receives_even_valence_beam_and_y. The fields dict is now built from SimpleNamespace(tag=name) sentinels and the assertion compares {basis: field.tag} against dict(cfg.EVEN_MAP)/dict(cfg.ODD_MAP) entry by entry, plus an `is` check that each forwarded object is the very field instance handed in. Acceptance: mutating _even_map to bind all five basis keys to the gluon field (mut_cc.py MUT=even_map) makes it fail; the file's other 24 cases pass under the same mutation, and the previous key-set form was measured to pass it. tests/test_closure_charged_current_wiring.py:238-239 (set(captured['maps_to'])==set(datasets.cfg.EVEN_MAP), and the valence analogue). Python's set() on a dict yields only its keys. Measured (mutation_maps_to_keyset.py, this audit, standalone reimplementation of EVEN_MAP/_even_map -- no closure_*/ import): a mutant that binds every one of the 5 EVEN_MAP basis keys to the same (gluon) field object, and a second mutant with a reversed key/value binding, both give set(mutant)==set(EVEN_MAP)==True even though 4 of 5 keys are bound to the wrong field object in each case.",
+      "why_it_matters": "closure_NNPDF_truth/datasets.py:37-38's _even_map/_odd_map (byte-identical across all 4 suites) could swap, drop, or misbind any basis key to any physical field and this test would not notice, as long as the resulting dict has the same key set -- e.g. accidentally binding every basis key to the gluon field, which would silently corrupt every CC dataset's flavour content while this test keeps passing.",
+      "proposed_fix": "Build the fields dict with per-name-distinguishable sentinels (e.g. SimpleNamespace(tag=name) instead of bare object()) and assert captured['maps_to'][basis].tag == datasets.cfg.EVEN_MAP[basis] per key, not just the key set.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_charged_current_wiring-03",
+      "test": "test_cc_builder_is_in_ordinary_dis_route",
+      "pattern": "W-NEVER",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 by test_cc_builder_is_in_ordinary_dis_route. Added `_EXP_BUILDERS[\"sigma_r_cc\"] is build_sigma_r_cc` and `_experimental_builder(\"sigma_r_cc\") is build_sigma_r_cc` alongside the membership check, so both the dict literal and the dispatch that reads it are pinned. Acceptance: rebinding the key to build_sigma_r in the literal (mut_cc.py MUT=builder_key) makes it fail while the other 24 cases pass; the membership check alone passed under the same mutation. tests/test_closure_charged_current_wiring.py:137 (assert \"sigma_r_cc\" in datasets._EXP_BUILDERS). closure_NNPDF_truth/datasets.py:340-344 defines _EXP_BUILDERS as a 3-entry dict literal ({\"f2\": build_f2, \"sigma_r\": build_sigma_r, \"sigma_r_cc\": build_sigma_r_cc}); Python's `in` on a dict checks keys, never the bound value.",
+      "why_it_matters": "A copy-paste error in the _EXP_BUILDERS literal (e.g. \"sigma_r_cc\": build_sigma_r, duplicating the line above it) would route every closure CC dataset through the neutral-current builder instead -- silently dropping the W3/valence physics -- and this assertion would still pass, since the key 'sigma_r_cc' is still present.",
+      "proposed_fix": "Add `assert datasets._EXP_BUILDERS[\"sigma_r_cc\"] is datasets.build_sigma_r_cc` alongside the membership check.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_charged_current_wiring-04",
+      "test": "test_target_labels_reaching_the_builders_agree_with_pixels_alias_table",
+      "pattern": "W-UNSETTLED",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-14 by test_target_labels_reaching_the_builders_agree_with_pixels_alias_table. NOT A DEFECT, and now recorded as such rather than as an open asymmetry. The full suites' dis_audit reads the target off the fitpack spreadsheet (p/d); the _small suites' writes spec.target from config.EXP_SPECS (proton/deuteron), so the label passed through verbatim already equals what the full suites' map produces. Nothing downstream can tell them apart: pixel.util.flavor.normalize_target, reached from every DIS builder through _dis_common, maps both to the same canonical target and raises on anything outside its alias table. The new test pins TARGET_MAP as a strict subset of PIXEL's aliases, the equivalence of both forms, and that every label in each shipped manifest normalizes; a control asserts an unknown label raises. Both generate.py docstrings now state the reason. Acceptance: a plugin setting TARGET_MAP['d'] = 'neutron' on the two full suites (self-checked) fails exactly the 2 full-suite parametrizations, 30 other tests pass.",
+      "why_it_matters": "A per-suite difference with no recorded reason invites a 'consistency' edit that would either add a dead second alias table or change a committed manifest.",
+      "proposed_fix": "(applied) document the cause in both directions and assert the equivalence.",
+      "effort": "S"
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_closure_charged_current_wiring-M01",
+      "topic": "closure-suite",
+      "title": "Assert _EXP_BUILDERS['sigma_r_cc'] is build_sigma_r_cc, not just key presence",
+      "rationale": "RESOLVED 2026-08-13 by test_cc_builder_is_in_ordinary_dis_route (extended). Oracle: F1 function identity -- `_EXP_BUILDERS[\"sigma_r_cc\"] is build_sigma_r_cc` and the same identity through `_experimental_builder`, both read off the module under test, so this is structural rather than independent. Acceptance: mut_cc.py MUT=builder_key (the dict literal rebound to build_sigma_r) makes it fail. See weakness -03: 'x in dict' cannot detect the dict key pointing at the wrong function. closure_NNPDF_truth/datasets.py:340-344 (and the byte-identical dicts in the other 3 suites).",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_charged_current_wiring.py (extend test_cc_builder_is_in_ordinary_dis_route)",
+      "searched": [
+        "grep -in \"exp_builders|_experimental_builder\" $AUDIT/test_index.txt -> 0 hits",
+        "grep -rln \"_EXP_BUILDERS\" tests/test_*.py -> 1 file (this one)",
+        "grep -rn \"build_sigma_r_cc is|_EXP_BUILDERS\\[\" tests/test_*.py -> 0 hits",
+        "grep -i \"exp_builders|experimental_builder\" $AUDIT/missing_running.tsv -> 0 hits"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_charged_current_wiring-M02",
+      "topic": "closure-suite",
+      "title": "Cover exp_layout's explicit-Y branch for a sigma_r_cc table",
+      "rationale": "RESOLVED 2026-08-13 by test_cc_layout_keeps_beam_and_rowwise_inelasticity. The manifest now carries a third table with BOTH an explicit Y ([0.65, 0.42]) and an RS column that would give [0.2967, 0.2225], so the explicit-Y branch must win rather than merely be present. Oracle: F1, exact list passthrough. Acceptance: mut_cc.py MUT=explicit_y (the `if \"Y\" in tab` branch made unreachable) makes it fail; the other 24 cases pass. closure_NNPDF_truth/generate.py:559-560 (`if \"Y\" in tab: rec[\"y\"] = list(tab[\"Y\"])`) is a distinct code path from the RS-derived branch this file's only layout test exercises; no parametrized case here or elsewhere supplies an explicit 'Y' key.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_charged_current_wiring.py (new parametrized case or second fixture in test_cc_layout_keeps_beam_and_rowwise_inelasticity)",
+      "searched": [
+        "grep -in 'explicit.*inelasticity|\"Y\" in tab' $AUDIT/test_index.txt -> 0 hits",
+        "grep -rln exp_layout tests/test_*.py -> 1 file (this one)",
+        "grep -rn exp_layout tests/test_*.py -> 4 hits, all in this file, none building a table with an explicit Y key",
+        "grep -i exp_layout $AUDIT/missing_running.tsv -> 0 hits"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_charged_current_wiring-M03",
+      "topic": "closure-suite",
+      "title": "Cover exp_layout's status != 'used' skip branch",
+      "rationale": "RESOLVED 2026-08-13 by test_cc_layout_keeps_beam_and_rowwise_inelasticity. The manifest now carries a status='retired' table between two used ones, and the test asserts len(records) == 2 plus the exact surviving label list, so a dropped skip cannot be masked by reordering. Oracle: F1. Acceptance: mut_cc.py MUT=status (the skip made unreachable) makes it fail; the other 24 cases pass. closure_NNPDF_truth/generate.py:533-534 (`if tab[\"status\"] != \"used\": continue`) drops retired/failed tables from the closure fit entirely; this file's fixture always has exactly one row with status='used', so a broken or inverted skip condition (which would silently include retired tables, or silently drop used ones) is untested. Already flagged as an acknowledged gap in this file's own docstring (line 79 comment) but not previously logged as a proposal.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_charged_current_wiring.py (extend test_cc_layout_keeps_beam_and_rowwise_inelasticity with a second table row at status != 'used')",
+      "searched": [
+        "grep -in 'status.*used|skip.*status' $AUDIT/test_index.txt -> 0 hits",
+        "grep -i 'status.*used' $AUDIT/missing_running.tsv -> 0 hits"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_charged_current_wiring-M04",
+      "topic": "closure-suite",
+      "title": "Cover build_sigma_r_cc's sqrt_s branch (as opposed to explicit y)",
+      "rationale": "RESOLVED 2026-08-13 by the new test_cc_builder_falls_back_to_sqrt_s_when_the_record_has_no_y. Oracle: F1 -- kwarg presence plus one exact float; sqrt_s is supplied as the string \"318.0\" so the source's float() cast is observable and not a passthrough, and `y` is asserted absent. Acceptance: mut_cc.py MUT=no_sqrt_s (the elif leg deleted) makes it fail; the other 24 cases pass. closure_NNPDF_truth/datasets.py:226-229 (`if \"y\" in rec: ... elif \"sqrt_s\" in rec: kwargs[\"sqrt_s\"] = float(rec[\"sqrt_s\"])`) is a second, untested branch; this file's only builder test always supplies rec['y'], byte-identical in all 4 suites.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_charged_current_wiring.py (extend test_cc_dataset_builder_receives_even_valence_beam_and_y with a second rec using sqrt_s instead of y)",
+      "searched": [
+        "grep -in sqrt_s $AUDIT/test_index.txt -> hits only in test_dis_builder_equivalence.py (signature introspection, not an executed call) and test_sigma_r.py (SigmaR neutral-current, not ChargedCurrentSigmaR)",
+        "grep -rn sqrt_s tests/test_closure_charged_current_wiring.py tests/test_charged_current_dis.py -> 0 hits in either"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_charged_current_wiring-M05",
+      "topic": "closure-suite",
+      "title": "Exercise with_exp_nuisances=True vs False with a rec that actually has rel_norm/correlated_file",
+      "rationale": "RESOLVED 2026-08-13 by the new test_cc_builder_forwards_the_normalization_only_with_exp_nuisances, parametrized over with_exp_nuisances True/False on a record carrying rel_norm=0.015. Oracle: F1 -- kwarg presence plus one exact float (normalization == 0.015, fit_normalization == cfg.DIS_FIT_NORMALIZATION). Acceptance: mut_cc.py MUT=nuisance_gate (the `if not enabled: return {}` early return made unreachable) fails the four with_exp_nuisances=False cases while the other 24 pass. The correlated_file leg is still uncovered: it loads an .npz sidecar from disk. _exp_nuisance_kwargs (closure_NNPDF_truth/datasets.py:154-188) only produces nonempty kwargs when rec has 'rel_norm' or 'correlated_file'; this file's rec fixture has neither, so its with_exp_nuisances=False is unmeasurable -- measured (mutation_exp_nuisance_kwargs.py, this audit) that with_exp_nuisances=True on the identical rec produces the identical (empty) captured kwargs.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_charged_current_wiring.py (extend test_cc_dataset_builder_receives_even_valence_beam_and_y with rel_norm set and with_exp_nuisances parametrized True/False)",
+      "searched": [
+        "grep -in 'with_exp_nuisances|rel_norm|correlated_file' $AUDIT/test_index.txt -> 0 hits",
+        "grep -rln 'with_exp_nuisances|rel_norm|correlated_file' tests/test_*.py -> 1 file (this one)"
+      ],
+      "effort": "M"
+    },
+    {
+      "id": "test_closure_charged_current_wiring-M06",
+      "topic": "closure-suite",
+      "title": "Assert record['target'] survives TARGET_MAP for an abbreviated table target",
+      "rationale": "RESOLVED 2026-08-13 by test_cc_layout_keeps_beam_and_rowwise_inelasticity, WITH A CORRECTION TO THIS PROPOSAL: the expansion is NOT common to the four suites. Only the two full suites call TARGET_MAP.get(tab['target'], tab['target']); the two _small suites' exp_layout copies tab['target'] through verbatim and define no TARGET_MAP at all (read in all four generate.py copies, 2026-08-13). The manifest fixture now says 'p' and the assertion is per family -- 'proton' for the full suites, 'p' for the _small pair -- so either behaviour changing fails, and the asymmetry is stated in the test docstring rather than assumed away. Oracle: F1. Acceptance: mut_cc.py MUT=target_map (the .get(...) replaced by tab['target']) fails the two full-suite cases and, correctly, leaves the two _small cases passing, with the file's other 26 cases green. Open question for the owner, not actionable from tests/: whether the _small suites should expand abbreviated fitpack labels too -- today a manifest using 'p'/'d'/'n' would reach their dataset builders unexpanded. closure_NNPDF_truth/generate.py:539 (TARGET_MAP.get(tab['target'], tab['target']); TARGET_MAP defined at generate.py:59 maps 'p'/'d'/'n' to 'proton'/'deuteron'/'neutron') is never checked by this file's fixture, which uses 'target': 'proton' (already the expanded form, so the lookup is a no-op either way) and never asserts record['target'] at all.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_charged_current_wiring.py (extend test_cc_layout_keeps_beam_and_rowwise_inelasticity: set the fixture's target to 'p' and assert record['target'] == 'proton')",
+      "searched": [
+        "grep -in target_map $AUDIT/test_index.txt -> 1 hit, test_analysis_add_mellin_accepts_cp_target_mapping (an unrelated CP-target-mapping concept in test_analysis.py, not generate.py's TARGET_MAP dict)",
+        "grep -rln TARGET_MAP tests/test_*.py -> 0 files"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_charged_current_wiring-M07",
+      "topic": "closure-suite",
+      "title": "Check _even_map/_odd_map bind the correct field object per key, not just the key set",
+      "rationale": "RESOLVED 2026-08-13 by test_cc_dataset_builder_receives_even_valence_beam_and_y -- same change as weakness -02, recorded there in full. Oracle: F1 per-key binding via tagged sentinels, plus `is` identity against the field instances passed in. Acceptance: mut_cc.py MUT=even_map. See weakness -02, proposed_fix. A related but non-overlapping check exists one layer up, at the declarative-API field_maps level: tests/test_dataset_spec_registry.py::test_charged_current_recipe_preserves_even_and_valence_maps checks set(field_names()) <= set(plus|minus) (a subset, and its own docstring documents that a dropped quark field would pass too) -- that test never imports or calls closure_*/datasets.py's _even_map/_odd_map, so it does not cover this gap.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_charged_current_wiring.py (extend test_cc_dataset_builder_receives_even_valence_beam_and_y per weakness -02's proposed_fix)",
+      "searched": [
+        "grep -in maps_to $AUDIT/test_index.txt -> 0 hits (index is def-lines only)",
+        "grep -rln maps_to tests/test_*.py -> ~20 files",
+        "grep -rn '_even_map|_odd_map' tests/test_*.py -> only tests/test_closure_charged_current_wiring.py",
+        "grep -n test_charged_current_recipe_preserves_even_and_valence_maps tests/test_dataset_spec_registry.py -> 1 hit; read in full, tests field_maps at the dataset_spec/build_dataset layer, not this file's _even_map/_odd_map"
+      ],
+      "effort": "M"
+    }
+  ],
+  "unjustified_tolerances": [
+    {
+      "line": 110,
+      "text": "atol=1.0e-15,  # float-reassociation floor: (q2/x)/rs**2 here vs q2/(x*rs*rs) in source",
+      "quantity": "rowwise inelasticity y from exp_layout(), vs the same formula regrouped",
+      "comment_added": "already present (killed prior agent's edit, verified accurate here); measured (mutation_y_broadcast.py, this audit) that the two groupings are bit-identical (max abs diff 0.0) for this fixture, so the bar has effectively infinite headroom above actual floating-point noise -- confirms 'float-reassociation floor' is not an overstatement",
+      "provenance": "known"
+    }
+  ],
+  "measurements": [
+    {
+      "claim": "test_cc_layout_keeps_beam_and_rowwise_inelasticity's y-array assertion cannot distinguish exp_layout's real rowwise formula from a single-row-broadcast mutant, because the fixture's two rows are numerically degenerate.",
+      "command": "mutation_y_broadcast.py (standalone script, no closure_*/ or src/pixel import; reimplements the verbatim formula read from closure_NNPDF_truth/generate.py:564 and the test's own fixture values, run via OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 .venv/bin/python3)",
+      "result": "y_correct=[0.9888849333491555, 0.9888849333491555]; y_mutant_broadcast_row0=[0.9888849333491555, 0.9888849333491555]; y_mutant_broadcast_mean=[0.9888849333491555, 0.9888849333491555]; max|y_correct-expected_in_test|=0.0; max|mutant_row0-expected_in_test|=0.0; max|mutant_mean-expected_in_test|=0.0; both mutants pass rtol=0.0/atol=1e-15: True"
+    },
+    {
+      "claim": "test_cc_dataset_builder_receives_even_valence_beam_and_y's set(captured['maps_to'])==set(EVEN_MAP) assertion cannot detect a basis key bound to the wrong field object.",
+      "command": "mutation_maps_to_keyset.py (standalone script, no closure_*/ or src/pixel import; reimplements EVEN_MAP/ODD_MAP literals read verbatim from closure_NNPDF_truth/config.py:268-280 and _even_map's dict comprehension read verbatim from datasets.py:37-38)",
+      "result": "set(real)==set(EVEN_MAP): True; set(mutant_all_keys_bound_to_gluon_field)==set(EVEN_MAP): True; set(mutant_reversed_binding)==set(EVEN_MAP): True; per-key identity check shows 4 of 5 keys bound to the wrong object under mutant_a, 4 of 5 under mutant_b -- both invisible to the test's actual assertion"
+    },
+    {
+      "claim": "test_cc_dataset_builder_receives_even_valence_beam_and_y's with_exp_nuisances=False produces identical captured kwargs to with_exp_nuisances=True, for this specific rec fixture.",
+      "command": "mutation_exp_nuisance_kwargs.py (standalone script, no closure_*/ or src/pixel import; reimplements _exp_nuisance_kwargs verbatim from closure_NNPDF_truth/datasets.py:154-188, unreachable np.load/DIS_FIT_NORMALIZATION branches stubbed since rec has no rel_norm/correlated_file)",
+      "result": "with_exp_nuisances=False -> {}; with_exp_nuisances=True -> {}; identical: True"
+    },
+    {
+      "claim": "The rewritten rowwise-y fixture is non-degenerate: a row-0 broadcast and a row-mean broadcast now both differ from the correct array far above the atol=1e-15 bar, and the regrouped reference still agrees with the source formula exactly.",
+      "command": "scratchpad/measure_y.py -- re-execs closure_NNPDF_truth/generate.py from mutated source (row-0 broadcast, row-mean broadcast) against the unmutated module, on the test's own manifest fixture; PYTHONPATH=<repo> OMP_NUM_THREADS=1 venv/bin/python",
+      "result": "true y=[0.29666548, 0.55555556]; row-0 broadcast max|diff|=2.5889e-01; row-mean broadcast max|diff|=1.2945e-01; regrouped reference used by the test max|diff|=0.0000e+00"
+    },
+    {
+      "claim": "Every new or strengthened assertion in this file fails under a scoped in-memory mutation of the closure driver it covers, with the file's other cases still passing.",
+      "command": "MUT=<name> PYTHONPATH=<scratchpad> OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 venv/bin/python -m pytest tests/test_closure_charged_current_wiring.py -q -p no:randomly -p mut_cc  (mut_cc.py re-execs closure_*/generate.py or datasets.py from a mutated source string into a fresh module object's own __dict__ and rebinds it on the parent package; no file on disk is edited)",
+      "result": "status: 4 failed/24 passed | explicit_y: 4/24 | y_broadcast: 4/24 | y_mean: 4/24 | target_map: 2 failed/26 passed (absent from the _small suites by design) | even_map: 4/24 | builder_key: 4/24 | no_sqrt_s: 4/24 | nuisance_gate: 4/24. In every case the failing test is the one targeted. None of this file's tests read repository source as text or use inspect.getsource, so the recompile cannot produce a spurious line-offset failure."
+    },
+    {
+      "claim": "The two full suites expand an abbreviated fitpack target label through generate.TARGET_MAP; the two _small suites do not.",
+      "command": "regex extraction of exp_layout from all four closure_*/generate.py copies, plus grep -n TARGET_MAP",
+      "result": "closure_NNPDF_truth and closure_JAM_truth: 'target': TARGET_MAP.get(tab['target'], tab['target']). closure_NNPDF_truth_small and closure_JAM_truth_small: 'target': tab['target'], and no TARGET_MAP defined anywhere in those two files."
+    },
+    {
+      "claim": "The TARGET_MAP asymmetry between the full and _small suites is intentional and harmless: the two suites' manifests carry different label forms, and PIXEL normalizes both.",
+      "command": "read dis_manifest.json 'used' tables per suite; evaluate pixel.util.flavor.normalize_target on each label",
+      "result": "full suites: 13 used tables, targets {p: 11, d: 2}. _small suites: 7 used tables, targets {proton: 5, deuteron: 2}. normalize_target accepts p/proton/n/neutron/d/deuteron/isoscalar/pn and raises ValueError otherwise; TARGET_MAP is a strict subset of that alias table. Cause: the full suites' dis_audit reads the target from the fitpack spreadsheet, the _small suites' writes spec.target from config.EXP_SPECS."
+    }
+  ],
+  "notes_for_readme": "src/pixel/api/manifest.py's closure-manifest translator (_closure_record, line 171) still recognizes the retired 'f3_proxy' kind and has no 'sigma_r_cc' branch at all -- a separate, apparently un-migrated code path outside every file audited so far; flagged out-of-scope via spawn_task rather than fixed here."
+}

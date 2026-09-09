@@ -1,0 +1,188 @@
+{
+  "file": "tests/test_closure_dy_evolution.py",
+  "area": "closure-suite",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "src/pixel/geometry (Grid, ProductBasis)",
+    "src/pixel/kernels/evolution/flavor_transition.py (nf4_parton_evolution_projection, rowwise_parton_evolution_projection -- real, unstubbed bottom-threshold decision Q20 < AlphaS.mb_match2 <= Q2; non_singlet_evolution_matrix/singlet_evolution_matrix are monkeypatched out by _stub_evolution)",
+    "src/pixel/data/drell_yan.py (DrellYan builder, BilinearContribution, _evolution_terms), reached through closure datasets.build_drell_yan",
+    "closure_JAM_truth/config.py, closure_JAM_truth/datasets.py (build_drell_yan, dy_evolution_maps), closure_JAM_truth/generate.py (dy_central)",
+    "closure_NNPDF_truth/config.py, closure_NNPDF_truth/datasets.py (build_drell_yan, dy_evolution_maps), closure_NNPDF_truth/generate.py (dy_central)"
+  ],
+  "drives_non_pixel": "Also drives closure_JAM_truth/{config,datasets,generate}.py and closure_NNPDF_truth/{config,datasets,generate}.py (not under src/pixel/), imported via importlib per module-level SUITES = (\"closure_JAM_truth\", \"closure_NNPDF_truth\"). Never touches closure_JAM_truth_small/ or closure_NNPDF_truth_small/ -- see the S0-05 note below.",
+  "n_tests": 6,
+  "n_parametrized_cases": 12,
+  "tests": [
+    {
+      "name": "test_dy_evolve_constant_reaches_the_built_operator",
+      "line": 137,
+      "claim": "DY_EVOLVE actually reaches the built dataset: toggling it changes whether bilinear_contributions carry evolution operators and whether b/bbar partons are present, not just what the docstring says.",
+      "actual": "Builds the dataset with DY_EVOLVE=True (DY_NF=5) then False (DY_NF=4) from the same fields/basis, and checks four things: any() contribution has both evolution_A/B non-None (evolved), {\"b\",\"bb\"} is a parton_A subset (evolved), all() contributions have both evolution_A/B None (unevolved), \"b\" absent from partons (unevolved).",
+      "how": "datasets.build_drell_yan(...) with config.DY_EVOLVE/DY_NF monkeypatched; _stub_evolution replaces the two leaf evolution-matrix functions with a cheap linear stand-in, but the caller-side threshold/projection logic in flavor_transition.py runs for real.",
+      "oracle": "F1",
+      "bar": "membership/attachment only, no numeric tolerance",
+      "strength": "S2",
+      "catches": "DY_EVOLVE not reaching build_drell_yan at all (the historical bug: evo=None was hardcoded), or the bottom-threshold nf=4->nf=5 projection failing to add b/bbar. Measured this audit (see measurements): every one of 1552 contributions gets real evolution in this fixture when DY_EVOLVE=True, so the any() check is strictly weaker than the all() its own mirror four lines below uses -- a regression that dropped evolution from a subset of contributions (e.g. only the newly-crossed b/bb ones) while leaving the rest wired would pass both the any() line and the b/bb membership line. Does not check the evolution operator's numeric value (stubbed)."
+    },
+    {
+      "name": "test_dy_central_folds_the_same_operator_the_dataset_carries",
+      "line": 189,
+      "claim": "generate.dy_central folds the same assembled (possibly evolved) operator the dataset carries, evolved or not, rather than a separately written physics path.",
+      "actual": "Builds the dataset once (evolve parametrized True/False), draws one truth curve per basis field, computes an expected central value by looping dataset.bilinear_contributions one at a time (own einsum over c.assemble(...)), and compares to generate.dy_central's grouped/accumulated output.",
+      "how": "expected: per-contribution np.einsum(\"rij,i,j->r\", c.assemble(nu,basis,basis), truth[c.field_A], truth[c.field_B]) summed in a plain loop; got: generate.dy_central (groups on (id(kernel),id(evolution_A),id(evolution_B)) before contracting).",
+      "oracle": "A3",
+      "bar": "rtol=1e-12, atol=0.0 (float64 grouping-order pin, not a physics bound)",
+      "strength": "S2",
+      "catches": "a grouping-key bug in dy_central's accumulation (wrong-sign outer product, a weight double-counted across contributions sharing one group key, or evolved/unevolved rows merged into one group). Both sides read c.field_A/c.field_B and c.assemble(...) off the SAME dataset.bilinear_contributions objects (tests/README.md rule 1), so a field_A/field_B mislabelling in build_drell_yan/dy_evolution_maps, or an axis-transposed tensor inside assemble() itself, reproduces identically on both sides and is not caught here -- see the module docstring and the missing-test proposal below."
+    },
+    {
+      "name": "test_unevolved_dy_central_reproduces_the_parton_precombined_fold",
+      "line": 240,
+      "claim": "The field-decomposed rewrite of dy_central must not move the historical unevolved answer, which pre-combined truth into parton curves and folded the bare hard tensor.",
+      "actual": "Recombines truth into parton-level curves via config.dy_field_maps (the same function build_drell_yan itself calls for the unevolved fields_A/fields_B), folds against c.kernel.bilinear_tensor(...) directly (bypassing assemble()), and compares the sum to generate.dy_central's per-field-decomposed output.",
+      "how": "expected: one term per distinct kernel (deduplicated via id(c.kernel)), np.einsum(\"rij,i,j->r\", kernel.bilinear_tensor(...), parton_curve(map_A[parton_A]), parton_curve(map_B[parton_B])); got: generate.dy_central.",
+      "oracle": "A3",
+      "bar": "rtol=1e-12, atol=0.0 (float64 fold-order pin)",
+      "strength": "S2",
+      "catches": "a bug in the field-decomposed rewrite that breaks distributivity of the bilinear form over the field decomposition -- a coefficient applied twice, a missing cross term between two fields sharing one parton, or a sign error in coeffA*coeffB. Does not catch a wrong dy_field_maps coefficient or a bug in bilinear_tensor's own hard-scattering formula, since both sides call them the same way (config.dy_field_maps is not an independent source of the coefficients here -- it is the exact function build_drell_yan itself used to build fields_A/fields_B)."
+    },
+    {
+      "name": "test_evolved_dy_contributions_collapse_onto_shared_operator_groups",
+      "line": 306,
+      "claim": "Block sparsity survives evolution: contributions that share (kernel, evolution_A, evolution_B) collapse onto one operator instead of one numerically-identical array per field pair.",
+      "actual": "Builds an evolved dataset and checks len(groups) < len(contributions) (strict inequality only) plus, for every contribution, that evolution_A/evolution_B have shape (n_data, n_elements, n_elements).",
+      "how": "groups = {(id(c.kernel), id(c.evolution_A), id(c.evolution_B)) for c in contributions}; shape check via np.asarray(operator).shape.",
+      "oracle": "F1",
+      "bar": "len(groups) < len(contributions) (strict, unquantified); shape equality",
+      "strength": "S3",
+      "catches": "an outright regression to one array per contribution (no sharing at all). Measured this audit (see measurements): this fixture collapses 1552 contributions onto 424 groups (27.3%), far more compression than the bar requires; an implementation that regressed to 1551 groups -- effectively no sharing -- would still satisfy the strict inequality. The shape check is real but only checks structure, not operator values (which are stubbed)."
+    },
+    {
+      "name": "test_dy_projection_disagreeing_with_the_configured_nf_is_rejected",
+      "line": 352,
+      "claim": "A five-flavour projection into a four-flavour-configured luminosity must not pass silently.",
+      "actual": "Forces a real evolved projection (fixture Q2 crosses the bottom threshold, so proton.nf is genuinely 5) against a deliberately-wrong DY_NF=4, and checks dy_evolution_maps raises ValueError with a message containing \"projects to nf=5\".",
+      "how": "pytest.raises(ValueError, match=\"projects to nf=5\") around datasets.build_drell_yan; exercises datasets.py's `if int(proton.nf) != int(cfg.DY_NF): raise ValueError(...)` guard directly.",
+      "oracle": "F1",
+      "bar": "exception type + message substring, no numeric tolerance",
+      "strength": "S3",
+      "catches": "the nf-consistency guard being weakened, removed, or short-circuited (e.g. the comparison operator changed, or the check deleted). Structural contract: says nothing about whether the threshold-crossing decision the guard is built on (crosses_bottom in flavor_transition.py) is itself correct -- that is what test 1's b/bb membership check probes."
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_closure_dy_evolution-01",
+      "test": "test_dy_evolve_constant_reaches_the_built_operator",
+      "pattern": "W-LOOSE",
+      "severity": "S2",
+      "evidence": "RESOLVED 2026-08-13 by test_dy_evolve_constant_reaches_the_built_operator. The any(...) is now all(...), matching the unevolved mirror four lines down and the code's own guarantee (fields_A and evolution_A come from one PartonEvolutionProjection, so they share a key set by construction), and `len(evolved.bilinear_contributions) == 1552` is asserted beside it so all(...) cannot become vacuously true on an empty list. Re-measured 2026-08-13 for both suites: 1552 contributions, every one wired on both sides. Acceptance: leaving exactly one contribution unwired (mut_dyevo.py MUT=drop_one_evolution, which wraps the closure build_drell_yan and rebinds bilinear_contributions with contribution 0 carrying evolution_A=evolution_B=None) makes this test fail on the all(...) line (line 242, `assert False`), and the same dataset was measured directly: 1552 contributions, 1551 wired, any(...) -> True, all(...) -> False, and the test's other assertion `{b, bb} <= partons` -> True, i.e. the previous form of this test passed the mutation outright. The mutation also crashes tests 4 and 5, which is correct behaviour for a genuinely unwired contribution (np.asarray(None) reaches their shape/einsum assertions) rather than a scoping failure. NOTE for anyone reusing the harness: DrellYan.bilinear_contributions is a tuple on a frozen dataclass, so the first version of this mutation raised TypeError instead of mutating and its 'failures' were worthless; it now rebuilds the tuple and rebinds it with object.__setattr__. tests/test_closure_dy_evolution.py:169-172 (post-edit line numbers) uses any(c.evolution_A is not None and c.evolution_B is not None for c in evolved.bilinear_contributions), while its unevolved mirror at line 180 four lines later uses all(...) for the negative case. Measured this audit (script below): for both suites, all 1552 bilinear_contributions built by this fixture with DY_EVOLVE=True get real (non-None) evolution_A and evolution_B -- the code's own construction guarantees fields_A/evolution_A share exactly the same key set (both come from one PartonEvolutionProjection), so all(...) would pass too.",
+      "why_it_matters": "a regression that attaches evolution to most but not all contributions (e.g. an indexing bug specific to the newly-crossed b/bb flavours, or a completion-sharing bug in _nonsinglet_blocks/_singlet_blocks that leaves one source's shared block unset) would satisfy any(...) as long as at least one contribution is still wired, and would not be caught by the b/bb parton-membership check either (that checks label presence, not evolution attachment).",
+      "proposed_fix": "Change any(...) to all(...) to match what the code already guarantees and what the unevolved mirror check already asserts symmetrically; note in the docstring (done this pass) that the weaker check was previously unexplained.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_dy_evolution-02",
+      "test": "test_dy_central_folds_the_same_operator_the_dataset_carries, test_unevolved_dy_central_reproduces_the_parton_precombined_fold",
+      "pattern": "W-COMMON",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-14 by test_dy_side_a_is_the_beam_and_side_b_carries_the_reaction_transform (new). The remaining half of this weakness was the field_A/field_B LABELLING upstream in dy_evolution_maps (closure_*/datasets.py:242-292), whose return is (proton.fields, target.fields, proton.evolution, target.evolution) -- four near-identical structures whose two halves can be exchanged by a one-line edit that changes no shape and raises nothing. The new test anchors the orientation on the function's OWN pp answer (for reaction 'pp' the target IS the beam, so both sides are the untransformed proton projection) and then requires, for pd and ppbar: the A-side evolution map to reproduce the pp reference bit for bit, and the B-side to reproduce isoscalar_projection/conjugate_projection applied to it. No projection is re-derived and no kwarg list is retyped from datasets.py -- the reference is the same function under the one reaction whose answer is unambiguous. ACCEPTANCE: mutation swap_ab (scratchpad/mut_JK/mut_dy_sides_jk.py) rebinds datasets.dy_evolution_maps to a wrapper returning (fields_B, fields_A, evolution_B, evolution_A) -- the exact edit -- on both closure_NNPDF_truth and closure_JAM_truth. Result: 1 failed / 7 passed in 18.9s, the failure being ONLY the new test, at '_parton_evolution_differences(evo_A, pp_evo_A) == []' with 66 structural differences reported (first 'b/g: 4 terms vs 2'). The plugin counts the swapped function's calls and reports closure_NNPDF_truth=7, so the four pre-existing DY_EVOLVE=True tests EXECUTED the mutated code and passed anyway -- the original blindness demonstrated rather than assumed. Baseline unmutated, same file: 8 passed in 19.0s (was 7 before this test). THREE MEASURED DEGENERACIES that would each have produced a vacuous test, none visible from a green run: (a) the fields maps -- the very objects the weakness names -- are IDENTICAL across all three reactions and across partons, because PartonEvolutionProjection.fields records only which source fields feed a parton with coefficient 1.0 and neither the isoscalar average nor the charge conjugation changes that set; measured fields_A == fields_B == isoscalar(...).fields == conjugate(...).fields, and fields['u'] == fields['d'] == fields['ub']. All the orientation lives in .evolution (weights and term counts). Any test asserting on the fields maps is blind, so the new test asserts their degeneracy explicitly rather than relying on it. (b) conjugate_projection is an INVOLUTION, so relations like fields_B['u'] == fields_A['ub'] are symmetric under the swap and pass either way -- the reference has to be an externally anchored projection, which is what the pp leg supplies. (c) pp itself can never detect the swap; it is asserted symmetric rather than skipped, so the reason it is exempt is on the record. Note the shared _stub_evolution (scalar multiples of the identity) IS sufficient here, unlike in test_assemble_composes_each_hadron_operator_onto_its_own_axis: what is compared is the term structure, not a folded value, and the swap shows up as 'u/t3: 1 term vs 2' (pd) and 'u/v3: weight +0.25 vs -0.25' (ppbar). Comparisons are EXACT (np.array_equal on operators, == on weights): both sides come from the same deterministic stub, so any tolerance would only hide a discrepancy. Tests 2 and 3 are unchanged and keep their common-mode caveat, which is correct for what they target (the fold arithmetic). PARTIALLY RESOLVED 2026-08-13 by the new test_assemble_composes_each_hadron_operator_onto_its_own_axis (see missing-test entry -M01 for the full record). The assemble()/evolved_tensor half of this weakness is now covered: folding the bare tensor with separately evolved curves must reproduce folding the assembled tensor, an identity that fails when the two operators are exchanged. Tests 2 and 3 are unchanged and keep the caveat -- they still read field_A/field_B and the composed tensor off the same contributions -- and the field_A/field_B *labelling* itself, upstream in dy_evolution_maps, remains uncovered: nothing checks that the field named field_A is the one whose parton the A-side projection was built for. Module and per-test docstrings updated to say exactly that. tests/test_closure_dy_evolution.py:223-227 and :283-296 both read c.field_A, c.field_B, c.kernel.parton_A/parton_B, and either c.assemble(...) or c.kernel.bilinear_tensor(...) off the same dataset.bilinear_contributions list that generate.dy_central (the function under test) also reads. Neither test constructs an independent tensor or independent field/parton assignment.",
+      "why_it_matters": "DY is bilinear -- the composed tensor has two basis axes, one per hadron -- and both tests' single _basis() fixture is handed to both axes of every tensor built here. A field_A/field_B mislabelling anywhere upstream (build_drell_yan, dy_evolution_maps) or an axis-transpose bug inside BilinearContribution.assemble()/DYKernel.bilinear_tensor() itself would reproduce identically in the test's own reference computation and in dy_central's output, and neither test would fail. This is failure mode 1 from tests/README.md: both sides share the object that could be wrong.",
+      "proposed_fix": "Documented as a stated caveat in both tests' docstrings and the module docstring this pass (not fixed in source -- neither test is wrong for what it targets, the fold arithmetic, but the file has no test positioned to catch a field/axis mislabelling; see missing-test proposal M01).",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_dy_evolution-03",
+      "test": "test_evolved_dy_contributions_collapse_onto_shared_operator_groups",
+      "pattern": "W-LOOSE",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 by test_evolved_dy_contributions_collapse_onto_shared_operator_groups. The bar moved from `len(groups) < len(contributions)` (which 1551 groups, i.e. no sharing at all, satisfied) to `len(groups) <= len(contributions) // 2`, i.e. 776 here. Re-measured 2026-08-13, identically in both suites: 424 groups from 1552 contributions (27.32%), so the achieved value clears the new bar by 45% -- tight enough to fail a loss of most of the sharing, loose enough to survive a flavour or channel being added to the fixture. Acceptance: giving all but two contributions their own copy of the evolution arrays (mut_dyevo.py MUT=break_sharing) makes it fail with `assert 1551 <= (1552 // 2)` -- and 1551 groups satisfies the OLD bar `1551 < 1552`, so this mutation discriminates the two bars exactly. It fails only this test (2 failed / 8 passed over the fast subset). Bar and measurement are both recorded in the docstring and beside the assertion. tests/test_closure_dy_evolution.py:339 (post-edit) `assert len(groups) < len(contributions)`. Measured this audit: 1552 contributions collapse onto 424 groups (ratio 0.2732) in this fixture -- the real compression is large, but the assertion only requires one fewer group than contributions.",
+      "why_it_matters": "the test's own docstring calls a non-collapsing implementation 'ruinously more expensive', but the bar does not encode any magnitude, so a change that broke most of the sharing (e.g. down to 1551 groups) would pass silently, defeating the performance property the test claims to guard.",
+      "proposed_fix": "Tighten to a magnitude-aware bound, e.g. len(groups) <= len(contributions) // 2, or assert the measured ratio directly with a documented margin (tests/README.md rule 7). Documented as a caveat in the docstring and an inline comment this pass; not changed in the assertion itself (executable line).",
+      "effort": "S"
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_closure_dy_evolution-M01",
+      "topic": "closure-suite",
+      "title": "Add a non-degenerate two-sided DY closure fixture that can detect a field_A/field_B (hadron-axis) mislabelling or an assemble()-transpose bug",
+      "rationale": "RESOLVED 2026-08-13 (in part -- see the scope note below) by the new test_assemble_composes_each_hadron_operator_onto_its_own_axis, parametrized over both suites. Oracle: the documented semantic contract rather than a re-typing of the source einsum -- BilinearContribution.assemble and DYKernel.evolved_tensor document their operators as mapping input coefficients to the hard tensor's basis (q_phys = E @ q_input, model.py:715 and kernel.py:575-577), so folding the BARE tensor with the separately evolved curves E_A[r] @ q_A and E_B[r] @ q_B (ordinary matrix-vector products, row by row) must reproduce folding the ASSEMBLED tensor with the un-evolved curves, weight included. A3: both sides use the same bilinear_tensor and the same operators, so it checks which axis each operator is composed onto, not the hard kernel or the operators themselves. TWO DEGENERACIES had to be removed first, both measured, and both are the 'second degeneracy behind the first' the brief warns about: (1) the reaction must be pd, so hadron B's projection is isoscalar_projection(proton) rather than the same object; (2) the file's shared _stub_evolution returns factor * eye, and a scalar multiple of the identity makes (E_A q_A)^T Y (E_B q_B) EXACTLY invariant under exchanging the operators -- measured swap ratio 0.000, bit for bit. Multiplying by one fixed non-diagonal matrix is not enough either (all operators stay proportional to it; measured 0.000 again). The test therefore uses a new _stub_evolution_flavour_mixing whose channels and singlet blocks carry DIFFERENT polynomials in a nilpotent shift. Measured with that stub, identically in both suites, on the two selected contributions (parton pairs u/ub and d/db): identity max|a/b - 1| = 6.7e-16 against an rtol=1e-11 bar, swapped fold 2.821 away. The non-degeneracy bar is set at > 0.1 rather than at the achieved 2.821 because that ratio depends on the random curves (2.821, 0.878, 0.423 at seeds 0, 3, 17) while the agreement does not (1e-16 at every seed). Acceptance: swapping evolution_A and evolution_B inside DYKernel.evolved_tensor (mut_dyevo.py MUT=swap_axes, patched on the existing class object) makes this test fail and nothing else: 2 failed / 8 passed over the 10 items that exclude test 2, whose 4 cases were deselected because that test costs roughly half an hour per evolved case on this box (1552 assemble() calls in its own reference loop). Test 2 is expected to pass the swap by construction -- both of its sides read the same assemble() output -- and that expectation IS the recorded weakness -02, which is why this new test exists. SCOPE NOTE: this closes the assemble()/evolved_tensor axis question, not the field_A/field_B labelling question in dy_evolution_maps; the latter stays open and is now stated in the module docstring. Every numeric assertion in this file (tests 2 and 3) reads c.field_A/c.field_B and the composed tensor off the SAME dataset.bilinear_contributions the code under test also reads, so a field mislabelling upstream or an axis-transposed FEM tensor reproduces identically on both sides and passes (see weakness -02 and the module docstring). Searched two other plausible homes for this check and both fall short at the FEM/closure scale actually used here: (1) tests/test_dy_channels.py's scalar-luminosity checks (test_mirror_channel_swaps_A_and_B, test_qqbar_luminosity_flavor_activation) both use a hadron-B fixture proportional to hadron-A (_FB = 10 * _FA), which their own docstrings document as unable to detect a hadron-array swap for that reason -- a fix is already proposed there (test_dy_channels-M03, not yet landed) but scoped to the scalar luminosity() function, not the FEM tensor/closure-dataset level. (2) tests/test_dy_kernel.py's one externally-oracled test (test_dy_kernel_tensor_sum_matches_fitpack_legacy_benchmark_row) runs at n_elements=1 (_AnalyticFakePDFBasis), too degenerate for a 1x1 'matrix' transpose to be meaningful. A closure-level regression, in this file or alongside it, using two DIFFERENT (non-proportional) per-field truth curves and asserting that swapping which reaction's field map feeds fields_A vs fields_B changes the prediction (or, more directly, monkeypatching BilinearContribution.assemble to swap its two tensor axes and showing an existing test in this file would NOT catch it) would close this gap at the scale this file actually cares about.",
+      "proposed_oracle": "A2",
+      "proposed_location": "tests/test_closure_dy_evolution.py (new test alongside test_dy_central_folds_the_same_operator_the_dataset_carries, using per-field truth curves that are not proportional across fields, e.g. rng.normal per field as already done, which already differs field-to-field -- the missing piece is an assertion that is actually sensitive to which axis carries field_A vs field_B, e.g. via a deliberate mutation/monkeypatch demonstration per METHODOLOGY.md Appendix 3b, not just re-reading the same objects twice)",
+      "searched": [
+        "grep -rn \"def test_.*swap|def test_.*asymmetric|def test_.*distinguish|def test_.*hadron\" tests/test_*.py -> 8 hits across 6 files (test_dy_channels.py, test_dy_electroweak.py, test_dy_flavor_evolution.py, test_fiducial_cuts.py, test_heavy_flavour.py, test_nnpdf_fk.py); none scoped to the FEM bilinear-tensor axis question, all either scalar-luminosity or unrelated (pT/eta fiducial asymmetry, FK-table rotation)",
+        "grep -rln 'field_A' tests/test_*.py -> 9 files; grep -n field_A/field_B in test_dy_dataset.py -> 1 hit (a set-membership check on (field_A,field_B) pairs, not axis-order sensitive) and test_dy_kernel.py -> 0 hits for field_A specifically (uses parton_A/parton_B directly)",
+        "python3 -c 'json.load(...)' over plans/test_audit/reports/test_dy_channels.json and test_dy_kernel.json missing[] arrays -> test_dy_channels.json already has test_dy_channels-M03 'Add a non-proportional-fixture regression test for luminosity's hadron-A/B array binding' (scalar level, not FEM/closure level); test_dy_kernel.json has no missing entry mentioning swap/transpose/hadron; test_dy_dataset.py not yet audited (report file absent)",
+        "grep -n 'def test_' tests/test_dy_kernel.py -> 10 defs read individually (see report); test_dy_kernel_tensor_sum_matches_fitpack_legacy_benchmark_row is the only one with an independent oracle and its own docstring states it runs at n_elements=1"
+      ],
+      "effort": "M"
+    }
+  ],
+  "unjustified_tolerances": [
+    {
+      "line": 233,
+      "text": "assert np.allclose(got, expected, rtol=1e-12, atol=0.0)",
+      "quantity": "generate.dy_central's grouped-and-accumulated output vs a one-contribution-at-a-time reference fold, same underlying tensors and truth curves",
+      "comment_added": "Added a comment stating this bounds summation-order float64 noise from the different grouping order, not a physical accuracy, cross-referenced to the module docstring.",
+      "provenance": "known (bar is unchanged; both sides provably sum the identical set of terms, so 1e-12 is a float64-noise floor, not a measured physics margin)"
+    },
+    {
+      "line": 302,
+      "text": "assert np.allclose(got, expected, rtol=1e-12, atol=0.0)",
+      "quantity": "generate.dy_central's field-decomposed output vs a parton-precombined reference fold (unevolved branch)",
+      "comment_added": "Same as above -- added a comment naming this a fold-order float64 pin, referencing the per-test docstring for the independence caveat.",
+      "provenance": "known (bar is unchanged; algebraically identical sums in a different grouping order)"
+    },
+    {
+      "line": 339,
+      "text": "assert len(groups) < len(contributions)",
+      "quantity": "number of distinct (kernel, evolution_A, evolution_B) groups vs number of bilinear contributions, for the block-sparsity collapse",
+      "comment_added": "Added a comment recording the measured ratio (424/1552, 27.3%) and noting the bound only confirms some sharing, not how much.",
+      "provenance": "known (measured this audit; see measurements array)"
+    }
+  ],
+  "measurements": [
+    {
+      "claim": "Every bilinear contribution built by this file's fixture gets a real (non-None) evolution_A and evolution_B when DY_EVOLVE=True, for both suites -- so test 1's any(...) check is strictly weaker than the all(...) its own construction guarantees and its unevolved mirror already uses.",
+      "command": "OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 venv/bin/python /private/tmp/.../scratchpad/measure_any_vs_all.py -- reconstructs this file's _basis()/_stub_evolution()/_record() fixtures verbatim, builds an evolved dataset via {suite}.datasets.build_drell_yan for suite in (closure_JAM_truth, closure_NNPDF_truth), and counts contributions with evolution_A is not None and evolution_B is not None",
+      "result": "closure_JAM_truth: n_contributions=1552 n_with_both_evolution=1552 all_true=True; closure_NNPDF_truth: n_contributions=1552 n_with_both_evolution=1552 all_true=True"
+    },
+    {
+      "claim": "The block-sparsity collapse test_evolved_dy_contributions_collapse_onto_shared_operator_groups checks is large in practice (far more than the bare strict inequality requires).",
+      "command": "Same script, appended: groups = {(id(c.kernel), id(c.evolution_A), id(c.evolution_B)) for c in contributions}; print(len(groups), len(contributions), len(groups)/len(contributions))",
+      "result": "groups=424 contributions=1552 ratio=0.2732 (closure_NNPDF_truth, last suite in the loop)"
+    },
+    {
+      "claim": "The strict-subset evolution regression is caught by all(...) and was not caught by any(...).",
+      "command": "scratchpad/probe_quantifier.py -- applies mut_dyevo's drop_one_evolution wrapper, builds the file's own fixture, and evaluates both quantifiers plus the parton-membership assertion on the same dataset",
+      "result": "1552 contributions, 1551 wired; any(...) -> True; all(...) -> False; {b, bb} <= partons -> True. Under pytest the mutation fails test 1 at line 242 with `assert False`."
+    },
+    {
+      "claim": "Re-measured group collapse and evolution attachment for the file's fixture, both suites, after the bar change.",
+      "command": "scratchpad/probe_groups.py -- builds the file's own pd record with the file's own stub on closure_JAM_truth and closure_NNPDF_truth",
+      "result": "both suites: 1552 contributions, 424 groups (0.2732), 1552 wired on both sides with DY_EVOLVE=True, and 296 contributions all unwired with DY_EVOLVE=False. New bar len(contributions)//2 = 776."
+    },
+    {
+      "claim": "The file's shared _stub_evolution is structurally incapable of resolving the two hadron axes, and so is any single-non-diagonal-matrix variant.",
+      "command": "scratchpad/probe_dy.py, probe_dy_nd.py, probe_dy_nd2.py -- fold each contribution's assembled tensor against the bare tensor with the operators applied in the correct and in the swapped order",
+      "result": "factor * eye stub: max|swap/correct - 1| = 0.000 (bit-identical). factor * M for one fixed non-diagonal M: 0.000 again. Per-channel/per-block polynomials in a nilpotent shift: 2.821 (seed 0), 0.878 (seed 3), 0.423 (seed 17), with the correct-order identity holding at 4.4e-16 to 1.8e-15 throughout."
+    },
+    {
+      "claim": "The new axis test agrees with the documented composition contract and disagrees with the swapped one, identically in both suites.",
+      "command": "scratchpad/probe_final.py -- replicates the committed test's selection (one contribution per distinct parton pair, non-proportional operators) and its seed",
+      "result": "closure_JAM_truth and closure_NNPDF_truth, parton pairs u/ub and d/db, weight -0.0312: identity max|a/b - 1| = 4.44e-16 (6.66e-16 for the committed pair after the per-parton-pair selection), swap max|a/b - 1| = 2.821 in all four cases."
+    },
+    {
+      "claim": "FINDING (source, not test): the DY hard-tensor assembly is ~13x slower than when tests/test_durations.json was written, which is why this file now costs ~40 minutes instead of ~3.",
+      "command": "scratchpad/time_tensor.py -- builds this file's own evolved fixture and times DYKernel.bilinear_tensor / BilinearContribution.assemble twice each; plus git status and mtimes on src/pixel/kernels/drell_yan/",
+      "result": "n_elements=6, 3 rows, 1552 contributions. bilinear_tensor: 0.584s first call, 0.576s second (no in-process memoization). assemble (evolved): 0.580s / 0.593s. test_dy_central_folds_the_same_operator_the_dataset_carries[True-*] needs 1552 assembles in its own reference loop plus 424 inside dy_central = ~1976 calls = 19.5 min per case, matching the >20 CPU-minutes observed. tests/test_durations.json records 87.47s/88.72s for those cases, i.e. ~0.045 s per call previously. src/pixel/kernels/drell_yan/kernel.py and src/pixel/data/drell_yan.py carry uncommitted modifications timestamped the same day, and the package has newly added nnlo_convolution.py / nnlo_source.py / _redy_bridge.cpp; the closure config runs DY_ORDER = 'LO'. No test-side change touches the timed code."
+    },
+    {
+      "claim": "The field_A/field_B labelling in dy_evolution_maps was uncovered: exchanging the two halves of its return left every test in the file green, including the four that execute it.",
+      "command": "PIXEL_MUT=swap_ab OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1 PYTHONPATH=scratchpad/mut_JK venv/bin/python -m pytest tests/test_closure_dy_evolution.py -q -p no:randomly -p mut_dy_sides_jk   (serial, no -n)",
+      "result": "With the new test: 1 failed / 7 passed in 18.9s -- only test_dy_side_a_is_the_beam_and_side_b_carries_the_reaction_transform fails, reporting 66 structural differences. Swapped-function call count closure_NNPDF_truth=7, i.e. the other tests ran the mutated code and passed. Unmutated baseline 8 passed in 19.0s. Degeneracy probe (scratchpad/mut_JK/probe_dy_sides.py): fields maps identical across pp/pd/ppbar and across u/d/ub; evolution maps differ at u/t3 (term count) for pd and u/v3 (weight sign) for ppbar."
+    }
+  ],
+  "notes_for_readme": "This file is the one place that would need updating if the S0-05 methodology decision (closure_*_small's forbidden ensemble-second-moment dy_central) is ever resolved by unifying the small and full suites' generate.py -- currently this file's SUITES tuple deliberately excludes the _small suites and that exclusion is load-bearing for the module docstring's claim that this file does not touch S0-05."
+}

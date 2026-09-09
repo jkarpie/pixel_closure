@@ -1,0 +1,333 @@
+{
+  "file": "tests/test_closure_constraints.py",
+  "area": "closure-suite",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "src/pixel/core/model.py (Field, Dataset, Contribution, DatasetMetadata)",
+    "src/pixel/geometry/grid.py (Grid)",
+    "src/pixel/kernels/common.py (Delta, Mellin)",
+    "src/pixel/kernels/base.py (Kernel.matrix, Kernel.__init__)",
+    "closure_JAM_truth/fit.py (constraint_datasets:38-111, _iterate_t0:460-491)",
+    "closure_JAM_truth/config.py (make_grid, vanishes_at_origin, low_x_completion, ALL_FIELDS, VALENCE_NORMS, SINGLET_GLUON_FIELDS, CONSTRAINT_*_SIGMA, ENDPOINT_X, T0_MAX_ITERATIONS, LOW_X_LINEAR_POWER)",
+    "closure_NNPDF_truth/{fit,config}.py (constraint_datasets byte-identical to closure_JAM_truth's; every constant this file reads identical too)",
+    "closure_JAM_truth_small/{fit,config}.py (same)",
+    "closure_NNPDF_truth_small/{fit,config}.py (same)"
+  ],
+  "drives_non_pixel": "Primary logic under test is the repo-root closure_JAM_truth / closure_NNPDF_truth / closure_JAM_truth_small / closure_NNPDF_truth_small driver packages -- specifically fit.constraint_datasets and config.{make_grid, vanishes_at_origin, low_x_completion, ALL_FIELDS, VALENCE_NORMS, SINGLET_GLUON_FIELDS, CONSTRAINT_*_SIGMA, ENDPOINT_X, T0_MAX_ITERATIONS} -- none of which live under src/pixel. pixel.core.model.{Field,Dataset,Contribution}, pixel.geometry.Grid, and pixel.kernels.{Delta,Mellin} are imported and called, but only as generic, already-covered plumbing; no formula native to src/pixel is under test in this file.",
+  "n_tests": 12,
+  "n_parametrized_cases": 45,
+  "tests": [
+    {
+      "name": "test_near_hard_constraints_match_truth_in_the_fit_basis",
+      "line": 67,
+      "claim": "Synthetic per-field curves fold through constraint_datasets, and every near-hard dataset's mean matches kernel.matrix(nu, basis) @ curve; the dataset count and per-dataset metadata keys are also checked.",
+      "actual": "Recomputes each dataset's target with the identical kernel object constraint_datasets already used, against a curve provably identical (exact-knot np.interp) to the internal one. Proves Dataset storage/plumbing is self-consistent, not that the nu/alpha/target formula choices are correct.",
+      "how": "Builds 9 fields on suite.cfg.make_grid(), a synthetic curve x**0.3*(1-x)**2*(1+0.1*i) per field, calls constraint_datasets(fields, truth), asserts len(datasets)==13, then for each dataset recomputes contribution.kernel.matrix(dataset.nu, field.basis) @ curve and compares to dataset.mean.",
+      "oracle": "A3",
+      "bar": "rtol=0.0, atol=1e-12 (recompute); exact len(datasets)==13",
+      "strength": "W1",
+      "catches": "Dataset construction/storage bugs (e.g. mean not matching what was computed, contribution/field misalignment). Demonstrated NOT to catch a wrong ENDPOINT_X, VALENCE_NORMS value, or Mellin alpha -- see measurements: a mutant nu (0.9 instead of 1.0) moves the target by a factor of 2.5e17 and this exact check still passes."
+    },
+    {
+      "name": "test_t0_iteration_ceiling_covers_observed_small_suite_convergence",
+      "line": 124,
+      "claim": "T0_MAX_ITERATIONS is high enough to cover the observed small-suite convergence iteration count.",
+      "actual": "Checks a static config int is >= a hardcoded literal 9; never runs _iterate_t0 or any fit, so nothing about actual convergence is exercised.",
+      "how": "assert suite.cfg.T0_MAX_ITERATIONS >= 9",
+      "oracle": "D2",
+      "bar": ">= 9 (T0_MAX_ITERATIONS == 12 in all four suites; margin 3)",
+      "strength": "W2",
+      "catches": "T0_MAX_ITERATIONS being lowered toward 9. Does not catch _iterate_t0 failing to converge in practice, or 9 itself being wrong -- no provenance for '9' was found in cfg.py, fit.py, or closure_logs/ (searched; the small-suite logs on disk predate any successful run)."
+    },
+    {
+      "name": "test_origin_constraint_is_off_when_the_grid_never_reaches_zero",
+      "line": 151,
+      "claim": "On the default x_min > 0 closure grid, no cons_origin_* dataset is built; the vanishing x->0 limit is instead carried by the low-x completion.",
+      "actual": "Confirms the absence of any cons_origin_* dataset name (a real, independent key-set check on constraint_datasets's guard at fit.py:100), plus a per-field low_x_completion/vanishes_at_origin dispatch check that is independent on the power-vs-flat *kind* but self-referential on the *alpha* value.",
+      "how": "grid = suite.cfg.make_grid(); datasets = constraint_datasets(_fields_on(suite, grid)); assert no dataset name starts with cons_origin_; then for each field compare low_x_completion(name) to a literal partly built from cfg.LOW_X_LINEAR_POWER.",
+      "oracle": "F1",
+      "bar": "exact key-set absence; exact dict/string equality",
+      "strength": "S3",
+      "catches": "The x=0 guard at closure_JAM_truth/fit.py:100 being removed or inverted, which would silently start emitting the all-zero Delta constraint row this suite exists to avoid."
+    },
+    {
+      "name": "test_origin_constraint_switches_on_for_the_vanishing_fields",
+      "line": 187,
+      "claim": "With include_origin=True, exactly the 7 non-singlet/gluon fields get an origin dataset pinned at nu=mean=0 with covariance CONSTRAINT_ORIGIN_SIGMA**2, and the Delta row genuinely selects the x=0 basis element.",
+      "actual": "Field-set cross-check (partly self-referential, since vanishes_at_origin is itself defined via SINGLET_GLUON_FIELDS), a tautological covariance check, a narrow nu/mean pin (true only because truth=None triggers represented_target's early return), and a genuinely independent one-hot Delta-row check.",
+      "how": "Builds fields on Grid(include_origin=True); calls constraint_datasets(fields) with no truth; collects cons_origin_* datasets; checks set membership two ways, nu/mean/cov, then recomputes the Delta row and checks exactly one nonzero entry summing to 1.",
+      "oracle": "A1",
+      "bar": "atol=0.0 exact (nu, mean); pytest.approx default rel=1e-6 (cov, row sum); count_nonzero==1 exact",
+      "strength": "S1",
+      "catches": "A finite-element basis that fails the nodal/Lagrange property at x=0 (would not be one-hot), or the origin-dataset guard selecting the wrong field subset. The strongest, most independent check in this file."
+    },
+    {
+      "name": "test_origin_constraint_targets_the_represented_truth",
+      "line": 254,
+      "claim": "The origin constraint (like the x=1 endpoint) is satisfied by the represented injected truth curve, not the nominal physical value.",
+      "actual": "Same same-kernel-object recompute pattern as the first test, applied to all datasets on an include_origin grid. For the origin family specifically this is unfalsifiable: measured represented == nominal == 0.0 for every field, because the synthetic curve x**0.3*(1-x)**2 is exactly zero at x=0 by construction. Only the norm sub-case (folded into the same loop) exercises represented != nominal.",
+      "how": "Same construction as the first test but on an include_origin grid; loops over every returned dataset (endpoint+norm+origin), recomputes kernel.matrix(nu,basis)@curve vs dataset.mean, then a metadata check that is vacuously true for every non-origin dataset.",
+      "oracle": "A3",
+      "bar": "rtol=0.0, atol=1e-12",
+      "strength": "W1",
+      "catches": "Same narrow plumbing bugs as the first test. For the origin family specifically: nothing -- a represented_target implementation that silently fell back to nominal instead of reading the curve would pass this test unchanged (measured)."
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_closure_constraints-01",
+      "test": "test_near_hard_constraints_match_truth_in_the_fit_basis",
+      "pattern": "W-TAUT",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_constraint_targets_match_an_analytic_affine_truth. Added a closed-form oracle (A1) that calls no pixel code: the affine truth q(x)=A+Bx is represented exactly by the cubic-spline element basis, so the endpoint target is q(1)=A+B (measured |got/exact-1| = 0.0 for all nine fields; asserted rtol=1e-12 because the x=1 row has 110 nonzeros and a 110-term dot product's summation order is not contractual) and the valence-norm target is A(1+ln 1/x_min)+B (measured 5.543e-5, bar rtol=2e-4, 27.7% used). dataset.nu is pinned to the literal 1.0 and the nominal targets to literal quark-counting numbers, both stated in the test rather than read back from cfg. Acceptance: with ENDPOINT_X=0.9 in all four configs the new tests fail (8 failed) while all four pre-existing tests still pass (33 passed); same result for alpha=-1 -> 0 on the valence Mellin kernel and for a Delta-only silent fallback to nominal. Measured residual note: PIXEL's [0,x_min) head for a Mellin kernel with alpha != 0 is short by 9.18e-4 * q(x_min), grid- and quadrature-refinement invariant (kernels.base.assemble disables the exact low_x_mellin_head when alpha != 0); that is the whole of the 5.543e-5 and is src/pixel behaviour, not closure code. tests/test_closure_constraints.py:110-118 recomputes with contribution.kernel, the literal object constraint_datasets built and already used to compute dataset.mean. Demonstrated by mutation (measurements m2): a wrong endpoint nu (0.9 instead of the correct 1.0) moves the stored target from 5.865125278789004e-20 to 0.01453329096320881 (factor 2.478e17) and the identical assert_allclose(..., atol=1e-12) still passes.",
+      "why_it_matters": "A typo in cfg.ENDPOINT_X, or in any nu passed to a near-hard kernel, silently changes the closure constraint's target, and this file's core numeric check would not notice -- it recomputes with whatever nu ended up on the Dataset rather than an independent reference.",
+      "proposed_fix": "Add an assertion that dataset.nu equals the expected physical value read independently from cfg (e.g. assert_allclose(dataset.nu, [cfg.ENDPOINT_X]) for endpoint data, [1.0] for norm data), so a wrong constant in cfg is caught even though the kernel recompute cannot catch it.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_constraints-02",
+      "test": "test_origin_constraint_targets_the_represented_truth",
+      "pattern": "W-TAUT",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_constraint_targets_read_the_represented_truth_not_the_nominal_value. Added a second, non-degenerate curve family: x**0.3 (1-x)**2 + 0.25, nonzero at BOTH x=0 and x=1, so every Delta target (9 endpoint + 7 origin) must come back as exactly 0.25 while its nominal stays 0.0. Oracle is the injected node value, needing no kernel. Acceptance: a represented_target that returns float(nominal) for Delta kernels only -- leaving the Mellin/valence path correct -- passes every pre-existing test in the file and fails this one on all four suites. The original curve is kept alongside (it is the one whose targets can be read off by inspection). tests/test_closure_constraints.py:254-301; measured (m1 script) represented=0.0, nominal=0.0 for the origin family under this file's own curve x**0.3*(1-x)**2 (identically zero at x=0). Only cons_norm_* differs in the same run (represented=3.28899164907155 vs nominal=1.0 for v3).",
+      "why_it_matters": "The test's name and its own inline comment (lines 273-274) explicitly claim to distinguish 'represented' from 'nominal' targets -- exactly the closure-validity property this repo's memory notes flag as a known trap. For the origin family this test cannot ever exercise that distinction with its current fixture: a represented_target implementation that silently used nominal instead of reading the curve would produce byte-identical results here.",
+      "proposed_fix": "Use a curve family nonzero at x=0 (e.g. x**0.3*(1-x)**2 + eps), and assert the represented target differs from nominal by roughly the injected offset, the way the norm sub-case already (accidentally) does.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_constraints-03",
+      "test": "all five test_* functions (SUITES parametrization)",
+      "pattern": "W-DEAD",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 by test_the_four_suites_still_share_one_constraint_builder. The cross-suite identity was recorded only as prose in the module docstring, which goes stale silently; it is now asserted -- inspect.getsource(constraint_datasets) equal across the four suites, plus 14 config constants (GRID_N, GRID_SPACING, X_MIN, ELEMENT_TYPE, ALL_FIELDS, SINGLET_GLUON_FIELDS, VALENCE_NORMS, ENDPOINT_X, the three CONSTRAINT_*_SIGMA, LOW_X_LINEAR_POWER, T0_MAX_ITERATIONS, T0_TOLERANCE). Acceptance: setting closure_NNPDF_truth.config.LOW_X_LINEAR_POWER = 2.0 fails the guard and exactly the two NNPDF-suite value assertions that read it (3 failed, 38 passed); before the fix nothing failed. closure_JAM_truth/fit.py:38-111 constraint_datasets is byte-identical (diffed directly) to closure_NNPDF_truth/fit.py, closure_JAM_truth_small/fit.py, and closure_NNPDF_truth_small/fit.py. Every config.py constant this file reads -- GRID_N=128, GRID_SPACING='log-linear', X_MIN=1e-6, ELEMENT_TYPE='cubic_spline', ALL_FIELDS, SINGLET_GLUON_FIELDS, VALENCE_NORMS, CONSTRAINT_*_SIGMA, ENDPOINT_X=1.0, T0_MAX_ITERATIONS=12, LOW_X_LINEAR_POWER=1.0 -- is identical across all four packages (checked by diff/grep, not assumed).",
+      "why_it_matters": "@pytest.mark.parametrize('suite', SUITES) makes each test look like 4 independent checks (20 parametrized cases total across the file); today it is one code path executed four times over. Nothing documented that fact, so a reviewer skimming 20 green checks would overestimate this file's coverage.",
+      "proposed_fix": "Documented in this pass (module docstring). Optionally add one cheap assertion (e.g. session-scoped) that fails loudly if the four suites' relevant config constants or constraint_datasets source text ever diverge, converting the implicit assumption into an explicit, cheap check.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_constraints-04",
+      "test": "test_t0_iteration_ceiling_is_at_least_the_mcp_t0_map_budget",
+      "pattern": "W-TOL",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-14 (the weakness itself; its residual is a MISSING TEST, M04, not a defect in this one). Two things were still open on the previous pass and both are now closed. (1) THE TYPED '+1'. The floor read `suite.cfg.T0_MAX_ITERATIONS >= defaults['max_iterations'] + 1`: the sibling's budget was derived from its AST, but the arithmetic turning that budget into a pass count -- the loop shape `range(max_iterations + 1)` -- was still a typed copy at the call site. So the half of the provenance that was fixed was the literal, and the half left typed was the one that encodes HOW the two loops compare. _mcp_t0_map_defaults now evaluates the loop's own range() call (a 20-line arithmetic-only AST evaluator, _eval_with, that raises on anything it does not recognise rather than guessing) and returns 'passes' and 'comparisons' alongside the two literals. (2) THE TWO READINGS OF 'BUDGET', which the previous evidence recorded as unreconciled. Reading both loops settles it: _run_t0_map (runner.py:253) runs range(max_iterations + 1) = 9 passes = 1 initial fit + 8 refits, with 8 comparisons (the first has `previous is None`); _iterate_t0 (fit.py:481-492) takes one prediction BEFORE its loop -- the analogue of the MCP job's first pass -- then runs range(1, max_iter + 1), so T0_MAX_ITERATIONS counts REFITS: 12 refits, 12 comparisons, 13 predictions. Refits 12 vs 8, comparisons 12 vs 8, passes 13 vs 9: the closure budget is the more generous under EVERY reading, so the ambiguity never affected the verdict. The assertion now takes max() over the three MCP counts, which makes 'the stricter one is asserted' executable instead of a claim in prose, and adds `assert floor >= 1` so a parse returning 0 fails loudly rather than making the real assertion vacuous. THE NUMERIC BAR IS UNCHANGED AT 9; achieved 12, i.e. 33% headroom, recorded beside it in both directions. ACCEPTANCE: mutation mcp_loop_widened (scratchpad/mut_JK/mut_t0_budget_jk.py) intercepts pathlib.Path.read_text so the text the test parses reads `range(max_iterations + 6)` -- 14 passes -- while leaving the `max_iterations = 8` literal alone; src/ is untouched. Result: 2 failed / 23 passed, both failures being the two parametrizations of this test at 'assert 12 >= 14'; self-check reports runner.py rewritten 3 times. The pre-fix assertion's arithmetic is computed from the same mutated text and printed by the plugin: typed bar = max_iterations + 1 = 9, so 12 >= 9 PASSES -- the old test could not see a sibling loop widened by any amount, because the only thing it read from that loop was a literal the widening does not touch. Clean run, same file: 25 passed in 1.58s. STILL OPEN AND NOT CLAIMED HERE: no real-fit iteration count exists anywhere in the repo, and getting one needs build_analysis plus generated truth on disk, i.e. a closure run, which is outside what may be run. That is missing-test M04, and the test's docstring now says explicitly that a ceiling generous relative to a sibling implementation is not evidence that either ceiling is enough. REMAINING HALF RESOLVED 2026-08-14 by test_t0_iteration_ceiling_is_at_least_the_mcp_t0_map_budget (renamed from test_t0_iteration_ceiling_covers_observed_small_suite_convergence). The audit's grep is confirmed: 9 is NOT an observed iteration count and no such count is recorded anywhere. The only in-repo quantity 9 matches is the sibling implementation's own budget -- _run_t0_map (src/pixel/mcp/runner.py:243,253) defaults max_iterations = 8 and loops range(max_iterations + 1), i.e. 9 passes, which is exactly how guides/experimental_data_and_t0.md's side-by-side table prints it. That guide's 'upper bound on the setting' cell reads 'none; a test asserts >= 9', i.e. the guide was pointing back at this test, so the two of them were circular. The floor is now DERIVED from that function's AST (_mcp_t0_map_defaults, which parses rather than imports, and asserts rather than skips if the literal is gone) instead of typed, and the numeric bar is UNCHANGED at 9 -- this records where the number comes from, it does not move it. Added alongside: the two loops must still share their convergence criterion (T0_TOLERANCE == the MCP default tolerance == 1e-4), without which comparing budgets means nothing. Acceptance, two mutations, each run against the pre-fix copy and the fixed file: (a) cfg.T0_TOLERANCE = 2e-4 on all four suites -- chosen to stay inside the regime window test_t0_iteration_stops_on_tolerance_and_never_exceeds_the_ceiling asserts (8.9991e-05 <= tol < 8.9910e-04) AND to leave its expected stop index at 5, so nothing else in the file can notice the two implementations diverging: pre-fix 49 passed; fixed 4 failed, 45 passed. (b) the MCP default read back as max_iterations = 20, intercepted at pathlib.Path.read_text so src/ is untouched: pre-fix 49 passed with the plugin self-check reporting runner.py rewritten 0 times -- the pre-fix test never opened the file, which IS the finding -- and fixed 4 failed, 45 passed on 'assert 12 >= (20 + 1)', self-check 4 rewrites. STILL OPEN, unchanged: no real-fit iteration count exists; see M04. Two readings of 'budget' are left unreconciled and both stated in the docstring (9 vs 12 model builds, or 8 vs 12 convergence comparisons); the stricter is asserted. PARTLY RESOLVED 2026-08-13 by test_t0_iteration_stops_on_tolerance_and_never_exceeds_the_ceiling. _iterate_t0 is now driven for real with build_analysis and _dis_predictions stubbed, over the scripted sequence t0_k = 1000 (1 + 10**-k): the successive relative shifts are 4.500e-01, 8.182e-02, 8.911e-03, 8.991e-04, 8.999e-05, so the loop must stop at iteration 5 (T0_TOLERANCE=1e-4). The 1000 scale separates a relative shift from an absolute one. Also asserted: the ceiling caps a never-settling sequence at T0_MAX_ITERATIONS with exactly that many build_analysis calls; mode 'both' rebuilds as 'dis' so the bilinear sector never reaches MAP; an empty t0 returns ({}, 0) with no rebuild. Acceptance: three mutations -- range(1, max_iter+2), an absolute-instead-of-relative shift, and t0_mode = mode -- each fail only this test (4 failed, 37 passed each). STILL OPEN: the '>= 9' floor's provenance. Nothing here measures a real fit's iteration count; see M04. tests/test_closure_constraints.py:136, assert suite.cfg.T0_MAX_ITERATIONS >= 9. Grepped closure_JAM_truth/{fit,config}.py, closure_NNPDF_truth*/{fit,config}.py, and closure_logs/*_small_all_2026-07-30.log for any recorded t0_iterations count or provenance of '9' -- none found; both small-suite logs on disk consist entirely of failed/tracebacked runs, none reaching the 'DIS t0 ready ... iterations=' log line fit.py:288 would emit.",
+      "why_it_matters": "The test name asserts the ceiling 'covers observed small suite convergence', implying 9 was measured from a real run. As found, nobody reading this test can tell whether 9 is a historical measurement, a guess, or stale, and the configured ceiling (12) is compared only to this unexplained literal.",
+      "proposed_fix": "First branch taken ('cite the run/log where 9 was observed') as far as the repo allows: no run or log exists, and the citation that does is the sibling MCP job's default budget, now read from source rather than quoted. The second branch (run _iterate_t0 for small_jam for real) remains blocked by the owner's hold on closure pipeline runs -- it needs build_analysis and generated truth on disk.",
+      "effort": "M (S if only adding a provenance citation; M if adding a real convergence check, since it needs a build_analysis fixture)"
+    },
+    {
+      "id": "test_closure_constraints-05",
+      "test": "test_origin_constraint_switches_on_for_the_vanishing_fields",
+      "pattern": "W-APPROX",
+      "severity": "S4",
+      "evidence": "RESOLVED 2026-08-13. dataset.cov[0,0] is now compared against the literal 1.0e-4**2 at rel=1e-12 (was pytest.approx(cfg.CONSTRAINT_ORIGIN_SIGMA**2) at the default rel=1e-6, tautological on both counts). Acceptance: setting CONSTRAINT_ORIGIN_SIGMA=1e-3 in all four configs fails only test_origin_constraint_switches_on_for_the_vanishing_fields (4 failed, 37 passed); it could not have failed before. The Delta row sum at the origin node was measured exact (row.sum() - 1 == 0.0) and is now asserted as == 1.0 rather than at the default pytest.approx tolerance. tests/test_closure_constraints.py:242 and :250, pytest.approx(...) with no rel=/abs= (default rel=1e-6) on cfg.CONSTRAINT_ORIGIN_SIGMA**2 and on a Delta-row sum respectively.",
+      "why_it_matters": "Minor: the covariance comparison is tautological anyway (both sides read the same constant), and the row-sum comparison is a well-conditioned float64 sum of a handful of cubic-spline basis values, so 1e-6 is not actually loose relative to the effect here. Flagged for completeness per this suite's rule 7, not because a bug is plausible at this bar.",
+      "proposed_fix": "Add explicit rel=/abs= if this file is revisited for other reasons; no urgency on its own.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_constraints-06",
+      "test": "test_origin_constraint_is_off_when_the_grid_never_reaches_zero",
+      "pattern": "W-TAUT",
+      "severity": "S4",
+      "evidence": "RESOLVED 2026-08-13. The expected low-x completion alpha is now the literal 1.0 with a comment naming the physics claim (x*f -> 0 linearly), not cfg.LOW_X_LINEAR_POWER read back from the source under test. Acceptance: setting closure_NNPDF_truth.config.LOW_X_LINEAR_POWER = 2.0 fails test_origin_constraint_is_off_when_the_grid_never_reaches_zero for that suite; reading the constant back could not. Same pass added a direct measurement of the premise the test rests on: on the production x_min>0 grid a Delta row at x=0 has nnz == 0 (measured max|row| = 0.0), i.e. an origin dataset there would be a silent no-constraint. tests/test_closure_constraints.py:181, assert completion == {'kind': 'power', 'alpha': suite.cfg.LOW_X_LINEAR_POWER} -- the expected alpha is read from the same cfg.LOW_X_LINEAR_POWER constant that closure_JAM_truth/config.py's low_x_completion returns, so a wrong LOW_X_LINEAR_POWER value cannot be caught by this line; only the 'power' vs 'flat' kind dispatch (keyed by vanishes_at_origin) is independent.",
+      "why_it_matters": "Low stakes: LOW_X_LINEAR_POWER is a single shared constant (1.0) with no independent physics check anywhere in this file; a wrong value would silently propagate everywhere it is used, including here.",
+      "proposed_fix": "Hardcode the expected alpha as a literal 1.0 (with a comment noting it must track cfg.LOW_X_LINEAR_POWER) instead of reading it back from cfg, if independence here is ever wanted.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_constraints-07",
+      "test": "test_constraint_targets_match_an_analytic_affine_truth",
+      "pattern": "W-BAR-INHERITED",
+      "severity": "S1",
+      "evidence": "RESOLVED 2026-08-13 by test_valence_norm_low_x_error_converges_in_x_min. The valence-norm bar rtol=2e-4 read as a low-x accuracy guarantee and was neither that nor x_min-independent: measured, the achieved value is exactly 9.182736455e-4 * q(x_min) / norm_exact (reproduced to every printed digit at five x_min values), i.e. the head's Gauss-Jacobi quadrature error only, inherited from cfg.X_MIN through 1/(1+ln(1/x_min)) and falling merely logarithmically -- 7.679e-05, 6.438e-05, 5.543e-05, 4.867e-05, 4.338e-05 at x_min 1e-4..1e-8, a factor 1.77 over four decades. The cause is the truth's class: AFFINE_A=0.4 so q(0)!=0, int q/x is log-divergent in exact arithmetic, and norm_exact is finite only because the completion defines it -- no model error is left for a rate to converge, so a convergence test cannot be built on this truth. The new test uses a vanishing sublinear truth x**0.5 (1-x)**3, states x_min explicitly (1e-6, 1e-7, 1e-8 at fixed n_points=145) instead of inheriting cfg.X_MIN, and asserts a rate: the level against a closed-form head-model error (mpmath.betainc/beta, 40 dps, bar 10%, measured 0.03/0.29/2.17%) and 10**a per decade (bar 1.3x, measured 3.1727 and 3.2228 against 10**0.5 = 3.1623). a=0.5 is a stand-in for physical valence; both bars are written as functions of a. Acceptance: (i) an in-memory cfg mutation giving the valence fields a flat completion makes alpha+gamma = -1 (a divergent integral) and fails the integrability assertion, while its error still falls at 3.1606/3.1528 per decade so the rate alone cannot see it; (ii) inflating low_x_quadrature_correction by 50% fails the level at got/pred = 0.5008 while the rate stays at 3.1831/3.2860, inside the band. Precision about the pre-existing tests: they DO fail under both, but not as convergence statements -- test_constraint_targets_match_an_analytic_affine_truth's norm_exact formula BAKES IN the linear head (the [0,x_min) interval contributes exactly q(x_min)), so a flat completion breaks the formula rather than being measured by it, and its 2e-4 quadrature bar is trivially exceeded by a 50% head change. Neither the rate, the level against a head model, nor the integrability of the pairing was asserted anywhere before. The original test and its 2e-4 bar are kept -- its affine truth is the one whose targets can be read off by inspection -- with the docstring rewritten to state what the bar is a bar on. Full diagnosis: plans/low_x_head_diagnosis.md."
+    },
+    {
+      "id": "test_closure_constraints-08",
+      "test": "test_mellin_moment_convention_forces_momentum_density_on_every_field",
+      "pattern": "W-MISSING",
+      "severity": "S2",
+      "evidence": "RESOLVED 2026-08-14 by test_mellin_moment_convention_forces_momentum_density_on_every_field. The audit asked for build_mellin's momentum_density to become a per-field decision. Measured: that would be WRONG PHYSICS. The fields are momentum densities q = x f and a record labelled order n means <x^(n-1)>_f = int x^(n-2) q dx, i.e. the alpha=-1 weight -- a storage convention, identical for sigma/g and the valence combinations. The test pins it against the closed form mpmath.beta(p+n-1, b+1) with a measured non-degeneracy control (the alpha=0 answer is 0.385 away, far outside the 1e-4 quadrature bar). It also pins WHY the pairing is safe: a Mellin row of order n carries its own x^(n-1), so the effective low-x weight is n-2, and these suites build n=2 and n=3 only (asserted). Swapping the completion for flat and for a RISING power(-0.3) moves the folded moment by at most 9.1e-09, against a 1e-6 bar. Acceptance: a plugin downgrading Mellin alpha=-1 to 0 for nu>=2 only (scoped so the nu=1 cons_norm_* row is untouched; self-checked to change nu=3 and not nu=1) fails exactly the 4 new parametrizations, 45 other tests pass.",
+      "why_it_matters": "The recorded proposed_fix would have changed the observable these rows compute from <x^(n-1)>_f to <x^n>_f while keeping the label -- generation and fit still agreeing with each other, and no test failing. The real completion-shape exposure is elsewhere: cfg.low_x_completion gives t8/t15 a vanishing power(alpha=1) head, which ADDENDUM 2 of plans/low_x_head_diagnosis.md measures as wrong (they rise), and that bites the alpha=-1 pseudo-ITD and cons_norm_* rows, not these.",
+      "proposed_fix": "(applied) pin the convention against a closed form and record the measured completion insensitivity, instead of making momentum_density per-field.",
+      "effort": "S"
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_closure_constraints-M01",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_constraint_targets_match_an_analytic_affine_truth and test_constraint_targets_read_the_represented_truth_not_the_nominal_value. Oracle: closed-form endpoint/valence-norm values for q=A+Bx (independent -- elementary integrals, no pixel call), plus an offset curve nonzero at x=0 and x=1 whose Delta targets are its own node values. Acceptance: ENDPOINT_X=0.9, alpha=-1 -> 0, and a Delta-only fallback to nominal each fail the new tests while the pre-existing ones pass. Use a curve nonzero at x=0/x=1 so endpoint/origin constraints can be shown to read the represented truth",
+      "rationale": "closure_JAM_truth/fit.py:57-66 represented_target's whole purpose is preferring the represented curve over the nominal physical value. Measured (m1 script, see this report's measurements) that with this file's own curve family x**0.3*(1-x)**2, represented==nominal at both x=0 (0.0==0.0) and x=1 (5.87e-20 ~= 0.0), so no test in this file can distinguish a correct represented-truth read from a silent nominal fallback for those two families -- only the valence-norm family (Mellin n=1) currently does (measured represented=3.289 vs nominal=1.0 for v3).",
+      "proposed_oracle": "A3",
+      "proposed_location": "tests/test_closure_constraints.py",
+      "searched": [
+        "grep -in 'represented' $AUDIT/test_index.txt -> 2 hits: this file's own test name, and an unrelated tests/test_nnpdf_fk.py::test_fk_adapter_rejects_wrong_scale_and_unrepresented_photon",
+        "grep -rln constraint_datasets /Users/jkarpie-admin/work/building/pixel/tests/test_*.py -> 1 file (tests/test_closure_constraints.py itself)",
+        "grep -rn 'non.vanish|nonzero.*endpoint|endpoint.*nonzero' tests/test_*.py -> 0 hits",
+        "grep -i 'represented|endpoint.*curve|origin.*curve|W-TAUT' $AUDIT/missing_running.tsv -> 0 hits (file empty at time of search)"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_constraints-M02",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_constraint_datasets_rejects_a_truth_missing_a_field_curve. Oracle: F1 -- pytest.raises(KeyError, match='v3') on a truth dict with one curve removed, plus a control asserting the intact truth raises nothing (so it cannot pass against a builder that rejects everything). Acceptance: adding a `.get`-style fallback to float(nominal) for a missing curve makes it fail (4 failed, 37 passed); nothing else in the file notices. Exercise constraint_datasets with a truth dict missing one field's curve",
+      "rationale": "closure_JAM_truth/fit.py:60-64 does np.interp(field.nodes, truth_x, np.asarray(truth['curves'][name])) with no validation; a truth dict missing one of cfg.ALL_FIELDS' curves raises a bare KeyError with no diagnostic message, and no test in this file (the only test file in the repo that calls constraint_datasets) exercises that path.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_constraints.py",
+      "searched": [
+        "grep -in 'missing.*curve|malformed.*truth|truth.*keyerror|truth_x' $AUDIT/test_index.txt -> 0 hits",
+        "grep -n KeyError tests/test_closure_constraints.py -> 0 hits",
+        "grep -rln constraint_datasets tests/test_*.py -> 1 file (this one)",
+        "grep -i 'constraint_datasets|malformed truth' $AUDIT/missing_running.tsv -> 0 hits"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_constraints-M03",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_vanishes_at_origin_rejects_an_unknown_field. Oracle: F1 -- pytest.raises(KeyError, match='unknown closure field') plus two controls fixing the answers a typo would land between. Acceptance: replacing vanishes_at_origin with the unvalidated body `field not in SINGLET_GLUON_FIELDS` makes it fail (4 failed, 37 passed). Exercise cfg.vanishes_at_origin's KeyError for a field name outside ALL_FIELDS",
+      "rationale": "closure_JAM_truth/config.py's vanishes_at_origin explicitly raises KeyError(f'unknown closure field {field!r}') for field not in ALL_FIELDS, documented in its own docstring; vanishes_at_origin is referenced only in tests/test_closure_constraints.py across the entire tests/ tree, and this file never calls it with an invalid name.",
+      "proposed_oracle": "F1",
+      "proposed_location": "tests/test_closure_constraints.py",
+      "searched": [
+        "grep -in 'unknown.*field|invalid.*field.*name|field.*keyerror' $AUDIT/test_index.txt -> 2 hits, both unrelated (test_model_params.py::test_model_rejects_prior_for_unknown_field, test_problem_infer.py::test_problem_rejects_unknown_dataset_field -- different subsystems, not closure config)",
+        "grep -l vanishes_at_origin tests/test_*.py -> 1 file (tests/test_closure_constraints.py)",
+        "grep -rln 'vanishes_at_origin|low_x_completion' tests/test_*.py -> 11 files, but the other 10 hit the generic pixel.kernels.lowx low_x_completion concept, not the closure_*-specific per-field function",
+        "grep -i 'vanishes_at_origin|unknown closure field' $AUDIT/missing_running.tsv -> 0 hits"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_constraints-M04",
+      "topic": "closure-suite",
+      "title": "PARTLY RESOLVED 2026-08-13 by test_t0_iteration_stops_on_tolerance_and_never_exceeds_the_ceiling: the loop's stopping rule, ceiling, mixed-mode rebuild and empty-t0 no-op are now tested against arithmetic on a scripted prediction sequence (A1), with build_analysis stubbed. STILL OPEN and deliberately so: the real-fit iteration count. That needs a genuine build_analysis(q_key, 'dis') plus generated truth on disk under the held closure_*_truth packages, i.e. the L cost the original note flags; the cheap unit test does not substitute for it and its docstring says so. Check _iterate_t0 actually converges within T0_MAX_ITERATIONS for at least one suite/mode",
+      "rationale": "closure_JAM_truth/fit.py:460-491 _iterate_t0 is the function test_t0_iteration_ceiling_covers_observed_small_suite_convergence's name refers to; nothing in tests/ calls _iterate_t0 or references T0_TOLERANCE, so the ceiling's sufficiency is asserted (>=9) but never demonstrated against an actual iteration count.",
+      "proposed_oracle": "E1",
+      "proposed_location": "tests/test_closure_constraints.py",
+      "searched": [
+        "grep -in 't0.*converg|converg.*t0|t0_tolerance' $AUDIT/test_index.txt -> 1 hit, this file's own test name (the thing being investigated, not independent coverage)",
+        "grep -rln '_iterate_t0|T0_TOLERANCE' tests/test_*.py -> 0 files",
+        "grep -n 'T0_MAX_ITERATIONS|_iterate_t0|t0_iterations' tests/test_mcp_jobs.py -> 1 hit but it is an unrelated output-filename check ('t0_iterations.json' artifact name), not the function itself",
+        "grep -i 't0_iterat|iterate_t0' $AUDIT/missing_running.tsv -> 0 hits"
+      ],
+      "effort": "L -- needs a real build_analysis(q_key, 'dis', ...) call, which is expensive; likely why this is not unit-tested today. State the cost before pursuing."
+    },
+    {
+      "id": "test_closure_constraints-M05",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by test_valence_norm_low_x_error_converges_in_x_min. Sweep x_min and assert the rate of the valence-norm low-x error, instead of a fixed bar inherited from cfg.X_MIN. Oracle: B(a, beta+1) in mpmath at 40 dps (exactly 32/35 at the shipped a=0.5, beta=3) plus mpmath.betainc for the head -- independent because it integrates the whole [0,1] with no grid, no basis and no low-x completion, sharing nothing with pixel.kernels.lowx. Acceptance: a flat completion on the valence fields fails the integrability assertion; a 50% inflation of low_x_quadrature_correction fails the level assertion while leaving the rate inside its band.",
+      "rationale": "No test anywhere varied x_min for a low-x completion accuracy claim; the file's only low-x bar was a fixed rtol=2e-4 at one x_min on a non-vanishing truth.",
+      "effort": "M"
+    }
+  ],
+  "unjustified_tolerances": [
+    {
+      "line": 118,
+      "text": "np.testing.assert_allclose(prediction, dataset.mean, rtol=0.0, atol=1e-12)",
+      "quantity": "same-kernel-object recompute of a near-hard endpoint/norm target",
+      "comment_added": "Exact float64 reproduction of the same kernel call constraint_datasets made (module docstring); not a physics accuracy bound.",
+      "provenance": "known -- self-recompute, not a physics bar; see module docstring and weakness -01"
+    },
+    {
+      "line": 136,
+      "text": "assert suite.cfg.T0_MAX_ITERATIONS >= 9",
+      "quantity": "T0 reweighting iteration ceiling floor",
+      "comment_added": "floor only; provenance of 9 unrecorded",
+      "provenance": "unrecorded -- searched fit.py, config.py, closure_logs/*.log; no citation found"
+    },
+    {
+      "line": 238,
+      "text": "np.testing.assert_allclose(dataset.nu, [0.0], rtol=0.0, atol=0.0)",
+      "quantity": "origin dataset nu, exact by construction (literal 0.0 in fit.py)",
+      "comment_added": "nu/mean equal 0.0 by construction: constraint_datasets passes a literal 0.0 for both, and truth=None here takes represented_target's early-return branch -- an exact pin, not a derived bound.",
+      "provenance": "known -- literal 0.0 passed at closure_JAM_truth/fit.py, plus the truth=None early-return"
+    },
+    {
+      "line": 239,
+      "text": "np.testing.assert_allclose(dataset.mean, [0.0], rtol=0.0, atol=0.0)",
+      "quantity": "origin dataset mean under truth=None",
+      "comment_added": "(shared comment block with the nu check immediately above, tests/test_closure_constraints.py:235-237)",
+      "provenance": "known -- same as line 238"
+    },
+    {
+      "line": 242,
+      "text": "assert dataset.cov[0, 0] == pytest.approx(cfg.CONSTRAINT_ORIGIN_SIGMA ** 2)",
+      "quantity": "origin dataset covariance vs CONSTRAINT_ORIGIN_SIGMA**2",
+      "comment_added": "Default pytest.approx rel=1e-6; both sides read the same CONSTRAINT_ORIGIN_SIGMA constant, so this is tautological regardless.",
+      "provenance": "known -- tautological, same constant on both sides"
+    },
+    {
+      "line": 250,
+      "text": "assert row.sum() == pytest.approx(1.0)",
+      "quantity": "Delta row sum at the origin node (basis partition of unity)",
+      "comment_added": "default rel=1e-6; partition of unity",
+      "provenance": "known -- bare pytest.approx default; effect is well-conditioned so the bar is not actually loose here (see weakness -05)"
+    },
+    {
+      "line": 298,
+      "text": "np.testing.assert_allclose(prediction, dataset.mean, rtol=0.0, atol=1e-12)",
+      "quantity": "same-kernel-object recompute, extended to origin datasets",
+      "comment_added": "Same same-kernel-object recompute as the first test (module docstring); exact float64 reproduction, not a physics accuracy bound.",
+      "provenance": "known -- self-recompute, not a physics bar; see module docstring and weakness -02"
+    }
+  ],
+  "measurements": [
+    {
+      "claim": "The synthetic curve x**0.3*(1-x)**2 used throughout this file is (numerically) zero at both x=0 and x=1, so endpoint/origin represented targets coincide with the nominal 0.0, while the valence-norm (Mellin n=1) target differs meaningfully from its nominal.",
+      "command": "OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 python3 - <<'PY'\nimport numpy as np\nfrom pixel.core.model import Field\nfrom pixel.geometry import Grid\nfrom pixel import kernels\nGRID_N = 128; X_MIN = 1.0e-6\ngrid = Grid(n_points=GRID_N, spacing='log-linear', x_min=X_MIN)\nfield = Field.create('v3', grid, element_type='cubic_spline')\nnodes = np.asarray(field.nodes, dtype=float)\ni_v3 = 5  # ALL_FIELDS=(t3,t8,sigma,t15,g,v3,v8,v,v15) -> v3 index 5\ncurve = (1.0 + 0.1*i_v3) * nodes**0.3 * (1.0-nodes)**2\ndelta = kernels.Delta()\nm_end = np.asarray(delta.matrix(np.array([1.0]), field.basis), dtype=float)\nprint('endpoint represented', float((m_end @ curve)[0]))\nmel = kernels.Mellin(alpha=-1.0, low_x_extension={'kind':'power','alpha':1.0})\nm_norm = np.asarray(mel.matrix(np.array([1.0]), field.basis), dtype=float)\nprint('norm(v3) represented', float((m_norm @ curve)[0]))\ngrid0 = Grid(n_points=GRID_N, spacing='log-linear', x_min=X_MIN, include_origin=True)\nfield0 = Field.create('v3', grid0, element_type='cubic_spline')\nnodes0 = np.asarray(field0.nodes, dtype=float)\ncurve0 = (1.0 + 0.1*i_v3) * nodes0**0.3 * (1.0-nodes0)**2\nm_orig = np.asarray(delta.matrix(np.array([0.0]), field0.basis), dtype=float)\nprint('origin represented', float((m_orig @ curve0)[0]))\nPY",
+      "result": "endpoint: represented=5.865125278789004e-20 nominal=0.0 | norm(v3): represented=3.28899164907155 nominal=1.0 | origin: represented=0.0 nominal=0.0 (script does not import closure_*, only pixel.core.model / pixel.geometry / pixel.kernels, per the no-execute-closure_* constraint)"
+    },
+    {
+      "claim": "test_near_hard_constraints_match_truth_in_the_fit_basis's core assert_allclose(prediction, dataset.mean, atol=1e-12) cannot catch a wrong choice of the endpoint nu (e.g. a fat-fingered ENDPOINT_X), because it recomputes with the same nu/kernel that built the target in the first place.",
+      "command": "OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 python3 - <<'PY'\nimport numpy as np\nfrom pixel.core.model import Field, Dataset, Contribution\nfrom pixel.geometry import Grid\nfrom pixel import kernels\ngrid = Grid(n_points=128, spacing='log-linear', x_min=1.0e-6)\nfield = Field.create('v3', grid, element_type='cubic_spline')\nnodes = np.asarray(field.nodes, dtype=float)\ncurve = 1.5 * nodes**0.3 * (1.0-nodes)**2\nfor label, nu_used in [('correct', 1.0), ('MUTANT', 0.9)]:\n    kernel = kernels.Delta()\n    matrix = np.asarray(kernel.matrix(np.array([nu_used]), field.basis), dtype=float)\n    target = float((matrix @ curve)[0])\n    dataset = Dataset(f'cons_endpoint_v3_{label}', np.array([nu_used]), np.array([target]),\n                       np.array([[1.0e-4**2]]), [Contribution('v3', kernel)],\n                       extras={'nominal_target': 0.0, 'closure_target': target})\n    (contribution,) = dataset.contributions\n    prediction = np.asarray(contribution.kernel.matrix(dataset.nu, field.basis), dtype=float) @ curve\n    ok = np.allclose(prediction, dataset.mean, rtol=0.0, atol=1e-12)\n    print(label, 'nu_used=', nu_used, 'target=', target, 'recompute_passes=', ok)\nPY",
+      "result": "correct: nu_used=1.0 target=5.865125278789004e-20 test-style-recompute-passes=True | MUTANT: nu_used=0.9 target=0.01453329096320881 test-style-recompute-passes=True (script builds a pixel.core.model.Dataset by hand, mirroring closure_JAM_truth/fit.py:68-77's endpoint block read from source; does not import closure_*)"
+    },
+    {
+      "date": "2026-08-13",
+      "what": "closed-form check of the near-hard constraint targets on an affine truth q = A + Bx",
+      "how": "closure grid (128 pts, x_min=1e-6), curves scaled per field by 1+0.1i",
+      "result": {
+        "endpoint |got/exact-1|": "0.0 (all 9 fields); bar rtol=1e-12",
+        "valence-norm |got/exact-1|": "5.543e-05 (worst of 9); bar rtol=2e-4, 27.7% used",
+        "residual source": "PIXEL's low-x head for Mellin(alpha != 0): short by 9.18e-4 * q(x_min); invariant under grid refinement (N 65->513) and quadrature refinement (points_per_interval 8->256); the body integral over [x_min,1] agrees with an independent per-element Gauss-Legendre quadrature to 4.4e-16"
+      }
+    },
+    {
+      "date": "2026-08-13",
+      "what": "Delta row behaviour at the two grid endpoints",
+      "result": {
+        "production grid (x_min=1e-6), Delta at x=0": "all-zero row, nnz=0, max|row|=0.0",
+        "include_origin grid, Delta at x=0": "one-hot, nnz=1, row.sum()-1 == 0.0 exactly",
+        "production grid, Delta at x=1": "nnz=110 (global spline evaluation), row.sum()-1 == 0.0"
+      }
+    },
+    {
+      "claim": "test_constraint_targets_match_an_analytic_affine_truth's achieved relative error IS 9.182736455e-4 * q(x_min)/norm_exact, and falls only as 1/(1+ln(1/x_min)) -- so its rtol=2e-4 bar is a quadrature bar inherited from cfg.X_MIN, not a low-x accuracy guarantee.",
+      "command": "scratchpad/mut_lowx2/ (OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 venv/bin/python), Grid(n_points=128, spacing='log-linear', x_min=...), Mellin(alpha=-1, low_x_extension={'kind':'power','alpha':1.0}) on q = 0.4 + 0.7x",
+      "result": "x_min=1e-4 rel=7.6790e-05 (predicted 7.6790e-05); 1e-5 6.4383e-05 (6.4383e-05); 1e-6 5.5433e-05 (5.5433e-05); 1e-7 4.8668e-05 (4.8668e-05); 1e-8 4.3375e-05 (4.3375e-05). Identical to all printed digits at every rung."
+    },
+    {
+      "claim": "On a VANISHING sublinear truth q = x**0.5 (1-x)**3 the same valence-norm target carries a model error that dominates the quadrature error and falls at 10**0.5 per decade of x_min, matching a closed-form prediction.",
+      "command": "scratchpad/mut_lowx2/measure_prod.py (PYTHONPATH=. venv/bin/python), n_points=145, through closure_JAM_truth.fit.constraint_datasets",
+      "result": "x_min=1e-6 rel=1.094118e-03 (predicted 1.093751e-03, got/pred 1.000335); 1e-7 3.448574e-04 (3.458742e-04, 0.997060); 1e-8 1.070048e-04 (1.093750e-04, 0.978329). Consecutive ratios 3.1727 and 3.2228 vs 10**0.5 = 3.1623. Exact observable B(0.5,4) = 32/35 = 0.9142857142857143."
+    },
+    {
+      "claim": "build_mellin's unconditional momentum_density=True is REQUIRED, and the completion it is paired with is numerically irrelevant at the moment orders these suites build.",
+      "command": "venv/bin/python: kernels.Mellin(alpha=-1 or 0, low_x_extension=...).matrix([n], basis) contracted with q = x**0.5 (1-x)**3 on the 145-node closure grid (x_min=1e-6), against mpmath.beta(p+n-1, b+1)",
+      "result": "alpha=-1 reproduces B(p+n-1,b+1); alpha=0 gives B(p+n,b+1), a 0.615x/relative-0.385 error. Completion sensitivity at alpha=-1: flat vs power(1) = 4.9e-09 (n=2), 6.0e-15 (n=3); RISING power(-0.3) vs power(1) = 9.1e-09 (n=2), 9.1e-15 (n=3). check_low_x_integrable accepts every (field, completion, effective alpha) pairing these suites build -- 9 fields x {Mellin, ITD}, zero raises."
+    },
+    {
+      "claim": "The provenance of the '9' floor is the MCP t0_map job's own pass budget, not an observed closure-fit iteration count; and the guide that documents the pair points back at this test.",
+      "command": "grep -rn 'T0_MAX_ITERATIONS' --include='*.py' --include='*.md' --include='*.log' . ; then read src/pixel/mcp/runner.py:236-315 and guides/experimental_data_and_t0.md:515-540.",
+      "result": "runner.py:243 max_iterations default 8, :244 tolerance default 1e-4, :253 range(max_iterations + 1) -> 9 passes. The guide's table prints 'max_iterations = 8 (loop runs max_iterations + 1)' against 'T0_MAX_ITERATIONS = 12', with tolerance 1e-4 on both sides, and its 'upper bound on the setting' cell for the closure loop reads 'none; a test asserts >= 9'. No iteration count appears in any closure log or config."
+    },
+    {
+      "claim": "The '+1' turning the MCP budget into a pass count was a typed copy, so widening the sibling's loop left the floor untouched; deriving it from the loop's own range() call closes that, with the numeric bar unchanged.",
+      "command": "PIXEL_MUT=mcp_loop_widened OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 MKL_NUM_THREADS=1 PYTHONPATH=scratchpad/mut_JK venv/bin/python -m pytest tests/test_closure_constraints.py -q -p no:randomly -p mut_t0_budget_jk  (serial, no -n)",
+      "result": "2 failed / 23 passed -- both parametrizations of test_t0_iteration_ceiling_is_at_least_the_mcp_t0_map_budget, at 'assert 12 >= 14'; runner.py rewritten 3 times (self-check). Pre-fix arithmetic on the identical mutated text: typed bar = 8 + 1 = 9, 12 >= 9 True, i.e. the mutation was invisible. Clean: 25 passed in 1.58s. Budget reconciliation, both loops read: MCP 9 passes / 8 refits / 8 comparisons; closure 13 predictions / 12 refits / 12 comparisons."
+    }
+  ],
+  "notes_for_readme": "closure-suite: this file drives closure_*/fit.py + config.py (not src/pixel formulas); the 4-way SUITES parametrization is currently redundant (constraint_datasets and every relevant config constant are identical across all four packages, confirmed by diff)."
+}

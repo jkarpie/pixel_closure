@@ -51,15 +51,52 @@ Physics constraints (section 4) are added in **every** mode.
 ## 2. Grid, basis, and what that costs
 
 ```
-GRID_N        128
+GRID_N        146
 GRID_SPACING  log-linear
 X_MIN         1e-6            (x = 0 is NOT a node)
-ELEMENT_TYPE  cubic_spline
+ELEMENT_TYPE  piecewise_quintic
 ```
 
-Splines rather than C0 piecewise: PIXEL's x-space inverse-Mellin evolution needs a
-far longer contour for piecewise bases, so splines are both faster *and* more
-accurate for the DIS kernels.
+Changed 2026-09-09 from 128-point `cubic_spline`.
+
+**Representation gain, measured against the real JAM24 truth** (Q=2, member 1;
+sampled at the nodes, read back dense; worst field, max error relative to peak):
+
+```
+128 cubic_spline   4.20e-04      <- previous setting
+146 pw5            1.23e-04      <- 3.4x better; cubic needs n ~ 200-240 to match
+```
+
+The gain is not uniform. It is concentrated entirely in the steep small-`x`
+singlet-class fields -- `t8` 3.4x, `sigma` 3.7x, `t15` 3.3x, `g` 4.8x -- while `t3`
+and all four valence fields are unchanged at 1.0-1.1x; those were already resolved at
+128 nodes.
+
+**146, not 145.** A quintic tiles the grid only when `(n - 1) % 5 == 0`; the leftover
+intervals otherwise form one ragged final cell of *lower* degree. 145 leaves
+`144 % 5 = 4`, a degree-4 cell at large `x` where the DIS and DY rows carry the most
+weight. 146 gives 145 intervals = 29 exact quintic cells. On a polynomial-exactness
+probe the ragged cell costs ~6 orders (146 -> 8.9e-16, 141 -> 1.0e-15, 145 -> 1.1e-09);
+on the JAM truth above the 145/146 difference is nil, so this is cheap insurance
+rather than a measured rescue. 146 is also PIXEL's own pw5 rung for log-linear grids
+(`benchmarks/kernel_stress.py::PW5_LONG_SIZE`). 141 also tiles.
+
+**The cubic-spline argument was outweighed, not refuted -- and it still costs.** The
+previous note recorded that PIXEL's x-space inverse-Mellin evolution needs a far
+longer contour for C0 piecewise bases, so splines were both faster *and* more accurate
+for the DIS kernels. pw5 is C0, so `kernels.evolution.contour` now takes its piecewise
+branch:
+
+```
+128 cubic_spline   basis_kind=spline                 target 1e-8   zmax 1622
+146 pw5            basis_kind=piecewise-polynomial   target 1e-5   zmax 9111
+```
+
+Three orders looser a target on a 5.6x longer contour, with PIXEL's "LOUD WARNING" on
+every `adaptive_contour` call. Nothing in the closure config overrides that contour.
+The representation gain above is a property of the *basis*, measured with no evolution
+in the loop -- it says nothing about the evolved DIS/DY kernels. **Measure those before
+treating this change as settled.**
 
 **Two consequences worth knowing before reading any coverage number:**
 
@@ -206,7 +243,8 @@ amplitudes.
 **One real interaction:** a jitter set *above* the rcond cut stops the cut from
 firing. At 1e-10 the jitter is 1.4e3-2.3e4 times above a cut at 4.40e-15, so all
 128 eigenvalues clear it, the Cholesky fast path is taken, and ~35 unresolvable
-directions get solved instead of dropped.
+directions get solved instead of dropped. (Measured on the old 128-node cubic-spline
+grid; the counts, not the mechanism, move with the 146-node pw5 basis.)
 
 `GP_LENGTH_LOG = ln(2)`. `ln(10)` was tried and reverted: more accurate at its
 working point (9.90e-06 vs 1.78e-05) but it demands ~1e3x more jitter, survives
@@ -298,7 +336,7 @@ Results and figures ship under `results/` (per suite) and `campaign/`.
   single fit cannot do it; the physics residual is what discriminates today.
 * **`kernel_stress` has never been run in this tree** -- `benchmarks/results/
   kernel_stress/` does not exist, so the `CASE_ACCURACY` bars are inherited, not
-  verified at N=128.
+  verified at N=146 (nor at the N=128 they were inherited against).
 * **`SADDLE_MIN_ESS_FRAC` is a dead knob** -- defined, no consumer.
 * **`nested_vegas` never forwards `saddle_tol`**, so `CONTOUR_SADDLE_TOL = 5e-3`
   does not reach the nested-VEGAS path; it falls back to `1e-9`.

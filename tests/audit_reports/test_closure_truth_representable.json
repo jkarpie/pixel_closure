@@ -1,0 +1,184 @@
+{
+  "file": "tests/test_closure_truth_representable.py",
+  "area": "closure-suite",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "closure_JAM_truth/generate.py (fold_truth:98-104, dy_central:478-525)",
+    "closure_NNPDF_truth/generate.py (fold_truth:98-104, dy_central:478-525, byte-identical to JAM's)",
+    "closure_JAM_truth/config.py:204 (FIXED_TRUTH_MEMBER)",
+    "closure_NNPDF_truth/config.py:205 (FIXED_TRUTH_MEMBER)",
+    "src/pixel/core/model.py:709-768 (BilinearContribution, BilinearContribution.assemble -- real path, not a shim)"
+  ],
+  "drives_non_pixel": "Partially. The file does import pixel.core.model.BilinearContribution directly (real path, not a shim), but its primary subject is non-pixel driver code: closure_JAM_truth/generate.py and closure_NNPDF_truth/generate.py (fold_truth, dy_central), neither of which imports from pixel itself for the functions under test.",
+  "n_tests": 3,
+  "n_parametrized_cases": 6,
+  "tests": [
+    {
+      "name": "test_linear_and_bilinear_generation_fold_the_same_fixed_truth",
+      "line": 51,
+      "claim": "Generation folds linear (fold_truth) and bilinear (dy_central) observables from the same single fixed PDF truth, not a replica-ensemble statistic.",
+      "actual": "Pins cfg.FIXED_TRUTH_MEMBER==1 (a config value pin, unrelated in mechanism to the rest of the test). Checks fold_truth(operator, truth) against a direct numpy matrix-vector product, single-field operator only. Checks dy_central(dataset, truth, fields, 'pp') against a direct numpy outer-product contraction, through a real BilinearContribution whose kernel stub ignores nu/basis and returns a constant tensor, with field_A==field_B=='q' (one contribution, weight=1, no evolution). A closing assertion shows the fixed-truth law numerically differs from a replica-second-moment law on this fixture (measured 7-8%), which is what gives the direct-formula check teeth against that specific alternative.",
+      "how": "Both package=[closure_JAM_truth, closure_NNPDF_truth] parametrized cases execute byte-identical fold_truth/dy_central code (confirmed via diff of the two generate.py files); only the FIXED_TRUTH_MEMBER pin is separately re-checked per package, so the two cases are not materially different in mechanism.",
+      "oracle": "A1",
+      "bar": "assert_allclose default rtol=1e-7 atol=0 (x2, for the linear and bilinear identities); np.allclose default rtol=1e-5 atol=1e-8 (for the closing not-allclose check)",
+      "strength": "S2",
+      "catches": "dy_central silently switching away from a fixed-truth bilinear fold to any other combining law with a different value on this fixture (e.g. a replica second moment) -- demonstrated distinguishable, 7-8% apart. Does NOT catch: an index-transposed contraction (einsum 'rji,ij->r' vs 'rij,ij->r') or a field_A/field_B swap inside dy_central, because outer(truth['q'], truth['q']) is symmetric when field_A==field_B -- demonstrated: both mutants reproduce the correct value exactly on this fixture. Also does not catch a wrong nu or wrong basis threaded to bilinear_tensor, since the stub kernel ignores both arguments."
+    }
+  ],
+  "weaknesses": [
+    {
+      "id": "test_closure_truth_representable-01",
+      "test": "test_linear_and_bilinear_generation_fold_the_same_fixed_truth",
+      "pattern": "W-ORDER",
+      "severity": "S2",
+      "evidence": "RESOLVED 2026-08-13 by the new test_bilinear_fold_is_index_weight_and_kinematics_faithful. Rather than extending the existing symmetric case (which is kept -- its expected value is readable by inspection), a second test carries a fixture that is asymmetric in every axis under test: a non-symmetric tensor, three contributions with field_A != field_B, distinct truths per field, three distinct non-unit weights, and TWO kernel instances so dy_central's (id(kernel), id(evolution_A), id(evolution_B)) grouping must build two groups and accumulate the first group's two outer products. The stub kernel records its call arguments, so dataset.nu and the shared field basis are asserted to be threaded through rather than ignored. Four assert-not-allclose controls measure that the fixture separates each bug class. Bar rtol=1e-13. Acceptance: in-memory mutations of dy_central implementing (a) einsum('rji,ij->r'), (b) np.outer(curve_B, curve_A), (c) weight=1.0, and (d) a single merged group each make it fail, while test_linear_and_bilinear_generation_fold_the_same_fixed_truth passes under all four -- the recorded finding, demonstrated. tests/test_closure_truth_representable.py:119 (BilinearContribution('q','q',Kernel())) and :123 (expected = einsum('rij,i,j->r', tensor, truth['q'], truth['q'])) -- field_A==field_B=='q' makes outer(truth['q'],truth['q']) symmetric. Measured standalone on the exact fixture: einsum('rji,ij->r', tensor, outer) and einsum('rij,ij->r', tensor, outer(truth_q,truth_q).T) both equal einsum('rij,ij->r', tensor, outer) exactly ([28., 72.1] all three).",
+      "why_it_matters": "A dy_central that accidentally contracted 'rji,ij->r' instead of 'rij,ij->r', or built outer(curve_B, curve_A) instead of outer(curve_A, curve_B) -- a realistic index-order slip in the real generate.py:513-524 grouping/einsum code -- would pass this test's only bilinear case silently. tests/test_closure_dy_evolution.py almost certainly catches this class for real multi-flavour DY datasets, where field_A != field_B contributions are the norm (see its dy_field_maps-based reference), so this is a gap in this file's own discriminating power, not necessarily in the suite.",
+      "proposed_fix": "Add a second bilinear case (or extend the fixture) with field_A != field_B and distinct truth values on each side, e.g. BilinearContribution('q', 'g', Kernel()) with truth['q'] != truth['g'], so outer(A, B) is asymmetric and a transposition/swap bug becomes visible.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_truth_representable-02",
+      "test": "test_linear_and_bilinear_generation_fold_the_same_fixed_truth",
+      "pattern": "W-TAUT",
+      "severity": "S3",
+      "evidence": "RESOLVED 2026-08-13 (no code change needed, as recorded). The per-test docstring and the comment at the closing assertion now state precisely that the line checks the fixture's discriminating power -- that the replica-second-moment law disagrees with the fixed-truth law on this fixture -- rather than calling gen.dy_central a second time. The combined two-assertion mechanism is sound; only the attribution needed correcting. Verified unchanged this pass. tests/test_closure_truth_representable.py:130-142: 'assert not np.allclose(exact, second_moment)' runs after 'exact' was already bound and validated by 'assert_allclose(exact, expected)' two statements earlier (line 124). Given that assertion passed, exact ~= expected, so the closing assert is algebraically equivalent to 'expected != second_moment', a fact about the fixture arrays computed entirely in plain numpy -- it does not call gen.dy_central a second time.",
+      "why_it_matters": "The pre-edit comment ('cannot be substituted for the fixed function without breaking the truth target') read as if this line itself exercises dy_central against the second-moment law. It does not: it certifies that the earlier assert_allclose had the power to reject that law (a real and useful property -- see measurements), but taken alone a reader could mistake it for an independent second check on the implementation. The combined two-assertion mechanism is sound; only the attribution needed correcting, which the rewritten comment/docstring now does.",
+      "proposed_fix": "No code change needed. Addressed via the rewritten comment at lines 130-136 and the per-test docstring, which now state precisely that this line checks the fixture's discriminating power rather than calling gen again.",
+      "effort": "S"
+    },
+    {
+      "id": "test_closure_truth_representable-03",
+      "test": "test_bilinear_fold_uses_the_ensemble_mean_not_the_ensemble_second_moment",
+      "pattern": "W-SCOPE",
+      "severity": "S2",
+      "evidence": "RESOLVED 2026-08-14 by test_bilinear_fold_uses_the_ensemble_mean_not_the_ensemble_second_moment and test_all_four_dy_central_bodies_are_the_same_source. This is S0-05, closed. closure_*_small/generate.py::dy_central now runs the full suites' fixed-truth fold verbatim (AST-identical across all four packages), the two _small call sites pass mean_curves instead of the replica stack ens, and a new _one_truth_curve helper in ALL FOUR copies REFUSES a non-1-D truth curve rather than letting np.outer flatten it. DY_PACKAGES now parametrizes both bilinear tests over all four packages -- the package-level gap that let the bug live. Acceptance, two independent mutations: (a) the VERBATIM shipped _small dy_central restored on the two _small modules makes exactly the 4 _small parametrizations of the two bilinear tests fail plus the drift guard, while the full-package parametrizations pass (5 failed, 8 passed); (b) a signature-preserving mutation that drops the shape guard and silently reduces a replica stack to its mean makes all 4 parametrizations of the new test fail on DID NOT RAISE (4 failed, 9 passed). Before the fix both new tests passed only on the two full packages. Measured law difference on the shipped ensembles at Q=2: JAM 2.4e-03/2.9e-03, NNPDF 2.1e-03/6.4e-03 max|ratio-1|. ORIGINAL: the two _small packages were excluded from the package parametrization and no test anywhere called their dy_central, so the replica-second-moment law shipped unexercised.",
+      "why_it_matters": "A closure test exists to check that the fit recovers a known truth. The _small suites wrote the ensemble MEAN to truth.json while generating their DY rows from the ensemble SECOND moment, which no single PDF reproduces -- so DY coverage in those suites was measuring a central value with no truth curve behind it. The fix is truth-kind agnostic: dy_central takes whatever one curve the caller records, so switching between replica_ensemble_mean and fixed_lhapdf_member needs no change here.",
+      "proposed_fix": "(applied) adopt the full suites' dy_central; parametrize the bilinear tests over all four packages; add a 1-D shape guard.",
+      "effort": "M"
+    }
+  ],
+  "missing": [
+    {
+      "id": "test_closure_truth_representable-M01",
+      "topic": "closure-suite",
+      "title": "LEFT OPEN 2026-08-13, deliberately, batch C1. This item IS S0-05, which plans/test_audit/RESUME.md records as the OWNER'S DECISION rather than a defect, and which MISSING_TEST_AGENT_BRIEF.md keeps inside the hold on the closure_*_small packages ('That is the owner's hold: the data-generation code that builds the JAM/NNPDF truth inputs, including the S0-05 ensemble-second-moment question'). Writing a test here would bar one of the two laws as correct and pre-empt that decision either way, so no test was written. The scope correction that put tests/test_closure_*.py back in play covers the test files, not the S0-05 question itself. The entry's 'Not covered here' section states this explicitly so the gap stays visible rather than looking closed. Check closure_JAM_truth_small/closure_NNPDF_truth_small's dy_central against the single-truth rule",
+      "rationale": "STILL LEFT OPEN 2026-08-14, batch N1, deliberately and for the same reason recorded on 2026-08-13: this item IS S0-05, which RESUME.md records as the OWNER'S DECISION rather than a defect, and MISSING_TEST_AGENT_BRIEF.md keeps inside the hold on the closure_*_small packages. Re-confirmed against the dispatch for this batch, which names S0-05 explicitly as the owner's decision. Writing a test would bar one of the two laws as correct and pre-empt that decision either way. closure_JAM_truth_small.generate.dy_central and closure_NNPDF_truth_small.generate.dy_central (generate.py:237-268 in both, byte-identical) compute C = qA.T @ qB / n_rep -- a replica-ensemble second moment -- as the DY central value. This is, term for term, the law this very test's closing assertion proves differs from a fixed-truth bilinear fold by 7-8% on its own fixture: applying the _small formula to this test's own `replicas` array reproduces its `second_moment` value to 1.4e-14 (measured, see measurements). It is also exactly what closure_JAM_truth/generate.py:494-496's dy_central docstring calls 'deliberately forbidden' ('an ensemble second moment ... generally has no single PDF truth and therefore cannot define coverage for a bilinear observable') and what closure_JAM_truth/config.py:200-203's FIXED_TRUTH_MEMBER comment calls 'never used as a nonlinear central value'. No test anywhere calls the _small packages' dy_central or checks its central-value law. closure_JAM_truth_small/README.md documents the truth as 'the ensemble mean', which is exactly true for the suite's linear (lattice/DIS) central values (mean commutes with a linear fold) but is not what a second-moment DY fold computes -- so whether this is an accepted, if under-documented, scope simplification for the mock suite, or an unnoticed break of the single-truth rule stated in the full suite's own config.py, is open and worth a maintainer decision either way.",
+      "proposed_oracle": "A1",
+      "proposed_location": "tests/test_closure_truth_representable.py (a second parametrized block, since _small's dy_central takes ens not truth and so cannot share this file's exact parametrization) or a new tests/test_closure_truth_small_representable.py",
+      "searched": [
+        "grep -in 'truth_small|second_moment|second.moment' $AUDIT/test_index.txt -> 0 hits",
+        "grep -rln 'closure_JAM_truth_small|closure_NNPDF_truth_small' tests/test_*.py -> 14 files hit; grep -ln 'dy_central|bilinear_contributions' over those 14 -> only test_small_synthetic_z.py, which checks 'assert built[0].bilinear_contributions' structurally for the unrelated synthetic-Z plumbing record, never dy_central's value",
+        "grep -rn 'second_moment|ensemble.*second.moment|nonlinear central value' tests/test_*.py -> 3 hits, all inside this file itself",
+        "grep -i 'truth_small|second.moment|dy_central' $AUDIT/missing_running.tsv -> 0 hits"
+      ],
+      "effort": "L"
+    },
+    {
+      "id": "test_closure_truth_representable-M02",
+      "topic": "closure-suite",
+      "title": "RESOLVED 2026-08-13 by two tests, one per half. (1) The truth_curves= branch and assemble_operator: tests/test_closure_extension_systematics.py::test_fold_uses_fixed_truth_curves_when_given_and_replica_mean_otherwise -- the natural home, since that file already builds the records/operators/ensembles. Oracle A1: B @ truth[field] in plain numpy, rtol=1e-13. The truth curve is deliberately NOT the replica mean (1.7*shape + 0.3 against (index+1)*shape) and a control asserts the two branches are separated on this fixture by > 1e-2 relative, so the test cannot be passing because model == truth. assemble_operator is called on a production-shaped dataset with a physical pseudo-ITD Contribution plus a nuisance Contribution, and each returned B is checked against the kernel's own matrix call. (2) fold_truth's operator[1:] accumulation: tests/test_closure_truth_representable.py::test_linear_generation_fold_accumulates_a_multi_field_operator, oracle A1, three hand-summed matvecs at rtol=1e-13 with drop-a-term and wrong-field controls. Acceptance: a fold_lattice_systematics that ignores truth_curves fails (1); a fold_truth that returns only operator[0]'s term, and one that pairs every matrix with operator[0]'s field, each fail (2) and (1)'s assemble_operator half. Exercise fold_lattice_systematics's fixed-truth branch and assemble_operator with a real operator",
+      "rationale": "generate.py:280 (both full packages) reads 'central = Y.mean(axis=0) if truth_curves is None else fold_truth(operator, truth_curves)'. generate_member (the actual production path) calls fold_lattice_systematics with truth_curves=mean_curves at generate.py:668, taking the else branch -- the one that makes the lattice channel honor the same fixed-truth rule this file tests directly for DIS (fold_truth) and DY (dy_central). Every test that calls fold_lattice_systematics (tests/test_closure_extension_systematics.py) omits truth_curves, so only the Y.mean(axis=0) branch is ever covered by the suite. Separately, assemble_operator (generate.py:75-86) -- the function that builds a production-shaped, possibly multi-field operator from a real dataset+kernel -- is never called by any test; fold_truth is only ever tested (in this file) against a hand-built single-field operator, so its 'for field, B in operator[1:]' accumulation loop is untested end to end.",
+      "proposed_oracle": "A1",
+      "proposed_location": "tests/test_closure_extension_systematics.py (already builds records/operators/ensembles for fold_lattice_systematics, so adding a truth_curves= case is a small extension) or tests/test_closure_truth_representable.py",
+      "searched": [
+        "grep -in 'fold_lattice_systematics|assemble_operator' $AUDIT/test_index.txt -> 0 hits",
+        "grep -rln 'truth_curves' tests/test_*.py -> 1 file (tests/test_closure_truth_scales.py), and inspection shows it matches 'jam_truth_curves'/'nnpdf_truth_curves' function names, not the truth_curves= keyword argument",
+        "grep -rn 'truth_curves=' tests/test_*.py -> 0 hits",
+        "grep -i 'truth_curves|fold_lattice_systematics|assemble_operator' $AUDIT/missing_running.tsv -> 0 hits"
+      ],
+      "effort": "M"
+    },
+    {
+      "id": "test_closure_truth_representable-M03",
+      "topic": "closure-suite",
+      "title": "LEFT OPEN 2026-08-13, batch C1, with its two prerequisites closed. generate_member itself is still uncalled by any test: it writes real files via write_dat/json, so exercising it needs tmp_path plumbing, a redirected cfg.truth_dir and a minimal manifest (effort L, as recorded). What DID land is the pure-function half it depends on -- test_fold_uses_fixed_truth_curves_when_given_and_replica_mean_otherwise now covers the truth_curves= branch at generate.py:280 that generate_member takes at :668, and assemble_operator -- so the remaining gap is narrower and specific: generate_member choosing ONE consistent truth source to hand to all three folds (:668, :713, :767). Both entries' 'Not covered here' sections say so. Add an end-to-end test that generate_member wires one truth into lattice, DIS and DY alike",
+      "rationale": "STILL LEFT OPEN 2026-08-14, batch N1. Unchanged from its 2026-08-13 assessment (effort L: generate_member writes real files via write_dat/json, so it needs tmp_path plumbing, a redirected cfg.truth_dir and a minimal manifest). One thing this batch established that narrows the remaining work: the same class of gap for the _small suites' synthetic_z block was closed WITHOUT running the generator, by tests/test_small_synthetic_z.py::test_generation_time_synthetic_z_layout_is_what_the_manifest_reader_consumes -- it takes the real layout record, applies the exact transform generate_member applies (_public plus mean/cov), and drives it through the reader, comparing the generation-time and fitting-time build routes as an A3 identity. The same shape should work for generate_member's three folds without any file writes: call fold_lattice_systematics / fold_truth / dy_central directly on the SAME mean_curves generate_member hands each of them and assert the three agree on their truth source. That avoids the tmp_path plumbing that made this an L, and it stays clear of the closure-pipeline prohibition. generate_member (generate.py:572-789) is the actual 'generation' the module docstring's claim is about: it is the one place that decides mean_curves (from member cfg.FIXED_TRUTH_MEMBER) feeds fold_lattice_systematics, fold_truth, and dy_central alike (generate.py:668, 713, 767). No test calls it -- it writes real files via write_dat/json, so exercising it needs tmp_path plumbing to redirect cfg.truth_dir. This file only tests fold_truth/dy_central as pure functions against hand-built truth dicts, which cannot catch generate_member itself threading an inconsistent truth source (e.g. ens instead of mean_curves) into one of the three folds.",
+      "proposed_oracle": "F1",
+      "proposed_location": "new test in tests/test_closure_truth_representable.py, or a closure_*_truth-specific integration test file, with tmp_path/monkeypatch redirecting cfg.truth_dir and a minimal manifest",
+      "searched": [
+        "grep -in 'generate_member' $AUDIT/test_index.txt -> 0 hits",
+        "grep -rln 'generate_member' tests/test_*.py -> 0 files",
+        "grep -rn 'generate\\.generate_member|generate_member\\(' tests/test_*.py -> 0 hits",
+        "grep -i 'generate_member' $AUDIT/missing_running.tsv -> 0 hits"
+      ],
+      "effort": "L"
+    }
+  ],
+  "unjustified_tolerances": [
+    {
+      "line": 90,
+      "text": "np.testing.assert_allclose(gen.fold_truth([(\"q\", matrix)], truth), matrix @ truth[\"q\"])",
+      "quantity": "fold_truth's linear-fold output vs. a direct matrix-vector product",
+      "comment_added": "rtol=1e-7 (assert_allclose default). Single-field operator only -- the for field, B in operator[1:] accumulation in fold_truth for a multi-field operator is not exercised by this call.",
+      "provenance": "known (numpy documented default; the path is exact linear algebra, no interpolation/quadrature, so this is a transcription-level pin)"
+    },
+    {
+      "line": 124,
+      "text": "np.testing.assert_allclose(exact, expected)",
+      "quantity": "dy_central's bilinear-fold output vs. a direct outer-product contraction",
+      "comment_added": "rtol=1e-7 default; exact algebra, not a physics bound. field_A == field_B == \"q\" makes this blind to an index-transposed contraction or a field_A/field_B swap: both give this same number, because outer(truth[\"q\"], truth[\"q\"]) is symmetric.",
+      "provenance": "known (default; blind spot demonstrated by measurement, see measurements array)"
+    },
+    {
+      "line": 142,
+      "text": "assert not np.allclose(exact, second_moment)",
+      "quantity": "separation between the fixed-truth law and the replica-second-moment law, on this fixture",
+      "comment_added": "np.allclose default rtol=1e-5, atol=1e-8 -- far below the 7-8% gap measured here, not a tight bound.",
+      "provenance": "known (measured 7-8% gap, recorded in measurements)"
+    }
+  ],
+  "measurements": [
+    {
+      "claim": "The test's own 'replicas' fixture has mean exactly equal to truth['q'], and the fixed-truth law differs from the replica-second-moment law by 7-8% on this fixture.",
+      "command": "OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 .venv/bin/python3 -c (reproduced tensor/truth/replicas literally from the test file; computed exact=einsum('rij,i,j->r',tensor,truth['q'],truth['q']), second_moment as in the test, and replicas.mean(axis=0))",
+      "result": "exact=[28., 72.1], second_moment=[30., 77.7], replicas.mean(axis=0)==truth['q'] exactly, exact/second_moment-1 = [-0.0667, -0.0721]"
+    },
+    {
+      "claim": "closure_JAM_truth_small/closure_NNPDF_truth_small's dy_central formula (C = qA.T @ qB / n_rep, generate.py:265) applied to this test's own 'replicas' array reproduces the test's 'second_moment' value to float precision -- it is the same formula, not merely the same concept.",
+      "command": "standalone script: C = replicas.T @ replicas / replicas.shape[0]; small_suite_formula = np.einsum('rij,ij->r', tensor, C, optimize=True); compared against second_moment computed exactly as in the test file",
+      "result": "both print [30., 77.7]; max abs diff 1.42e-14; np.allclose(second_moment, small_suite_formula, rtol=1e-12, atol=0) is True"
+    },
+    {
+      "claim": "field_A == field_B == 'q' makes this test's bilinear check blind to an index-transposed contraction and to a field_A/field_B swap inside dy_central.",
+      "command": "standalone script: outer = np.outer(truth_q, truth_q); correct = einsum('rij,ij->r', tensor, outer); mutant_transposed = einsum('rji,ij->r', tensor, outer); mutant_swapped = einsum('rij,ij->r', tensor, outer.T)",
+      "result": "correct, mutant_transposed and mutant_swapped are all exactly [28., 72.1]; np.allclose(outer, outer.T) is True (outer(q,q) is symmetric by construction)"
+    },
+    {
+      "claim": "The replica-second-moment matrix C = qA.T @ qB / n_rep is not the outer product of any single vector (rank > 1), so it does not correspond to any single 'representable' PDF truth in the sense this file's claim is about.",
+      "command": "np.linalg.matrix_rank(replicas.T @ replicas / replicas.shape[0]) on the test's own 2-replica fixture; also inspected C - np.outer(mean, mean)",
+      "result": "rank == 2 (an outer(v,v) is always rank <= 1); C - outer(mean,mean) = [[0.25,0.25,0.5],[0.25,0.25,0.5],[0.5,0.5,1.0]], nonzero (the Cov(replicas) term)"
+    },
+    {
+      "claim": "ACCEPTANCE: four realistic dy_central slips are invisible to the original symmetric fixture and caught by the new asymmetric one.",
+      "command": "MUT=<transpose|swap|noweight|merge> PYTHONPATH=scratchpad/mutplug venv/bin/python -m pytest tests/test_closure_truth_representable.py -q -p no:randomly -p mut_truth",
+      "result": "Each mutation gives '2 failed, 4 passed' -- the two failures are both parametrizations of test_bilinear_fold_is_index_weight_and_kinematics_faithful, and test_linear_and_bilinear_generation_fold_the_same_fixed_truth passes under all four. transpose and swap both produce [-16.592857, 103.332143] against the correct [-16.564286, 103.360714]; noweight [96.267857, 130.242857]; merge [25.0125, 58.875]."
+    },
+    {
+      "claim": "ACCEPTANCE: fold_truth's multi-field accumulation is now covered.",
+      "command": "MUT=<fold_first_only|fold_wrong_field> ... -p mut_truth",
+      "result": "Both give '2 failed, 4 passed', failing only test_linear_generation_fold_accumulates_a_multi_field_operator ([2., 10.] and [11.25, 23.5] against the correct [-0.75, 24.59375])."
+    },
+    {
+      "claim": "EVIDENCE QUALITY: same harness audit as the systematics report.",
+      "command": "grep + pytest --tb=line per mutation",
+      "result": "scratchpad/mutplug/mut_truth.py defines plain replacement functions and assigns them onto sys.modules[...].dy_central / .fold_truth -- no exec, no compile, no __dict__ copy, no getsource; the test file reads no repository source as text. Failing lines: transpose/swap/noweight/merge all -> :278 (the bilinear assert_allclose), fold_first_only/fold_wrong_field both -> :186 (the multi-field fold_truth assert_allclose). One assertion per mutation, all numeric."
+    },
+    {
+      "claim": "S0-05 FIXED 2026-08-14. Both _small dy_central copies now run the full suites' fixed-truth fold; all four bodies are AST-identical (docstrings excluded).",
+      "command": "ast.dump of dy_central with the leading docstring dropped, over the four closure_*/generate.py copies",
+      "result": "1 distinct body across all four (was 2)"
+    },
+    {
+      "claim": "Size of the law change on the SHIPPED replica ensembles at Q=2: replica second moment vs the fixed-truth fold, max|ratio-1| over rows.",
+      "command": "venv/bin/python: built each suite's DY datasets via datasets.build_drell_yan, compared gen.dy_central(ds, ens, ...) [old law, restored in memory] against a fixed-truth fold of ens[f].mean(axis=0)",
+      "result": "JAM 791 replicas: dy_e866_pp 2.3661e-03, dy_e866_pd 2.8643e-03. NNPDF 1000 replicas: dy_e866_pp 2.1280e-03, dy_e866_pd 6.3953e-03. Far below the file's synthetic 7-8%, but a truth-level bias, not noise."
+    },
+    {
+      "claim": "All four committed truth.json files carry truth_kind 'replica_ensemble_mean', so the _small suites' recorded truth was the ensemble mean while their DY central value was the ensemble SECOND moment -- inconsistent within one suite.",
+      "command": "read meta.truth_kind from every closure_*/data/truthQ_*/truth.json (24 files)",
+      "result": "24/24 'replica_ensemble_mean'; full suites' generate.py today writes 'fixed_lhapdf_member' (FIXED_TRUTH_MEMBER=1), so the committed full-suite artifacts predate that change"
+    }
+  ],
+  "notes_for_readme": "closure_JAM_truth_small/closure_NNPDF_truth_small's dy_central implements the exact replica-second-moment law the full suites' own code calls forbidden for a bilinear observable, and no test anywhere checks it -- flag prominently if the closure-suite index summarizes single-truth coverage as suite-wide."
+}
