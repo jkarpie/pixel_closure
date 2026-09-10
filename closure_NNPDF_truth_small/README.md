@@ -106,7 +106,7 @@ extracts that archive into `closure_NNPDF_truth_small/data/lhapdf/` and sets
 
 ## Flavor basis (nf = 4)
 
-Nine fields on a shared 128-point log-linear grid:
+Nine fields on a shared 146-point log-linear grid:
 
 | sector | C-even (q+q̄) | C-odd valence (q−q̄) |
 |---|---|---|
@@ -162,7 +162,9 @@ central values by `Normal(central, sigma)` — the fake data are uncorrelated.
 
 ## Fit, priors, and constraints
 
-- **Grid:** 128-point log-linear grid, cubic-spline finite elements.
+- **Grid:** 146-point log-linear grid, piecewise-quintic (`pw5`) finite elements.
+  146 rather than 145 because a quintic tiles the grid only when `(n - 1) % 5 == 0`;
+  145 would leave a ragged degree-4 cell at large `x`.
 - **Prior:** each field is a log-RBF GP (`length = ln 2`, fixed `x_reg`) with a
   **constant, x-independent mean** (`priors.Const`):
   - the C-even singlet (`sigma`), gluon (`g`) and charm (`t15`) use **mean 5,

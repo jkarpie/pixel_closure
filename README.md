@@ -1,14 +1,43 @@
 # PIXEL closure-test suites
 
-Four packages that generate a synthetic "truth", fit it with PIXEL, and ask whether
-the fit recovers it. Two truth sources x two scales:
+Eight packages that generate a synthetic "truth", fit it with PIXEL, and ask whether
+the fit recovers it. **Two independent axes:** which PDF set the truth is drawn from,
+and which dataset selection is fitted.
 
-| package | truth | scale |
-|---|---|---|
-| `closure_NNPDF_truth_small` | `NNPDF40_nnlo_as_01180_1000` | mock / smoke |
-| `closure_JAM_truth_small` | JAM | mock / smoke |
-| `closure_NNPDF_truth` | `NNPDF40_nnlo_as_01180_1000` | full, 13 lattice ensembles |
-| `closure_JAM_truth` | JAM | full |
+| package | truth | variant | datasets |
+|---|---|---|---|
+| `closure_NNPDF_truth_small` | `NNPDF40_nnlo_as_01180_1000` | mock / smoke | mocked |
+| `closure_JAM_truth_small` | JAM | mock / smoke | mocked |
+| `closure_NNPDF_truth` | `NNPDF40_nnlo_as_01180_1000` | full | **JAM u NNPDF** (36) |
+| `closure_JAM_truth` | JAM | full | **JAM u NNPDF** (36) |
+| `closure_NNPDF_truth_JAM_data` | `NNPDF40_nnlo_as_01180_1000` | JAM_data | JAM24 (27) |
+| `closure_JAM_truth_JAM_data` | JAM | JAM_data | JAM24 (27) |
+| `closure_NNPDF_truth_NNPDF_data` | `NNPDF40_nnlo_as_01180_1000` | NNPDF_data | NNPDF4.0 (28) |
+| `closure_JAM_truth_NNPDF_data` | JAM | NNPDF_data | NNPDF4.0 (28) |
+
+The two dataset selections are the published analyses' own lists, restricted to what
+this closure can build:
+
+* **JAM24** (arXiv:2501.00665), from the uncommented entries of
+  `fitpack_legacy/examples/input.py`, minus the fragmentation-function families
+  (`sia`/`sidis`/`psidis`/`pp_hadron`) and the polarized ones (`pidis`/`pjet` --
+  they constrain helicity PDFs and the nine closure fields are unpolarized).
+* **NNPDF4.0** (arXiv:2109.02653), from `nnpdf40_dis_dy_roster.yaml`, keeping only
+  `linear` and `bilinear` predictions -- no ratios, no asymmetries.
+
+The two `_truth` suites run their **union** -- 36 datasets, 4291 rows, everything
+either analysis fits. Both run the *same* dataset, so a JAM-vs-NNPDF truth comparison
+there is still unconfounded by any dataset difference; the union just makes it on more
+data than the intersection would (2926 rows). The ten datasets the union adds over the
+intersection are `dis.hermes_p_10007` (JAM-only) and, all NNPDF-only, CHORUS nu+nubar,
+the HERACOMB bottom set, E605 copper Drell-Yan and the five collider Z sets.
+Each suite names its selection once, as `config.CONTRACT_MODE`, resolved against
+`observable_contracts.yaml`. Everything held out is carried there as a `reader_only`
+record with measured source rows and a `drop_reason`.
+
+```bash
+./run_closure.sh --truth NNPDF --scale JAM_data --Q 2 --modes both
+```
 
 Run with the PIXEL repo's venv -- this repo has none of its own, and it takes
 `pixel` (including `priors.BetaTaperedLogRBF`) from that checkout's `src/`:

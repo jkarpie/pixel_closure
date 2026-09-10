@@ -346,6 +346,16 @@ def test_small_closure_manifest_expands_to_closed_dataset_recipes(suite):
     in the suite could have told the difference.
     """
     root = Path(__file__).resolve().parents[1] / suite / "data" / "truthQ_2"
+    # ``data/truthQ_*`` is generated, not committed in a fresh checkout, and was deleted
+    # on 2026-09-09 with the rest of the 128-node artefacts when the grid moved to
+    # 146-point pw5. Same idiom as ``test_closure_prior_ties.py``: name the command that
+    # produces it rather than fail for a missing input.
+    if not (root / "manifest.json").exists():
+        pytest.skip(
+            f"{suite}: truth member truthQ_2 is not generated in this checkout "
+            f"(no {root / 'manifest.json'}); run "
+            f"`python -m {suite}.generate --Q 2`"
+        )
     manifest = json.loads((root / "manifest.json").read_text())
     options = _closure_options()
 

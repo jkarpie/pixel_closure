@@ -200,8 +200,8 @@ Three things make the wired version correct rather than merely on:
 * **Per-row scales.** An E866 table spans `Q^2 = 172-646`, and one matrix at an
   effective mass is a different operator, not an approximation of the right one.
   Each row carries its own operator.  Cost scales with *distinct scales*, not
-  rows: 46 and 49 for the two tables, ~31 s each on the 128-node basis, so about
-  50 minutes once.  The operators depend on kinematics and `Q0`, never on the
+  rows: 46 and 49 for the two tables, ~31 s each on the old 128-node cubic-spline
+  basis, so about 50 minutes once (not re-measured on the 146-node pw5 basis).  The operators depend on kinematics and `Q0`, never on the
   truth, so all six `truthQ_*` members share one cache.  Pin
   `OMP_NUM_THREADS=1` while assembling it.
 * **Five flavours.** Evolving from `mc` crosses bottom, so the projection is

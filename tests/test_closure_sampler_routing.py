@@ -195,10 +195,27 @@ def test_the_smoke_suites_cannot_build_a_dataset_their_sampler_cannot_route(suit
     ``evidence_value`` refuses any nonlinear block outright.
     """
     datasets = importlib.import_module(f"{suite}.datasets")
-    builders = set(getattr(datasets, "_EXP_BUILDERS", {}))
-    assert builders == {"f2", "sigma_r", "sigma_r_cc"}, sorted(builders)
-    for name in builders:
+    table = dict(getattr(datasets, "_EXP_BUILDERS", {}))
+    # Since 2026-09-09 the table lists **every** datatype JAM24 or NNPDF4.0 uses, most
+    # of them behind a gate that raises (``pixel.data.closure_datatypes``). A gated
+    # entry cannot build anything, so it cannot build "a dataset their sampler cannot
+    # route" -- the claim is about what is *buildable*, and that is what is compared.
+    buildable = {k for k, v in table.items() if not v.__name__.startswith("gated_")}
+    gated = set(table) - buildable
+    assert buildable == {"f2", "sigma_r", "sigma_r_cc"}, sorted(buildable)
+    for name in buildable:
         assert "ratio" not in name and "asym" not in name
+
+    # And the stronger statement the gate now makes available: the ratio and asymmetry
+    # kinds are not merely absent from the table, they are present and *refuse*. Before
+    # the registry this could only be asserted by their absence, which a future edit
+    # could have undone silently by adding a working one.
+    from pixel.data.closure_datatypes import DatatypeGateError
+
+    for name in gated:
+        if "ratio" in name or "asym" in name:
+            with pytest.raises(DatatypeGateError):
+                table[name]({}, None, None, None)
 
     fit = importlib.import_module(f"{suite}.fit")
     source = inspect.getsource(fit._closure_sampler)

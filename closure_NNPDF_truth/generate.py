@@ -35,6 +35,8 @@ import json
 from pathlib import Path
 from typing import NamedTuple
 
+from collections.abc import Mapping
+
 import numpy as np
 
 from pixel.util.progress import Stopwatch, format_duration
@@ -675,13 +677,24 @@ def nnpdf_layout():
     nuisance layer marginalizes each dataset's copy separately, so the cross-record
     block is dropped.  It carries a median 3-4% of each row's variance.
     """
-    roster = closure_extension_roster("nnpdf_full")
+    roster = closure_extension_roster(cfg.CONTRACT_MODE)
     out = []
     for entry in roster["selected"]:
         spec = cfg.NNPDF_DATASET_SPECS.get(entry["id"])
         if spec is None:
             continue
         common = read_nnpdf_source(cfg.NNPDF_COMMONDATA, spec["commondata_name"])
+        # Collider Drell-Yan is a different observable on the same commondata plumbing:
+        # rapidity/mass *bins* inside a fiducial acceptance, not (x, Q2, y) DIS points,
+        # so it neither has nor wants the W2 cut below.  One contract walk, two record
+        # shapes -- keeping it here means ``generate_member``'s coverage guard still
+        # sees every selected id in one place.
+        if spec["kind"] == "drell_yan_binned":
+            out.append(_collider_dy_record(entry, spec, common))
+            continue
+        if spec["kind"] == "drell_yan":
+            out.append(_fixed_target_dy_record(entry, spec, common))
+            continue
         x = np.asarray(common.kinematics["x"], dtype=float)
         q2 = np.asarray(common.kinematics["Q2"], dtype=float)
         y = np.asarray(common.kinematics["y"], dtype=float)
@@ -726,7 +739,10 @@ def nnpdf_layout():
             "name": spec["label"],
             "contract_id": entry["id"],
             "commondata_name": spec["commondata_name"],
-            "target": dict(spec["target"]),
+            # A nuclear target is a mapping (A/Z stay visible in the manifest); a
+            # proton target is the plain string the builders already accept.
+            "target": (dict(spec["target"]) if isinstance(spec["target"], Mapping)
+                       else spec["target"]),
             "beam": spec["beam"],
             "file": f"datasets/{spec['label']}.dat",
             "y": y[keep].tolist(),
@@ -736,6 +752,11 @@ def nnpdf_layout():
             "_leading": (x[keep], q2[keep]),
             "_additive_rel": additive,
         }
+        # Heavy-flavour-tagged sets carry the quark they tag and its charge weight; the
+        # inclusive arm has neither and the keys are simply absent there.
+        for extra in ("heavy_flavour", "heavy_mass", "charge_sq"):
+            if extra in spec:
+                rec[extra] = spec[extra]
         multiplicative = {
             name: np.asarray(v, dtype=float)[keep]
             for name, v in common.multiplicative.items()
@@ -751,6 +772,156 @@ def nnpdf_layout():
             ]
         out.append(rec)
     return out
+
+
+def _fixed_target_dy_record(entry, spec, common):
+    """One pointwise fixed-target Drell-Yan record (E605 p+Cu) from NNPDF commondata.
+
+    The same observable as the fitpack E866 tables the suite already carries -- one
+    ``(S, Q2, Y)`` per row -- so it feeds ``build_drell_yan`` unchanged and the only new
+    thing is the copper parton map (``config.nuclear_parton_basis``).
+
+    The commondata gives ``rapidity``/``M2``/``sqrts``; the closure's DY cuts are
+    ``Q2 >= DY_Q2_MIN`` and physical ``x1, x2 < DY_X_MAX``.  Measured 2026-09-09: all
+    119 rows pass (``Q2`` spans 50.5-286.0, ``x1 <= 0.650``, ``x2 <= 0.482``), which is
+    why the contract's ``selected_rows`` equals its ``source_rows``.  The equality is
+    asserted rather than assumed, so a future cut change surfaces here.
+    """
+    value = np.asarray(common.value, dtype=float)
+    kin = common.kinematics
+    y  = np.asarray(kin["rapidity"], dtype=float)
+    q2 = np.asarray(kin["M2"], dtype=float)
+    s  = np.asarray(kin["sqrts"], dtype=float) ** 2
+    tau = q2 / s
+    x1, x2 = np.sqrt(tau) * np.exp(y), np.sqrt(tau) * np.exp(-y)
+    keep = np.flatnonzero(
+        np.isfinite(value) & (q2 >= cfg.DY_Q2_MIN)
+        & (x1 < cfg.DY_X_MAX) & (x2 < cfg.DY_X_MAX)
+    )
+    if keep.size != int(entry["selected_rows"]):
+        raise RuntimeError(
+            f"{entry['id']}: the closure DY cut retains {keep.size} rows but the "
+            f"contract records selected_rows={entry['selected_rows']}"
+        )
+    published = np.abs(value[keep])
+    stat = np.sqrt(sum(np.asarray(v, dtype=float)[keep] ** 2
+                       for v in common.uncorrelated.values()))
+    correlated = [np.asarray(v, dtype=float)[keep] / published
+                  for v in common.correlated.values()]
+    additive = (np.stack(correlated, axis=1) if correlated
+                else np.zeros((keep.size, 0), dtype=float))
+    rec = {
+        "kind": spec["kind"],
+        "section": "datasets",
+        "label": spec["label"],
+        "name": spec["label"],
+        "contract_id": entry["id"],
+        "commondata_name": spec["commondata_name"],
+        "reaction": spec["reaction"],
+        "file": f"datasets/{spec['label']}.dat",
+        "Q2": q2[keep].tolist(), "S": s[keep].tolist(), "Y": y[keep].tolist(),
+        "source_rows": int(value.size),
+        "retained_rows": int(keep.size),
+        "rel_stat": (stat / published).tolist(),
+        "_additive_rel": additive,
+    }
+    multiplicative = {name: np.asarray(v, dtype=float)[keep]
+                      for name, v in common.multiplicative.items()}
+    if multiplicative:
+        rec["correlated_file"] = f"{spec['label']}.npz"
+        rec["correlated_names"] = sorted(multiplicative)
+        rec["_correlated_rel"] = np.stack(
+            [multiplicative[name] for name in rec["correlated_names"]], axis=0
+        )
+        rec["shared_multiplicative_sources"] = [
+            name for name in rec["correlated_names"] if name.startswith("global:")
+        ]
+    return rec
+
+
+def _collider_dy_record(entry, spec, common):
+    """One bin-integrated fiducial Z record for the ``datasets`` manifest section.
+
+    The commondata gives ``rapidity``/``rapidity_min``/``rapidity_max`` and ``m_Z2``
+    (plus ``m_Z2_min``/``m_Z2_max`` for the 2D sets) and ``sqrts``.  Those map one for
+    one onto :func:`pixel.data.DrellYan`'s bin-integrated arguments; nothing here is
+    re-derived.
+
+    **No kinematic cut is applied, and that is deliberate.**  The DIS arm cuts on
+    ``Q2 >= Q0^2`` and ``W2 > 10`` because inclusive DIS reaches down into the
+    non-perturbative region.  A Z measurement sits at ``Q ~ m_Z``, six-hundred-fold
+    above the input scale, so every published row is already perturbative and the
+    contract's ``selected_rows`` equals its ``source_rows``.  Asserting that equality
+    is the check -- if a future set needs a cut, this raises rather than silently
+    keeping rows the contract says were dropped.
+
+    Uncertainties follow the same convention as every other closure record: stored
+    **relative to the published central value**, because the folded truth is not the
+    published measurement and an absolute error bar would sit at the wrong scale.
+    """
+    value = np.asarray(common.value, dtype=float)
+    kin = common.kinematics
+    if int(entry["selected_rows"]) != int(entry["source_rows"]):
+        raise RuntimeError(
+            f"{entry['id']}: collider Drell-Yan applies no kinematic cut, but the "
+            f"contract records selected_rows={entry['selected_rows']} against "
+            f"source_rows={entry['source_rows']}; add the cut here or fix the contract"
+        )
+    if value.size != int(entry["source_rows"]):
+        raise RuntimeError(
+            f"{entry['id']}: commondata has {value.size} rows, contract says "
+            f"{entry['source_rows']}"
+        )
+
+    y = np.asarray(kin["rapidity"], dtype=float)
+    y_low = np.asarray(kin["rapidity_min"], dtype=float)
+    y_high = np.asarray(kin["rapidity_max"], dtype=float)
+    q2 = np.asarray(kin["m_Z2"], dtype=float)
+    s = np.asarray(kin["sqrts"], dtype=float) ** 2
+    q2_low = q2_high = None
+    if spec.get("mass_binned"):
+        q2_low = np.asarray(kin["m_Z2_min"], dtype=float)
+        q2_high = np.asarray(kin["m_Z2_max"], dtype=float)
+
+    published = np.abs(value)
+    stat = np.sqrt(sum(np.asarray(v, dtype=float) ** 2
+                       for v in common.uncorrelated.values()))
+    correlated = [np.asarray(v, dtype=float) / published
+                  for v in common.correlated.values()]
+    additive = (np.stack(correlated, axis=1) if correlated
+                else np.zeros((value.size, 0), dtype=float))
+
+    rec = {
+        "kind": spec["kind"],
+        "section": "datasets",
+        "label": spec["label"],
+        "name": spec["label"],
+        "contract_id": entry["id"],
+        "commondata_name": spec["commondata_name"],
+        "nnpdf_legacy_name": spec["nnpdf_legacy_name"],
+        "reaction": spec["reaction"],
+        "file": f"datasets/{spec['label']}.dat",
+        "Q2": q2.tolist(), "S": s.tolist(), "Y": y.tolist(),
+        "Y_low": y_low.tolist(), "Y_high": y_high.tolist(),
+        "Q2_low": None if q2_low is None else q2_low.tolist(),
+        "Q2_high": None if q2_high is None else q2_high.tolist(),
+        "source_rows": int(value.size),
+        "retained_rows": int(value.size),
+        "rel_stat": (stat / published).tolist(),
+        "_additive_rel": additive,
+    }
+    multiplicative = {name: np.asarray(v, dtype=float)
+                      for name, v in common.multiplicative.items()}
+    if multiplicative:
+        rec["correlated_file"] = f"{spec['label']}.npz"
+        rec["correlated_names"] = sorted(multiplicative)
+        rec["_correlated_rel"] = np.stack(
+            [multiplicative[name] for name in rec["correlated_names"]], axis=0
+        )
+        rec["shared_multiplicative_sources"] = [
+            name for name in rec["correlated_names"] if name.startswith("global:")
+        ]
+    return rec
 
 
 # -- one member --------------------------------------------------------------
@@ -821,7 +992,7 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
     manifest = {
         "q_key": q_key, "meta": meta,
         "provenance": contract_artifact_provenance(),
-        "closure_extension": closure_extension_roster("nnpdf_full"),
+        "closure_extension": closure_extension_roster(cfg.CONTRACT_MODE),
         "ensembles": [e.id for e in cfg.active_ensembles()],
         "lattice": [_public(r) for r in records if r["kind"] in ("pseudoitd", "mellin")],
         "exp": [

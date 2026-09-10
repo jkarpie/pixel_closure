@@ -170,6 +170,20 @@ def test_target_labels_reaching_the_builders_agree_with_pixels_alias_table(suite
     assert flavor.normalize_target("d") == flavor.normalize_target("deuteron")
 
     # Every label the shipped manifest actually carries is accepted.
+    #
+    # ``dis_manifest.json`` is *generated*, not committed -- it is written by each
+    # suite's ``dis_audit`` and was deleted wholesale on 2026-09-09 when the grid moved
+    # to 146-point pw5 and every 128-node artefact went stale. A fresh checkout has none
+    # of it either. Skipping names the command that produces it, which is the same idiom
+    # ``test_closure_prior_ties.py`` uses for the truth members; failing here would
+    # report a missing input as a wiring defect, which is what this test exists to
+    # detect and would then be unable to.
+    if not generate.cfg.DIS_MANIFEST_PATH.exists():
+        pytest.skip(
+            f"{suite}: no DIS manifest in this checkout "
+            f"(no {generate.cfg.DIS_MANIFEST_PATH}); run "
+            f"`python -m {suite}.dis_audit`"
+        )
     manifest = json.loads(generate.cfg.DIS_MANIFEST_PATH.read_text())
     used = [t for t in manifest["tables"] if t.get("status") == "used"]
     assert used, f"{suite}: no used DIS tables to check"

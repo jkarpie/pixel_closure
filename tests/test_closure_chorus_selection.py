@@ -63,8 +63,23 @@ def test_the_two_contract_copies_are_identical():
 
 @pytest.mark.parametrize("contract_id", CHORUS_IDS)
 def test_chorus_is_selected_as_physics_with_its_retained_rows(contract_id):
-    selection = {record["id"]: record for record in full_closure_selection("nnpdf_full")}
+    # ``nnpdf_data``, not ``nnpdf_full``, since 2026-09-09.  CHORUS is absent from JAM24's
+    # own dataset list (``fitpack_legacy/examples/input.py`` has no CHORUS entry), so when
+    # the modes were split into the two published selections plus their intersection,
+    # CHORUS stayed in the NNPDF4.0 selection and left the intersection that the two
+    # headline suites run.  It is still selected, still physics, still 520 retained rows.
+    selection = {record["id"]: record for record in full_closure_selection("nnpdf_data")}
     assert contract_id in selection, sorted(selection)
+    # CHORUS is NNPDF-only, and the two mode families say that differently:
+    # it is in ``nnpdf_data`` and (since the modes became the UNION on 2026-09-09) in
+    # ``jam_full``/``nnpdf_full`` too, but it must never appear in ``jam_data`` --
+    # JAM24's input.py has no CHORUS entry, and that is the fact being pinned.
+    assert contract_id not in {
+        r["id"] for r in full_closure_selection("jam_data")
+    }, "CHORUS is absent from JAM24's dataset list and must not enter jam_data"
+    assert contract_id in {
+        r["id"] for r in full_closure_selection("nnpdf_full")
+    }, "the full modes are the union, so an NNPDF-only record belongs in them"
     record = selection[contract_id]
     assert record["classification"] == "physics"
     assert record["selectable"] is True
@@ -97,19 +112,59 @@ def test_the_nuclear_convention_is_named_not_deferred(contract_id):
     assert "unimplemented" not in str(record["operator"]["kind"]).lower()
 
 
-def test_the_closure_selection_grew_by_exactly_the_two_chorus_records():
+def _by_prefix(mode):
+    counts: dict[str, int] = {}
+    for record in full_closure_selection(mode):
+        key = str(record["id"]).split(".")[0]
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def test_the_three_selections_have_their_measured_compositions():
     """Pinned so a promotion or a regression is acknowledged rather than absorbed.
 
-    Measured 2026-08-22: 30 records = 13 lattice + 15 DIS + 2 DY. It was 28 before CHORUS.
+    Was 30 records = 13 lattice + 15 DIS + 2 DY for a single shared selection (measured
+    2026-08-22; 28 before CHORUS).  Split 2026-09-09 into the two published dataset lists
+    and their intersection, so there are now three compositions to pin, and the two
+    differences between them are the whole point of the split:
+
+    * ``dis.hermes_p_10007`` is JAM-only -- HERMES sigma_r is not on the NNPDF4.0 roster;
+    * ``dis.chorus_nu``/``dis.chorus_nb`` are NNPDF-only -- CHORUS is not in JAM's
+      ``input.py``;
+    * ``dy.e866_pd_10002`` left *all three*.  Verified from the workbooks: JAM fits
+      E866 pp absolute + the pd/2pp ratios, NNPDF4.0 fits ``DYE886P`` (pp absolute) +
+      ``DYE886R`` (the ratio).  Neither fits E866 pd absolute, which is why the DY count
+      is 1 and not 2.
     """
-    selection = full_closure_selection("nnpdf_full")
-    by_prefix: dict[str, int] = {}
-    for record in selection:
-        by_prefix[str(record["id"]).split(".")[0]] = (
-            by_prefix.get(str(record["id"]).split(".")[0], 0) + 1
-        )
-    assert by_prefix == {"lattice": 13, "dis": 15, "dy": 2}, by_prefix
-    assert len(selection) == 30
+    assert _by_prefix("jam_data") == {"lattice": 13, "dis": 13, "dy": 1}
+    assert _by_prefix("nnpdf_data") == {"lattice": 13, "dis": 15, "dy": 2, "z": 5}
+    # **UNION since 2026-09-09**, at the owner's request -- "the larger set which
+    # contains everything used in both or either". It was the intersection for one
+    # afternoon; both are defensible and the union is what the suites run.
+    union = {"lattice": 13, "dis": 16, "dy": 2, "z": 5}
+    assert _by_prefix("jam_full") == union
+    assert _by_prefix("nnpdf_full") == union
+
+    jam = {r["id"] for r in full_closure_selection("jam_data")}
+    nnpdf = {r["id"] for r in full_closure_selection("nnpdf_data")}
+    full = {r["id"] for r in full_closure_selection("jam_full")}
+    # The headline suites run exactly the UNION -- asserted, not asserted-by-count.
+    # Both still run the SAME dataset, so a JAM-vs-NNPDF truth comparison stays
+    # unconfounded by any dataset difference; the union just makes it on more data.
+    assert full == jam | nnpdf
+    assert full != jam & nnpdf, "a union that equals the intersection means the two selections stopped differing"
+    assert full == {r["id"] for r in full_closure_selection("nnpdf_full")}
+    assert jam - nnpdf == {"dis.hermes_p_10007"}
+    # These are exactly the ten the union adds over the intersection.
+    assert nnpdf - jam == {
+        "dis.chorus_nu", "dis.chorus_nb",
+        # Promoted 2026-09-09 with their builders; all NNPDF-only, none in JAM's
+        # input.py, so none of them enters the intersection either.
+        "dis.heracomb_bottom", "dy.e605_copper",
+        "z.lhcb7_dielectron", "z.lhcb8_dielectron", "z.lhcb13_dimuon",
+        "z.lhcb13_dielectron", "z.atlas8_lomass_2d",
+    }
+    assert not any("e866_pd" in i for i in jam | nnpdf)
 
 
 def test_nutev_is_not_promoted_alongside_chorus():

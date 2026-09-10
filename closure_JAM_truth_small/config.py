@@ -220,13 +220,59 @@ DEFAULT_TRUTH_Q = "2"
 
 # -- PDF grid ----------------------------------------------------------------
 
-# Log-linear grid, 128 points (per spec).  Cubic-spline elements: PIXEL's x-space
-# inverse-Mellin evolution needs a far longer (slower) contour for C0 "piecewise"
-# bases, so splines are both faster and more accurate for the DIS kernels.
-GRID_N = 128
+# Log-linear grid, 146 points, piecewise-quintic (pw5) elements.  Changed 2026-09-09
+# from 128-point cubic_spline.
+#
+# **Representation gain, measured against the real JAM24 truth** (Q=2, member 1;
+# sampled at the nodes, read back on a dense x set, worst field, max |basis - JAM|
+# relative to that field's peak):
+#
+# .. code-block:: text
+#
+#     128 cubic_spline   4.20e-04   <- previous setting
+#     146 pw5            1.23e-04   <- 3.4x better; cubic needs n ~ 200-240 to match
+#
+# The gain is *not* uniform, and that matters when reading a per-field result: it is
+# concentrated entirely in the steep small-x singlet-class fields -- t8 3.4x, sigma
+# 3.7x, t15 3.3x, g 4.8x -- while t3 and all four valence fields (v3, v8, v, v15) are
+# unchanged at 1.0-1.1x.  Those five are already resolved at 128 nodes, so a finer
+# basis buys them nothing.
+#
+# **146, not 145.**  A quintic tiles the grid only when ``(n - 1) % 5 == 0``:
+# ``PiecewisePolynomial`` groups the intervals into cells of ``order`` and drops the
+# leftover ``(n - 1) % order`` intervals into a single ragged final cell of *lower*
+# degree.  145 leaves ``144 % 5 = 4`` -- a degree-4 cell at large x, where the DIS and
+# DY rows carry the most weight.  146 gives 145 intervals = 29 exact quintic cells.
+# Measured on the polynomial-exactness probe (interpolate ``x^5 - 2x^3 + 1``, which a
+# tiling quintic reproduces to roundoff): 146 -> 8.9e-16, 141 -> 1.0e-15,
+# 145 -> 1.1e-09, i.e. the ragged cell costs ~6 orders.  On the *JAM* truth above the
+# 145/146 difference is nil (1.226e-04 both), because there the error is set by
+# small-x resolution rather than by the large-x cell -- so this is cheap insurance,
+# not a measured rescue.  146 is also PIXEL's own pw5 rung for log-linear grids
+# (``benchmarks/kernel_stress.py::PW5_LONG_SIZE``); its snapper maps the shared cubic
+# anchor 145 to exactly 146 for a quintic.  141 also tiles, if a smaller grid is
+# wanted.
+#
+# **The cubic-spline argument was outweighed, not refuted -- and it still costs.**
+# The previous note recorded that PIXEL's x-space inverse-Mellin evolution needs a
+# far longer (slower) contour for C0 "piecewise" bases.  pw5 is C0, so it still
+# applies, and ``kernels.evolution.contour`` now takes its piecewise branch:
+#
+# .. code-block:: text
+#
+#     128 cubic_spline   basis_kind=spline                 target 1e-8   zmax 1622
+#     146 pw5            basis_kind=piecewise-polynomial   target 1e-5   zmax 9111
+#
+# So the evolution/inverse-Mellin path is asking for a target three orders looser on
+# a contour 5.6x longer, and PIXEL emits its "LOUD WARNING" on every adaptive_contour
+# call.  Nothing here overrides that contour; the suites take the adaptive policy.
+# The representation gain above is a property of the *basis*, measured without any
+# evolution -- it does not speak to the evolved DIS/DY kernels.  **Measure those
+# before treating this change as settled.**
+GRID_N = 146
 GRID_SPACING = "log-linear"
 X_MIN = 1.0e-6
-ELEMENT_TYPE = "cubic_spline"
+ELEMENT_TYPE = "piecewise_quintic"
 
 # -- flavor basis (nf = 4) ---------------------------------------------------
 # C-even (q+qbar) and C-odd valence (q-qbar) fields.  "strange" = T8/V8 and
@@ -1080,7 +1126,7 @@ def results_dir(q_key: str) -> Path:
 
 
 def make_grid():
-    """The shared 128-point log-linear PDF grid."""
+    """The shared 146-point log-linear PDF grid (piecewise-quintic elements)."""
     from pixel.geometry import Grid
 
     return Grid(n_points=GRID_N, spacing=GRID_SPACING, x_min=X_MIN)

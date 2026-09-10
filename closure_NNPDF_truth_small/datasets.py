@@ -16,6 +16,11 @@ from pathlib import Path
 
 import numpy as np
 
+from pixel.data.closure_datatypes import (
+    DATATYPE_GATES,
+    assert_datatype_ready,
+)
+
 from pixel import data
 
 from . import config as cfg
@@ -212,11 +217,44 @@ def build_drell_yan(rec, path, fields, cache):
 
 
 _LATTICE_BUILDERS = {"pseudoitd": build_pseudoitd, "mellin": build_mellin}
+def _gated_builder(name):
+    """A builder for a datatype the closure cannot build yet.
+
+    Registered in :data:`_EXP_BUILDERS` exactly like a real one, so every datatype JAM24
+    or NNPDF4.0 uses has an entry and the dispatch table is the full list rather than
+    the working subset. Calling one raises
+    :class:`pixel.data.closure_datatypes.DatatypeGateError` naming what blocks it and
+    the plan section that says how to fix it.
+
+    **The point is the failure mode.** Without an entry, a manifest record for a blocked
+    kind dies on ``unknown experimental closure kind``, which says nothing about whether
+    the datatype is unimplemented, out of scope, or simply misspelled. With one, the
+    error is the reason.
+    """
+    def build(rec, path, fields, cache, **kwargs):
+        assert_datatype_ready(name)
+        raise AssertionError(f"unreachable: {name} is registered as ready but has no builder")
+
+    build.__name__ = f"gated_{name}"
+    build.__doc__ = f"Gated: see pixel.data.closure_datatypes for what blocks {name!r}."
+    return build
+
+
 _EXP_BUILDERS = {
     "f2": build_f2,
     "sigma_r": build_sigma_r,
     "sigma_r_cc": build_sigma_r_cc,
 }
+
+# Every datatype JAM24 or NNPDF4.0 uses gets an entry, whether or not it builds today.
+# The blocked ones raise with their own reason (see pixel.data.closure_datatypes); a
+# missing entry would instead raise "unknown experimental closure kind", which cannot
+# distinguish "not implemented" from "misspelled".
+_EXP_BUILDERS.update({
+    name: _gated_builder(name)
+    for name, gate in DATATYPE_GATES.items()
+    if gate.status != "ready" and name not in _EXP_BUILDERS
+})
 
 
 def _experimental_builder(kind):

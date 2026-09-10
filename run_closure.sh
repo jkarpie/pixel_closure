@@ -11,9 +11,39 @@ Defaults to the JAM truth copy.
 Options:
   --truth TRUTH            Truth source to use: JAM or NNPDF. Defaults to JAM.
                            Also accepts the full package names directly.
-  --scale SCALE            Suite scale: full (13-ensemble realistic) or small
-                           (mock smoke-test). Defaults to full.
-                           full+JAM -> closure_JAM_truth; small+JAM -> closure_JAM_truth_small.
+  --data DATA              Which dataset selection to fit.  Defaults to union.
+                             union      everything either analysis uses (36 sets,
+                                        4291 rows)          -> closure_<T>_truth
+                             JAM        JAM24 only (27 sets) -> closure_<T>_truth_JAM_data
+                             NNPDF      NNPDF4.0 only (35)   -> closure_<T>_truth_NNPDF_data
+                             mock       small smoke-test     -> closure_<T>_truth_small
+  --scale SCALE            The same axis under its older name, kept working:
+                           full = union, small = mock, JAM_data, NNPDF_data.
+
+                           **--truth and --data are independent**, and that is the
+                           point of the 2x4 layout: --truth says which PDF set the
+                           synthetic truth is drawn from, --data says which datasets
+                           are fitted.  So
+
+                             --truth NNPDF --data JAM
+
+                           is the NNPDF4.0 truth fitted to JAM24's dataset selection,
+                           which is a different experiment from either analysis.
+  -j, --cores N            Concurrency limit: the max number of simultaneous workers
+                           across every parallel layer (kernel assembly, inner
+                           assembly, posterior sweep).  Equivalent to NPROC=N, which
+                           still works.  `auto` lets the kernel layer pick from CPUs,
+                           task count and free memory after a 4 GiB reserve -- the
+                           safer choice on a shared or memory-tight box.
+                           Defaults to 12.
+                           This does NOT raise BLAS threads: see --blas-threads.
+  --blas-threads N         Threads *inside* each BLAS call.  Default 1, and that is a
+                           speed choice, not only a reproducibility one -- kernel
+                           assembly is flat across 1/4/12 threads and the fit path
+                           saturates at ~1.6x by 2, while task-level workers give
+                           ~3x. Raising both oversubscribes the box and hands the
+                           task-level win back.  Raising it also forfeits kernel-cache
+                           reproducibility until the next --remake-kernels.
   --Q Q                    Truth member to run: mc, 1, 2, 3, 4, 5. Also accepts Q2/truthQ_2.
                            Defaults to 2.
   --prior FORM             Prior form: const_logrbf (Const mean tied to LogRBF sigma,
@@ -60,6 +90,14 @@ Examples:
   ./run_closure.sh --Q 2 --remake-data --remake-kernels
   ./run_closure.sh --Q 2 --modes both --keep-results
   ./run_closure.sh --Q 2 --modes both --prior beta_envelope
+
+  # The four dataset-variant suites (truth family x dataset selection):
+  ./run_closure.sh --truth JAM   --scale JAM_data   --Q 2 --modes both
+  ./run_closure.sh --truth JAM   --scale NNPDF_data --Q 2 --modes both
+  ./run_closure.sh --truth NNPDF --scale JAM_data   --Q 2 --modes both
+  ./run_closure.sh --truth NNPDF --scale NNPDF_data --Q 2 --modes both
+  # ...or name the package directly:
+  ./run_closure.sh --truth closure_NNPDF_truth_JAM_data --Q 2
 USAGE
 }
 
@@ -70,7 +108,18 @@ USAGE
 # them raises the thread count inside a single BLAS/XLA call, which is deliberate
 # on both correctness and speed grounds (see the BLAS pinning note below, and the
 # measurement in the PIXEL_POSTERIOR_WORKERS comment).
+#: Whether the caller exported a layer variable themselves.  Captured before the
+#: defaulting below overwrites the distinction, so --cores can respect an explicit
+#: override instead of silently stamping over it.
+PIXEL_ASSEMBLY_WORKERS_SET="${PIXEL_ASSEMBLY_WORKERS+set}"
+PIXEL_KERNEL_WORKERS_SET="${PIXEL_KERNEL_WORKERS+set}"
+PIXEL_POSTERIOR_WORKERS_SET="${PIXEL_POSTERIOR_WORKERS+set}"
+
 NPROC="${NPROC:-12}"
+#: Set by --cores/-j.  Applied in apply_concurrency() *after* argument parsing, because
+#: the flag has to win over this block while an explicit PIXEL_* export from the caller
+#: still wins over the flag.
+CORES_FLAG=""
 export PIXEL_ASSEMBLY_WORKERS="${PIXEL_ASSEMBLY_WORKERS:-$NPROC}"
 export PIXEL_ASSEMBLY_BACKEND=thread
 export PIXEL_KERNEL_WORKERS="${PIXEL_KERNEL_WORKERS:-$NPROC}"
@@ -112,6 +161,7 @@ export PIXEL_RUNTIME_REPORT="${PIXEL_RUNTIME_REPORT:-1}"
 # their saved digest, and the caches outlive the run -- so a file written that way
 # stays trusted indefinitely.  Rebuild with --remake-kernels after going back.
 BLAS_THREADS="${BLAS_THREADS:-1}"
+BLAS_FLAG=""
 export OMP_NUM_THREADS="$BLAS_THREADS"
 export OPENBLAS_NUM_THREADS="$BLAS_THREADS"
 export MKL_NUM_THREADS="$BLAS_THREADS"
@@ -126,9 +176,17 @@ cd "$ROOT_DIR"
 
 PYTHON="${PYTHON:-venv/bin/python}"
 
-#: Suite selection: (scale, truth_family) -> package.  scale in {full, small},
-#: family in {JAM, NNPDF}.  full+JAM = closure_JAM_truth, small+JAM =
-#: closure_JAM_truth_small, etc.  Defaults: full + JAM.
+#: Suite selection: (scale, truth_family) -> package.  The two axes are independent:
+#: ``truth_family`` in {JAM, NNPDF} picks which PDF set the injected truth is read from,
+#: and ``scale`` picks the size/dataset variant:
+#:
+#:   full        closure_<T>_truth              JAM n NNPDF dataset intersection
+#:   small       closure_<T>_truth_small        mock smoke-test
+#:   JAM_data    closure_<T>_truth_JAM_data     JAM24 (2501.00665) PDF datasets
+#:   NNPDF_data  closure_<T>_truth_NNPDF_data   NNPDF4.0 (2109.02653) linear/bilinear
+#:
+#: So e.g. --truth NNPDF --scale JAM_data = closure_NNPDF_truth_JAM_data: the NNPDF4.0
+#: truth fitted to JAM24's dataset selection.  Defaults: full + JAM.
 scale="full"
 truth_family="JAM"
 
@@ -152,6 +210,54 @@ die() {
     exit 2
 }
 
+apply_concurrency() {
+    # --cores/-j is one number for every parallel layer.  It is applied here rather
+    # than in the export block above so that the precedence is the useful one:
+    # an explicit PIXEL_KERNEL_WORKERS=... from the caller still beats the flag, the
+    # flag beats NPROC, and NPROC beats the default.  Nothing here touches BLAS
+    # threads; those are a separate knob for a separate reason (see --blas-threads).
+    if [[ -n "$CORES_FLAG" ]]; then
+        case "$CORES_FLAG" in
+            auto|AUTO) ;;
+            ''|*[!0-9]*) die "--cores expects a positive integer or 'auto', got '$CORES_FLAG'" ;;
+            0) die "--cores 0 is not meaningful; use 1 for serial" ;;
+        esac
+        NPROC="$CORES_FLAG"
+        [[ -n "${PIXEL_ASSEMBLY_WORKERS_SET:-}" ]] || export PIXEL_ASSEMBLY_WORKERS="$NPROC"
+        [[ -n "${PIXEL_KERNEL_WORKERS_SET:-}" ]]   || export PIXEL_KERNEL_WORKERS="$NPROC"
+        [[ -n "${PIXEL_POSTERIOR_WORKERS_SET:-}" ]] || export PIXEL_POSTERIOR_WORKERS="$NPROC"
+        # 'auto' is only meaningful to the kernel layer, which is the one that consults
+        # free memory.  The thread pools take a number.
+        if [[ "$NPROC" == auto || "$NPROC" == AUTO ]]; then
+            # 'auto' is only meaningful to the kernel layer, which is the one that
+            # consults free memory.  The two thread pools need a number, so give them
+            # the CPU count.  Asked of the interpreter this script already requires --
+            # nproc is absent on macOS and sysctl on Linux, and getting either wrong
+            # silently degrades to serial, which is a slow failure rather than a loud
+            # one.
+            local cpus
+            # getconf is POSIX and answers on both Linux and macOS; nproc and sysctl
+            # are each absent on one of them, and $PYTHON is not guaranteed to exist
+            # yet (it defaults to a venv path this repo does not ship).  Getting this
+            # wrong degrades silently to serial, which is the slow kind of failure.
+            cpus="$(getconf _NPROCESSORS_ONLN 2>/dev/null \
+                    || nproc 2>/dev/null \
+                    || sysctl -n hw.ncpu 2>/dev/null \
+                    || echo 1)"
+            [[ "$cpus" =~ ^[0-9]+$ ]] || cpus=1
+            export PIXEL_ASSEMBLY_WORKERS="$cpus"
+            export PIXEL_POSTERIOR_WORKERS="$cpus"
+        fi
+    fi
+    if [[ -n "$BLAS_FLAG" ]]; then
+        case "$BLAS_FLAG" in ''|*[!0-9]*) die "--blas-threads expects a positive integer" ;; esac
+        BLAS_THREADS="$BLAS_FLAG"
+        export OMP_NUM_THREADS="$BLAS_THREADS" OPENBLAS_NUM_THREADS="$BLAS_THREADS"
+        export MKL_NUM_THREADS="$BLAS_THREADS" VECLIB_MAXIMUM_THREADS="$BLAS_THREADS"
+        export NUMEXPR_NUM_THREADS="$BLAS_THREADS"
+    fi
+}
+
 set_truth() {
     # Accepts a family (JAM/NNPDF) or a full package name (which also fixes scale).
     case "$1" in
@@ -159,8 +265,12 @@ set_truth() {
         NNPDF|nnpdf|Nnpdf|NNPDF40|nnpdf40) truth_family="NNPDF" ;;
         closure_JAM_truth) truth_family="JAM"; scale="full" ;;
         closure_JAM_truth_small) truth_family="JAM"; scale="small" ;;
+        closure_JAM_truth_JAM_data) truth_family="JAM"; scale="JAM_data" ;;
+        closure_JAM_truth_NNPDF_data) truth_family="JAM"; scale="NNPDF_data" ;;
         closure_NNPDF_truth) truth_family="NNPDF"; scale="full" ;;
         closure_NNPDF_truth_small) truth_family="NNPDF"; scale="small" ;;
+        closure_NNPDF_truth_JAM_data) truth_family="NNPDF"; scale="JAM_data" ;;
+        closure_NNPDF_truth_NNPDF_data) truth_family="NNPDF"; scale="NNPDF_data" ;;
         *) die "unknown truth '$1' (expected JAM or NNPDF)" ;;
     esac
 }
@@ -169,18 +279,43 @@ set_scale() {
     case "$1" in
         full|Full|FULL|big|large) scale="full" ;;
         small|Small|SMALL|mock|smoke) scale="small" ;;
-        *) die "unknown scale '$1' (expected full or small)" ;;
+        JAM_data|jam_data|JAMdata|jamdata) scale="JAM_data" ;;
+        NNPDF_data|nnpdf_data|NNPDFdata|nnpdfdata) scale="NNPDF_data" ;;
+        *) die "unknown scale '$1' (expected full, small, JAM_data or NNPDF_data)" ;;
+    esac
+}
+
+set_data() {
+    # The dataset axis, named for what it selects rather than for a size.  Bare "JAM"
+    # and "NNPDF" are accepted here and NOT in set_scale: under --data they can only
+    # mean a dataset selection, while under --scale they would sit ambiguously next to
+    # --truth JAM.  Same reason "union" is the spelling rather than "full" -- the
+    # headline suites stopped being the intersection on 2026-09-09 and "full" says
+    # nothing about which.
+    case "$1" in
+        union|Union|UNION|both|all|full|Full|FULL) scale="full" ;;
+        JAM|jam|JAM24|jam24|JAM_data|jam_data) scale="JAM_data" ;;
+        NNPDF|nnpdf|NNPDF40|nnpdf40|NNPDF_data|nnpdf_data) scale="NNPDF_data" ;;
+        mock|Mock|MOCK|small|Small|SMALL|smoke) scale="small" ;;
+        *) die "unknown data selection '$1' (expected union, JAM, NNPDF or mock)" ;;
     esac
 }
 
 resolve_package() {
     local suffix=""
-    [[ "$scale" == "small" ]] && suffix="_small"
+    case "$scale" in
+        full) suffix="" ;;
+        small) suffix="_small" ;;
+        JAM_data) suffix="_JAM_data" ;;
+        NNPDF_data) suffix="_NNPDF_data" ;;
+        *) die "unknown scale '$scale'" ;;
+    esac
     case "$truth_family" in
         JAM) CLOSURE_PACKAGE="closure_JAM_truth${suffix}" ;;
         NNPDF) CLOSURE_PACKAGE="closure_NNPDF_truth${suffix}" ;;
         *) die "unknown truth family '$truth_family'" ;;
     esac
+    [[ -d "$CLOSURE_PACKAGE" ]] || die "no such suite directory: $CLOSURE_PACKAGE"
 }
 
 normalize_q() {
@@ -281,9 +416,24 @@ while [[ $# -gt 0 ]]; do
             set_truth "$2"
             shift 2
             ;;
-        --scale)
+        --scale|--variant)
             [[ $# -ge 2 ]] || die "$1 requires a value"
             set_scale "$2"
+            shift 2
+            ;;
+        --data|--data-variant|--datasets)
+            [[ $# -ge 2 ]] || die "$1 requires a value"
+            set_data "$2"
+            shift 2
+            ;;
+        -j|--cores|--jobs)
+            [[ $# -ge 2 ]] || die "$1 requires a value"
+            CORES_FLAG="$2"
+            shift 2
+            ;;
+        --blas-threads)
+            [[ $# -ge 2 ]] || die "$1 requires a value"
+            BLAS_FLAG="$2"
             shift 2
             ;;
         --prior|--prior-form)
@@ -379,7 +529,35 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+apply_concurrency
+
+# What this run will actually use, printed before any of it starts.  A multi-hour run
+# on a shared box is the wrong place to discover the concurrency was the 12-core
+# default, and PIXEL's own runtime banner appears only once Python is up -- after the
+# audit step has already gone by.
+report_concurrency() {
+    printf 'concurrency: kernel=%s assembly=%s posterior=%s | BLAS threads=%s\n' \
+        "$PIXEL_KERNEL_WORKERS" "$PIXEL_ASSEMBLY_WORKERS" \
+        "$PIXEL_POSTERIOR_WORKERS" "$OMP_NUM_THREADS" >&2
+    if [[ "${OMP_NUM_THREADS:-1}" != 1 ]]; then
+        printf '  note: BLAS threads > 1 oversubscribes against the task workers above,\n' >&2
+        printf '        and forfeits kernel-cache reproducibility until --remake-kernels.\n' >&2
+    fi
+}
 resolve_package
+report_concurrency
+data_label() {
+    case "$scale" in
+        full)       echo "union (JAM u NNPDF), 36 sets" ;;
+        small)      echo "mock smoke-test" ;;
+        JAM_data)   echo "JAM24, 27 sets" ;;
+        NNPDF_data) echo "NNPDF4.0, 35 sets" ;;
+        *)          echo "$scale" ;;
+    esac
+}
+printf 'suite: %s  (truth=%s, data=%s)\n' \
+    "$CLOSURE_PACKAGE" "$truth_family" "$(data_label)" >&2
+
 DATA_DIR="$ROOT_DIR/$CLOSURE_PACKAGE/data"
 RESULTS_DIR="$ROOT_DIR/$CLOSURE_PACKAGE/results"
 DIS_MANIFEST="$DATA_DIR/dis_manifest.json"

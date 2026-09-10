@@ -53,7 +53,14 @@ done
 case "$SCALE" in
     small) SUITES=(closure_JAM_truth_small closure_NNPDF_truth_small) ;;
     full)  SUITES=(closure_JAM_truth closure_NNPDF_truth) ;;
-    *) echo "unknown scale '$SCALE' (expected small or full)" >&2; exit 2 ;;
+    # The dataset-variant suites: same two truth families, one dataset selection each.
+    # 'full' above is their intersection, so these three scales together cover the
+    # JAM24 / NNPDF4.0 / shared comparison.
+    JAM_data)   SUITES=(closure_JAM_truth_JAM_data closure_NNPDF_truth_JAM_data) ;;
+    NNPDF_data) SUITES=(closure_JAM_truth_NNPDF_data closure_NNPDF_truth_NNPDF_data) ;;
+    data)       SUITES=(closure_JAM_truth_JAM_data closure_NNPDF_truth_JAM_data
+                        closure_JAM_truth_NNPDF_data closure_NNPDF_truth_NNPDF_data) ;;
+    *) echo "unknown scale '$SCALE' (expected small, full, JAM_data, NNPDF_data or data)" >&2; exit 2 ;;
 esac
 
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1

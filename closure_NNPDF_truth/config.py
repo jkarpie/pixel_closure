@@ -84,7 +84,12 @@ def assert_nnpdf40_native_ready(mode: str, *, validated_datasets=()):
     )
 
 from pixel.data.contracts import full_closure_selection as _full_closure_selection
-_CONTRACT_SELECTION = _full_closure_selection("nnpdf_full")
+#: The one place this suite names its dataset selection.  ``generate`` and the
+#: manifest read it from here rather than repeating the string, because a mode
+#: stated twice is a mode that drifts: ``nnpdf_layout`` hardcoded "nnpdf_full"
+#: and silently produced an empty layout when the modes were split on 2026-09-09.
+CONTRACT_MODE = "nnpdf_full"
+_CONTRACT_SELECTION = _full_closure_selection(CONTRACT_MODE)
 Z_ANALYSIS = tuple(r for r in _CONTRACT_SELECTION if str(r["id"]).startswith("z."))
 W_ASYM_ANALYSIS = tuple(r for r in _CONTRACT_SELECTION if str(r["id"]).startswith("w."))
 NNPDF_ANALYSIS = tuple(
@@ -120,6 +125,70 @@ NNPDF_DATASET_SPECS = {
         "target": NNPDF_LEAD_TARGET,
     },
 }
+
+#: Bin-integrated fiducial collider Z rapidity, added 2026-09-09.
+#:
+#: Only the five sets whose ``nnpdf40_fiducial_cuts.yaml`` record is ``resolved: true``
+#: with **zero open questions** and no stage-B (W-type) requirement.  The gate is that
+#: record, not convenience: an unresolved fiducial region is a silent normalization
+#: error.  Held back deliberately, each with its reason in ``observable_contracts.yaml``:
+#:
+#:   ATLASZHIGHMASS49FB / ATLASLOMASSDY11EXT  rapidity-*integrated* mass spectra, a
+#:       different observable from a rapidity scan; HIMASS carries no ``sqrts`` in its
+#:       commondata kinematics at all
+#:   ATLASDY2D8TEV (1 open question), ATLASWZRAP11CF (2), CMSDY2D11 (2, and
+#:       ``full_phase_space`` -- applying an acceptance there would double-correct)
+#:   every W-type set (CMSWMU8TEV, CMSWEASY840PB, CMSWMASY47FB, LHCBWZMU7TEV,
+#:       LHCBWZMU8TEV, D0WMASY): ``fiducial_lepton`` needs a charge-carrying
+#:       ``LeptonLevelCuts`` plus a neutrino/transverse-mass treatment, which
+#:       ``build_drell_yan_binned`` does not implement
+#:   ATLASWZRAP36PB, ATLASWZRAP11CC, D0WMASY  ``resolved: false``
+COLLIDER_DY_SPECS = {
+    "z.lhcb7_dielectron": {
+        "label": "dy_lhcb7_z_ee", "kind": "drell_yan_binned", "reaction": "pp",
+        "commondata_name": "LHCB_Z0_7TEV_DIELECTRON_Y",
+        "nnpdf_legacy_name": "LHCBZ940PB", "mass_binned": False,
+    },
+    "z.lhcb8_dielectron": {
+        "label": "dy_lhcb8_z_ee", "kind": "drell_yan_binned", "reaction": "pp",
+        "commondata_name": "LHCB_Z0_8TEV_DIELECTRON_Y",
+        "nnpdf_legacy_name": "LHCBZEE2FB_40", "mass_binned": False,
+    },
+    "z.lhcb13_dimuon": {
+        "label": "dy_lhcb13_z_mumu", "kind": "drell_yan_binned", "reaction": "pp",
+        "commondata_name": "LHCB_Z0_13TEV_DIMUON-Y",
+        "nnpdf_legacy_name": "LHCB_Z_13TEV_DIMUON", "mass_binned": False,
+    },
+    "z.lhcb13_dielectron": {
+        "label": "dy_lhcb13_z_ee", "kind": "drell_yan_binned", "reaction": "pp",
+        "commondata_name": "LHCB_Z0_13TEV_DIELECTRON-Y",
+        "nnpdf_legacy_name": "LHCB_Z_13TEV_DIELECTRON", "mass_binned": False,
+    },
+    "z.atlas8_lomass_2d": {
+        "label": "dy_atlas8_z_lowmass_2d", "kind": "drell_yan_binned", "reaction": "pp",
+        "commondata_name": "ATLAS_Z0_8TEV_LOWMASS_M-Y",
+        "nnpdf_legacy_name": "ATLAS_DY_2D_8TEV_LOWMASS", "mass_binned": True,
+    },
+}
+
+#: One registry for everything ``nnpdf_layout`` materializes from NNPDF commondata.
+NNPDF_DATASET_SPECS = {**NNPDF_DATASET_SPECS, **COLLIDER_DY_SPECS}
+
+#: Fixed-target nuclear Drell-Yan.  ``DYE605_dw_ite`` is p+Cu at sqrt(s) = 38.8 GeV, the
+#: same pointwise observable as E866 (``_FAMILY_ROUTE`` sends both to
+#: ``pixel.data.DrellYan``), so it reuses ``build_drell_yan`` unchanged and needs only a
+#: copper parton map.  Promoted 2026-09-09: the old drop_reason said "no approved copper
+#: nuclear law", but the isospin content of a nucleus is one number (``Z/A``) and the
+#: nuclear *uncertainty* is carried by the ``_dw_`` variant's covariance, exactly as
+#: CHORUS already does for lead.  See ``nuclear_parton_basis``.
+FIXED_TARGET_DY_SPECS = {
+    "dy.e605_copper": {
+        "label": "dy_e605_copper", "kind": "drell_yan", "reaction": "pCu",
+        "commondata_name": "DYE605_Z0_38P8GEV_DW_PXSEC",
+        "beam": "p", "target": "copper",
+    },
+}
+NNPDF_DATASET_SPECS = {**NNPDF_DATASET_SPECS, **FIXED_TARGET_DY_SPECS}
 
 # -- LHAPDF / NNPDF truth ------------------------------------------------------
 
@@ -248,6 +317,22 @@ ORDER = "NLO"
 MODE = "truncated"
 ALPHAS_MZ = 0.118
 
+#: Heavy-flavour-tagged NC reduced cross section.  ``HERACOMB_SIGMARED_B`` is the only
+#: such set on the NNPDF4.0 roster (the commondata also carries CHARM-SIGMARED, which
+#: the frozen roster does not select).  Promoted 2026-09-09: the contract's old
+#: drop_reason named the FONLL-B/C two-loop massive coefficient, which is a *theory-200
+#: parity* requirement -- this closure runs NLO, where FONLL-A is the matching variant
+#: and assembles.  See ``datasets.build_sigma_r_heavy``.
+HEAVY_DIS_SPECS = {
+    "dis.heracomb_bottom": {
+        "label": "heracomb_bottom_sigmar", "kind": "sigma_r_heavy",
+        "commondata_name": "HERA_NC_318GEV_EAVG_BOTTOM-SIGMARED",
+        "beam": "ep", "target": "proton",
+        "heavy_flavour": "bottom", "heavy_mass": MB, "charge_sq": 1.0 / 9.0,
+    },
+}
+NNPDF_DATASET_SPECS = {**NNPDF_DATASET_SPECS, **HEAVY_DIS_SPECS}
+
 #: Original NNPDF scales used to build distinct truth members.  Each is read from
 #: NNPDF at this Q, then assigned as the truth at ``Q0 = mc``.  ``Q = 1`` and
 #: ``Q = mc`` are evaluated directly through LHAPDF even though they are below
@@ -264,13 +349,59 @@ DEFAULT_TRUTH_Q = "2"
 
 # -- PDF grid ----------------------------------------------------------------
 
-# Log-linear grid, 128 points (per spec).  Cubic-spline elements: PIXEL's x-space
-# inverse-Mellin evolution needs a far longer (slower) contour for C0 "piecewise"
-# bases, so splines are both faster and more accurate for the DIS kernels.
-GRID_N = 128
+# Log-linear grid, 146 points, piecewise-quintic (pw5) elements.  Changed 2026-09-09
+# from 128-point cubic_spline.
+#
+# **Representation gain, measured against the real JAM24 truth** (Q=2, member 1;
+# sampled at the nodes, read back on a dense x set, worst field, max |basis - JAM|
+# relative to that field's peak):
+#
+# .. code-block:: text
+#
+#     128 cubic_spline   4.20e-04   <- previous setting
+#     146 pw5            1.23e-04   <- 3.4x better; cubic needs n ~ 200-240 to match
+#
+# The gain is *not* uniform, and that matters when reading a per-field result: it is
+# concentrated entirely in the steep small-x singlet-class fields -- t8 3.4x, sigma
+# 3.7x, t15 3.3x, g 4.8x -- while t3 and all four valence fields (v3, v8, v, v15) are
+# unchanged at 1.0-1.1x.  Those five are already resolved at 128 nodes, so a finer
+# basis buys them nothing.
+#
+# **146, not 145.**  A quintic tiles the grid only when ``(n - 1) % 5 == 0``:
+# ``PiecewisePolynomial`` groups the intervals into cells of ``order`` and drops the
+# leftover ``(n - 1) % order`` intervals into a single ragged final cell of *lower*
+# degree.  145 leaves ``144 % 5 = 4`` -- a degree-4 cell at large x, where the DIS and
+# DY rows carry the most weight.  146 gives 145 intervals = 29 exact quintic cells.
+# Measured on the polynomial-exactness probe (interpolate ``x^5 - 2x^3 + 1``, which a
+# tiling quintic reproduces to roundoff): 146 -> 8.9e-16, 141 -> 1.0e-15,
+# 145 -> 1.1e-09, i.e. the ragged cell costs ~6 orders.  On the *JAM* truth above the
+# 145/146 difference is nil (1.226e-04 both), because there the error is set by
+# small-x resolution rather than by the large-x cell -- so this is cheap insurance,
+# not a measured rescue.  146 is also PIXEL's own pw5 rung for log-linear grids
+# (``benchmarks/kernel_stress.py::PW5_LONG_SIZE``); its snapper maps the shared cubic
+# anchor 145 to exactly 146 for a quintic.  141 also tiles, if a smaller grid is
+# wanted.
+#
+# **The cubic-spline argument was outweighed, not refuted -- and it still costs.**
+# The previous note recorded that PIXEL's x-space inverse-Mellin evolution needs a
+# far longer (slower) contour for C0 "piecewise" bases.  pw5 is C0, so it still
+# applies, and ``kernels.evolution.contour`` now takes its piecewise branch:
+#
+# .. code-block:: text
+#
+#     128 cubic_spline   basis_kind=spline                 target 1e-8   zmax 1622
+#     146 pw5            basis_kind=piecewise-polynomial   target 1e-5   zmax 9111
+#
+# So the evolution/inverse-Mellin path is asking for a target three orders looser on
+# a contour 5.6x longer, and PIXEL emits its "LOUD WARNING" on every adaptive_contour
+# call.  Nothing here overrides that contour; the suites take the adaptive policy.
+# The representation gain above is a property of the *basis*, measured without any
+# evolution -- it does not speak to the evolved DIS/DY kernels.  **Measure those
+# before treating this change as settled.**
+GRID_N = 146
 GRID_SPACING = "log-linear"
 X_MIN = 1.0e-6
-ELEMENT_TYPE = "cubic_spline"
+ELEMENT_TYPE = "piecewise_quintic"
 
 # -- flavor basis (nf = 4) ---------------------------------------------------
 # C-even (q+qbar) and C-odd valence (q-qbar) fields.  "strange" = T8/V8 and
@@ -667,6 +798,12 @@ class ExpSpec:
         return f"ExpSpec({self.idx}, {self.kind}, {self.target}, {self.label!r})"
 
 
+#: **Union selection.**  The full suites fit everything either analysis uses, so this
+#: is JAM's own idis list (the NNPDF DIS choices are a subset of it apart from CHORUS
+#: and the bottom set, which enter through the contract selection).  10003 and 10021
+#: are audited but generate no rows: every 10003 row fails the Q2/W2 cuts and 10021
+#: is a ratio with no builder.
+#:
 #: The DIS tables the *analysis* uses, i.e. the exact kinematic coverage of the
 #: real fit (uncommented IDIS entries in fitpack_legacy/examples/input.py).
 #: dis_audit still scans every workbook and records its status, but fake data are
@@ -757,9 +894,15 @@ def dis_norm_beta(idx) -> float:
 # records the real rel_stat, exactly like the DIS audit.
 
 #: idx -> (reaction, label) for the modelable DY tables (the analysis-used set).
+#: **E866 pp absolute only.**  Verified from the workbooks: 10001 is E866 ``pp``
+#: (M^3 dsig/dM dxF, 184 rows), 10002 is E866 ``pd`` (191 rows), and 20001/20002 are the
+#: E866/E906 ``sigpd/2sigpp`` ratios.  JAM's ``dy`` list is 10001/20001/20002 and
+#: NNPDF4.0 carries E866 as ``DYE886P`` (pp absolute) + ``DYE886R`` (the ratio), so
+#: **neither analysis fits E866 pd absolute**.  It is therefore in neither selection nor
+#: in their UNION, which is what the full suites now run.  E605 (copper) enters through
+#: the contract selection instead, not through this fitpack list.
 DY_ANALYSIS = {
     10001: ("pp", "dy_e866_pp"),
-    10002: ("pd", "dy_e866_pd"),
 }
 
 #: DY kinematic cuts.  Require physical parton momentum fractions x1, x2 < 1 and
@@ -944,6 +1087,36 @@ DY_PARTON_BASIS_ANTIPROTON = {
     for parton in DY_PARTON_BASIS_PROTON
 }
 
+#: Copper, for E605 (``DYE605_dw_ite``).  Natural Cu: A = 63.546, Z = 29.
+DY_COPPER_A, DY_COPPER_Z = 63.546, 29.0
+DY_COPPER_PROTON_FRACTION = DY_COPPER_Z / DY_COPPER_A
+
+
+def nuclear_parton_basis(proton_fraction: float) -> dict:
+    r"""``Z/A``-weighted nuclear parton map, the static counterpart of the evolved one.
+
+    ``q_A = (Z/A) q_p + (N/A) q_n`` with ``q_n = q_p`` under ``u <-> d``.  The deuteron
+    map above is this at ``1/2``; nothing else about the nucleus enters.
+
+    **Isospin only, deliberately.**  No shadowing, antishadowing or EMC effect. These
+    datasets are read at their NNPDF ``_dw_`` (deweighted) variant, which carries the
+    nuclear uncertainty in the *covariance* rather than as a structure-function
+    correction -- the same convention CHORUS already uses here.
+    """
+    z = float(proton_fraction)
+    if not 0.0 <= z <= 1.0:
+        raise ValueError("proton_fraction must be Z/A in [0, 1]")
+    partner = {"u": "d", "d": "u", "ub": "db", "db": "ub"}
+    out = {}
+    for parton, cmap in DY_PARTON_BASIS_PROTON.items():
+        other = partner.get(parton)
+        out[parton] = (_merge(cmap, DY_PARTON_BASIS_PROTON[other], z, 1.0 - z)
+                       if other else dict(cmap))
+    return out
+
+
+DY_PARTON_BASIS_COPPER = nuclear_parton_basis(DY_COPPER_PROTON_FRACTION)
+
 
 def dy_field_maps(reaction: str):
     """Return ``(fields_A, fields_B)`` parton->basis maps for a DY reaction.
@@ -957,6 +1130,8 @@ def dy_field_maps(reaction: str):
         return DY_PARTON_BASIS_PROTON, DY_PARTON_BASIS_DEUTERON
     if reaction == "ppbar":
         return DY_PARTON_BASIS_PROTON, DY_PARTON_BASIS_ANTIPROTON
+    if reaction == "pCu":
+        return DY_PARTON_BASIS_PROTON, DY_PARTON_BASIS_COPPER
     raise ValueError(f"unsupported DY reaction {reaction!r}")
 
 
@@ -1275,7 +1450,7 @@ def results_dir(q_key: str) -> Path:
 
 
 def make_grid():
-    """The shared 128-point log-linear PDF grid."""
+    """The shared 146-point log-linear PDF grid (piecewise-quintic elements)."""
     from pixel.geometry import Grid
 
     return Grid(n_points=GRID_N, spacing=GRID_SPACING, x_min=X_MIN)

@@ -1,7 +1,16 @@
 """The ``datasets`` manifest section: CHORUS from NNPDF commondata, end to end.
 
-Exercises: ``closure_NNPDF_truth.generate.nnpdf_layout``, the coverage guard in
-    ``generate_member``, ``closure_NNPDF_truth.datasets._record_target`` and the
+**Suite: ``closure_NNPDF_truth_NNPDF_data``, since 2026-09-09.** This file used to run
+against ``closure_NNPDF_truth``, which carried CHORUS while there was a single shared
+dataset selection. The modes were then split into the two published lists plus their
+intersection, and CHORUS is NNPDF-only -- it is absent from JAM24's ``input.py`` -- so it
+left the intersection that ``closure_NNPDF_truth`` now runs and stayed in ``nnpdf_data``.
+Pointing this file at the ``_NNPDF_data`` suite keeps it testing the arm it was written
+for; against the intersection suite ``nnpdf_layout`` correctly returns nothing, which is
+a true statement about that suite and a useless one about the commondata arm.
+
+Exercises: ``closure_NNPDF_truth_NNPDF_data.generate.nnpdf_layout``, the coverage guard in
+    ``generate_member``, ``closure_NNPDF_truth_NNPDF_data.datasets._record_target`` and the
     ``include_nnpdf`` arm, ``pixel.data.closure_audit.read_nnpdf_source``, and
     ``pixel.data.contracts.annotate_manifest`` on a populated ``"datasets"`` section.
 Claim: a contract-selected NNPDF record is materialized with the cuts, the variant, the
@@ -36,15 +45,17 @@ from __future__ import annotations
 
 import json
 
+from collections.abc import Mapping
+
 import numpy as np
 import pytest
 
 from pixel.data import families
 from pixel.data.contracts import annotate_manifest, closure_extension_roster
 
-from closure_NNPDF_truth import config as cfg
-from closure_NNPDF_truth import datasets as dsets
-from closure_NNPDF_truth import generate as gen
+from closure_NNPDF_truth_NNPDF_data import config as cfg
+from closure_NNPDF_truth_NNPDF_data import datasets as dsets
+from closure_NNPDF_truth_NNPDF_data import generate as gen
 
 
 @pytest.fixture(scope="module")
@@ -53,8 +64,25 @@ def layout():
 
 
 @pytest.fixture(scope="module")
+def chorus_layout(layout):
+    """The two CHORUS records alone.
+
+    ``nnpdf_layout`` used to *be* the CHORUS records; since 2026-09-09 it also carries
+    the bin-integrated collider Z sets (``drell_yan_binned``), the heavy-flavour-tagged
+    bottom set (``sigma_r_heavy``) and fixed-target nuclear Drell-Yan (``drell_yan``).
+    The tests below assert properties that are true *of CHORUS* -- a nuclear target
+    mapping, a shared ``global:`` multiplicative source, a Q2 cut that actually bites --
+    and are not claims about every record the layout can now produce, so they take this
+    view rather than the whole layout. The whole-layout invariants (contract coverage,
+    row/contract agreement, annotation) keep using ``layout`` and are the stronger for
+    now spanning four kinds.
+    """
+    return [rec for rec in layout if str(rec["contract_id"]).startswith("dis.chorus")]
+
+
+@pytest.fixture(scope="module")
 def selected():
-    return {row["id"]: row for row in closure_extension_roster("nnpdf_full")["selected"]}
+    return {row["id"]: row for row in closure_extension_roster("nnpdf_data")["selected"]}
 
 
 def test_layout_materializes_exactly_the_contract_selection(layout, selected):
@@ -75,7 +103,7 @@ def test_every_spec_has_a_contract_and_every_selected_contract_a_spec(selected):
     )
 
 
-def test_retained_rows_match_the_contract_and_the_closure_cut(layout, selected):
+def test_retained_rows_match_the_contract_and_the_closure_cut(chorus_layout, selected):
     """The cut is the generator's own, not NNPDF's, and the contract records its result.
 
     Recomputed here from ``cfg`` rather than restated, so a change to ``DIS_Q2_MIN`` or
@@ -85,7 +113,7 @@ def test_retained_rows_match_the_contract_and_the_closure_cut(layout, selected):
     from pixel.data.closure_audit import read_nnpdf_source
     from pixel.data.experimental._dis_common import PROTON_MASS_GEV, dis_w2
 
-    for rec in layout:
+    for rec in chorus_layout:
         contract = selected[rec["contract_id"]]
         assert rec["source_rows"] == contract["source_rows"]
         assert rec["retained_rows"] == contract["selected_rows"]
@@ -121,7 +149,17 @@ def test_the_roster_variant_is_read_not_the_audit_default():
     """
     from pixel.data.closure_audit import _roster_variant
 
-    for spec in cfg.NNPDF_DATASET_SPECS.values():
+    # Scoped to the *nuclear* specs since 2026-09-09.  ``legacy_dw`` matters because it
+    # is the variant that has NOT been corrected to an isoscalar target, which is the
+    # whole nuclear argument; a proton-target LHCb Z set has no isoscalar correction to
+    # avoid and the roster names no variant for it at all.  Asserting ``legacy_dw`` over
+    # every spec would therefore be asserting something the claim does not say.
+    nuclear_specs = [
+        spec for spec in cfg.NNPDF_DATASET_SPECS.values()
+        if isinstance(spec.get("target"), Mapping)
+    ]
+    assert nuclear_specs, "no nuclear spec left to check the variant on"
+    for spec in nuclear_specs:
         assert _roster_variant(spec["commondata_name"]) == "legacy_dw"
 
     common = gen.read_nnpdf_source(
@@ -142,6 +180,9 @@ def test_the_target_composition_matches_the_contract_prose(selected):
     contracts = {r["id"]: r for r in load_observable_contracts()["datasets"]}
     for contract_id in selected:
         spec = cfg.NNPDF_DATASET_SPECS[contract_id]
+        # A/Z prose only exists for a nuclear target; a proton one has none to pin.
+        if not isinstance(spec.get("target"), Mapping):
+            continue
         nuclear = str(contracts[contract_id]["operator"]["nuclear"])
         assert str(spec["target"]["mass_number"]) in nuclear, (spec["target"], nuclear)
         assert str(int(spec["target"]["atomic_number"])) in nuclear
@@ -177,7 +218,7 @@ def test_a_bare_element_name_is_still_refused():
         normalize_target("Pb")
 
 
-def test_additive_sources_stay_out_of_the_multiplicative_nuisance_layer(layout):
+def test_additive_sources_stay_out_of_the_multiplicative_nuisance_layer(chorus_layout):
     """The split that a fitpack-shaped assumption would have destroyed.
 
     ``_exp_nuisance_kwargs`` passes ``correlated_names`` as ``multiplicative_systematics``,
@@ -186,7 +227,7 @@ def test_additive_sources_stay_out_of_the_multiplicative_nuisance_layer(layout):
     through that kwarg would rescale roughly 75% of the nu row variance by the theory
     prediction. Only the one genuine MULT source may appear there.
     """
-    for rec in layout:
+    for rec in chorus_layout:
         additive = np.asarray(rec["_additive_rel"], dtype=float)
         assert additive.ndim == 2 and additive.shape[0] == rec["retained_rows"]
         assert additive.shape[1] > 100, additive.shape
@@ -201,9 +242,9 @@ def test_additive_sources_stay_out_of_the_multiplicative_nuisance_layer(layout):
         assert rec["shared_multiplicative_sources"] == names
 
 
-def test_the_shared_source_really_is_shared_across_the_two_records(layout):
+def test_the_shared_source_really_is_shared_across_the_two_records(chorus_layout):
     """Anti-vacuity for the declaration above: it names a real, and real-sized, effect."""
-    by_id = {rec["contract_id"]: rec for rec in layout}
+    by_id = {rec["contract_id"]: rec for rec in chorus_layout}
     nu = np.asarray(by_id["dis.chorus_nu"]["_correlated_rel"], dtype=float)[0]
     nb = np.asarray(by_id["dis.chorus_nb"]["_correlated_rel"], dtype=float)[0]
     assert nu.shape == nb.shape
@@ -226,16 +267,30 @@ def test_annotate_manifest_binds_every_datasets_record_to_its_contract(layout):
             {k: v for k, v in rec.items() if not k.startswith("_")} for rec in layout
         ],
     }
+    from pixel.data.contracts import load_observable_contracts
+
     annotated = annotate_manifest(manifest)
     assert len(annotated["datasets"]) == len(layout)
     by_label = {rec["label"]: rec["contract_id"] for rec in layout}
+    # Each record's citation must be ITS OWN contract's, checked against the contract
+    # file rather than against one hardcoded key.  It was ``== ["CHORUS:2005cpn"]`` until
+    # 2026-09-09, which was equivalent only while the layout was CHORUS-only; the
+    # per-contract form is what the test's own docstring claims and is strictly stronger,
+    # since a record annotated from the wrong contract now fails on the citation as well
+    # as on the id.
+    contracts = {r["id"]: r for r in load_observable_contracts()["datasets"]}
+    assert len({by_label[rec["label"]] for rec in layout}) > 1, (
+        "this check is only meaningful across more than one contract"
+    )
     for record in annotated["datasets"]:
         # ``annotate_manifest`` *overwrites* ``contract_id`` from whatever the selector
         # matched, so asserting it still equals what the layout wrote is a check on the
         # selector, not a tautology: a record annotated as the other beam would fail here.
         assert record["contract_id"] == by_label[record["label"]]
         assert record["classification"] == "physics"
-        assert record["citation_keys"] == ["CHORUS:2005cpn"]
+        assert record["citation_keys"] == list(
+            contracts[record["contract_id"]]["citation_keys"]
+        )
         assert record["provenance"]["contract_id"] == record["contract_id"]
     assert len({r["contract_id"] for r in annotated["datasets"]}) == len(layout)
 
@@ -494,7 +549,7 @@ def _write_record(rec, directory, central):
     return path, cov
 
 
-def test_the_two_uncertainty_layers_are_added_once_each(tmp_path, layout):
+def test_the_two_uncertainty_layers_are_added_once_each(tmp_path, chorus_layout):
     """Additive in the ``.dat``, multiplicative in the nuisance layer, neither twice.
 
     This is the arithmetic behind the split, and it is the failure a working-looking fit
@@ -509,7 +564,7 @@ def test_the_two_uncertainty_layers_are_added_once_each(tmp_path, layout):
     a unit test.
     """
     fields = cfg.make_fields()
-    rec = next(r for r in layout if r["contract_id"] == "dis.chorus_nu")
+    rec = next(r for r in chorus_layout if r["contract_id"] == "dis.chorus_nu")
     # A positive, non-constant stand-in for the folded truth. Its *values* are irrelevant
     # here -- only that both layers are referenced to the same vector.
     central = 0.1 + 0.9 * np.linspace(0.0, 1.0, rec["retained_rows"]) ** 2
@@ -540,7 +595,7 @@ def test_the_two_uncertainty_layers_are_added_once_each(tmp_path, layout):
     assert np.linalg.norm(plain - stat_only) > np.linalg.norm(stat_only)
 
 
-def test_a_drawn_observation_is_consistent_with_the_written_covariance(tmp_path, layout):
+def test_a_drawn_observation_is_consistent_with_the_written_covariance(tmp_path, chorus_layout):
     """chi2/ndof ~ 1 for the exact covariance generation writes.
 
     Guards the scale error the relative/absolute conversion invites: the commondata's
@@ -549,7 +604,7 @@ def test_a_drawn_observation_is_consistent_with_the_written_covariance(tmp_path,
     the two consistent; carrying the absolute numbers over unchanged would put the
     covariance at the wrong scale and show up here immediately.
     """
-    rec = next(r for r in layout if r["contract_id"] == "dis.chorus_nb")
+    rec = next(r for r in chorus_layout if r["contract_id"] == "dis.chorus_nb")
     n = rec["retained_rows"]
     central = 0.1 + 0.9 * np.linspace(0.0, 1.0, n) ** 2
     _, cov = _write_record(rec, tmp_path, central)
@@ -563,11 +618,11 @@ def test_a_drawn_observation_is_consistent_with_the_written_covariance(tmp_path,
     assert abs(chi2 / n - 1.0) < 5.0 * np.sqrt(2.0 / n), chi2 / n
 
 
-def test_a_record_survives_json_and_annotation_and_still_names_its_nucleus(tmp_path, layout):
+def test_a_record_survives_json_and_annotation_and_still_names_its_nucleus(tmp_path, chorus_layout):
     """The manifest is written to disk and read back; the target must survive that.
 
     ``datasets.py`` never sees the in-memory record -- it reads ``manifest.json``. So the
-    round trip that matters is layout -> ``annotate_manifest`` -> JSON -> builder, and the
+    round trip that matters is chorus_layout -> ``annotate_manifest`` -> JSON -> builder, and the
     target has to come back out as a ``NuclearTarget`` rather than as the mapping that was
     serialised. ``annotate_manifest`` also *adds* keys (``classification``,
     ``citation_keys``, ``inspire_ids``, ``provenance``); an annotated record must still
@@ -578,22 +633,22 @@ def test_a_record_survives_json_and_annotation_and_still_names_its_nucleus(tmp_p
     from pixel.util.flavor import NuclearTarget
 
     fields = cfg.make_fields()
-    for rec in layout:
+    for rec in chorus_layout:
         central = 0.1 + 0.9 * np.linspace(0.0, 1.0, rec["retained_rows"]) ** 2
         _write_record(rec, tmp_path, central)
 
     manifest = annotate_manifest({
         "lattice": [], "exp": [],
         "datasets": [
-            {k: v for k, v in rec.items() if not k.startswith("_")} for rec in layout
+            {k: v for k, v in rec.items() if not k.startswith("_")} for rec in chorus_layout
         ],
     })
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps(manifest, indent=2))
     reloaded = json.loads(path.read_text())
 
-    # Anti-vacuity: annotation really did add keys, so this is not the raw layout record.
-    added = set(reloaded["datasets"][0]) - set(layout[0])
+    # Anti-vacuity: annotation really did add keys, so this is not the raw chorus_layout record.
+    added = set(reloaded["datasets"][0]) - set(chorus_layout[0])
     assert {"classification", "citation_keys", "provenance"} <= added, sorted(added)
 
     for record in reloaded["datasets"]:
@@ -641,8 +696,14 @@ def test_a_chorus_record_builds_and_folds_through_the_real_generation_arm(tmp_pa
     """
     import numpy as np
 
-    records = gen.nnpdf_layout()
-    assert records, "nnpdf_layout produced nothing to smoke"
+    records = [
+        rec for rec in gen.nnpdf_layout()
+        if str(rec["contract_id"]).startswith("dis.chorus")
+    ]
+    assert records, "nnpdf_layout produced no CHORUS record to smoke"
+    # ``records[0]`` until 2026-09-09, when the layout stopped being CHORUS-only: the
+    # collider Z and fixed-target DY records carry no ``_leading`` (that pair is the DIS
+    # arm's x/Q2) and would KeyError here while saying nothing about the CHORUS fold.
     record = records[0]
     n_rows = len(record["_leading"][0])
     keep = 6
