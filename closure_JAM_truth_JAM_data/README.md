@@ -1,23 +1,27 @@
 # Closure test: JAM truth x JAM datasets
 
-> ## Dataset variant: **JAM24 data** (`CONTRACT_MODE = "jam_data"`, 27 datasets)
+> ## Dataset variant: **JAM24 data** (`CONTRACT_MODE = "jam_data"`, 29 datasets)
 >
 > Truth family and dataset selection are **independent axes**. This suite pairs the
 > the **JAM24_PDF_proton_nlo** replica-ensemble truth with **JAM24's own dataset list** (arXiv:2501.00665), taken from the
 > uncommented entries of `fitpack_legacy/examples/input.py`.
 >
 > **In:** 13 lattice ensembles; SLAC/BCDMS p+d F2; NMC p F2; **HERMES sigma_r**; HERA
-> combined NC x5 and CC x2; E866 pp Drell-Yan.
+> combined NC x5 and CC x2; E866 pp Drell-Yan; CDF Z rapidity (`zrap/1000`) and the ATLAS
+> 7 TeV Z peak (`wzhep` ATLAS7C_Z), each realized from its value-for-value NNPDF twin
+> (`z.cdf_zrap`, `z.atlas7_46fb_cc_peak`), whose commondata carry the bin edges.
 >
-> **Out, by the owner's scope:** `sia`/`sidis`/`psidis`/`pp_hadron` (need fragmentation
-> functions). **Out, no field to fit:** `pidis` (40) and `pjet` (8) constrain *helicity*
-> PDFs; the nine closure fields are unpolarized. **Out, no builder:** `wc` (5), `wzrv`
-> (11), `wasym` (2), `zrap` (2), `jet` (4), `ln` (2), idis 10021 (d/p ratio) and dy
-> 20001/20002 (pd-over-2pp ratios). idis 10003 (JLab Hall C) is selected and audited but
-> every row fails the Q2 >= mc^2 / W2 > 10 cuts.
+> **Out, no field to fit:** `sia`/`sidis`/`psidis`/`pp_hadron` need fragmentation
+> functions; `pidis` (40) and `pjet` (8) constrain *helicity* PDFs; `pion_qT` the pion PDF.
+> **Out by scope:** every ratio or asymmetry -- `wzrv` (11), `wasym` (2), `zrap/1001`
+> (normalized), idis 10021 (d/p) and dy 20001/20002 (pd-over-2pp) -- and JAM's own lattice
+> inputs (`SU23`, `RpITD`, `ccLCS`). **Out on PIXEL physics:** `wc` (5), `jet` (4), `ln`
+> (2) and the two `wzhep` W tables (`DYLeptonEtaKernel` cannot compose evolution yet).
+> idis 10003 (JLab Hall C) is selected and audited but every row fails the
+> Q2 >= mc^2 / W2 > 10 cuts. `DATASETS.md` section 2a has the counts.
 >
-> Against `nnpdf_data` this suite differs by exactly one record: it **has** HERMES
-> sigma_r and **lacks** CHORUS.
+> Against `nnpdf_data` this suite **has** HERMES sigma_r and **lacks** 17 records:
+> CHORUS nu + nubar, the HERACOMB bottom set, E605 copper and 13 collider Z records.
 
 The **full-scale** counterpart of `closure_JAM_truth_small/`: a realistic closure
 dataset rather than a handful of mocked points.  A closure test draws a known
@@ -30,7 +34,9 @@ Test modes (what each information source constrains):
 1. `lattice` — pseudo-ITD + Mellin moments over **all thirteen** NME ensembles
    (arXiv:2601.10857), with injected-and-recovered lattice systematics;
 2. `dis` — DIS structure functions at the **real analysis kinematic coverage**;
-3. `dy` — fixed-target Drell-Yan (E866 pp/pd) only;
+3. `dy` — every Drell-Yan record in the selection, i.e. the manifest's `dy` section:
+   fixed-target E866 pp (and E605 copper) plus the collider Z records
+   (`DATASETS.md` section 1b lists them per selection);
 4. `exp` — **all experiment** (DIS + DY);
 5. `both` — everything (lattice + DIS + DY).
 
@@ -51,7 +57,7 @@ See the repo-root `closure_extension_plan.md` for the full-scale design and
 | lattice systematics | none | injected **and** recovered (`ht, chiral, cont_invz, cont_aL`) |
 | DIS coverage | 9 tables, 16 pts each | analysis-used tables, **all** retained rows (~2.5k pts) |
 | DIS error | replica spread | **real** per-point `rel_stat` |
-| Drell-Yan | E866 pp/pd, 6 rows/table | all accepted E866 pp/pd rows (179 + 183 = 362) |
+| Drell-Yan | E866 pp/pd, 6 rows/table | the selection's `dy` section: E866 pp (184 rows), plus E605 copper and collider Z where selected |
 
 ## Low-x completion
 

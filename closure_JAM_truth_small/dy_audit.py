@@ -13,9 +13,10 @@ per-point statistical precision:
 * ``skipped``     -- not a data table (e.g. an acceptance table);
 * ``missing``     -- the workbook is absent.
 
-Kinematics conversion (E866 fixed target): ``S = RS^2``, ``Q2 = Rtau * S``, and
-``xF -> Y`` via ``x1,2 = (+/- xF + sqrt(xF^2 + 4 tau)) / 2``, ``Y = 0.5
-ln(x1/x2)``; rows with ``x1 >= 1`` or ``x2 >= 1`` are cut.  ``rel_stat =
+Kinematics conversion (E866 fixed target): ``S = RS^2``, ``tau = Rtau^2`` -- the
+workbook's ``Rtau`` is ``sqrt(tau) = M/sqrt(s)``, see :func:`tau_from_rtau` --
+``Q2 = tau * S``, and ``xF -> Y`` via ``x1,2 = (+/- xF + sqrt(xF^2 + 4 tau)) / 2``,
+``Y = 0.5 ln(x1/x2)``; rows with ``x1 >= 1`` or ``x2 >= 1`` are cut.  ``rel_stat =
 |stat_u / value|`` sizes the (diagonal) error, as in the DIS audit.
 
 The records are written into ``data/dis_manifest.json`` under a ``"dy"`` key by
@@ -78,8 +79,33 @@ def _relative_normalization(df, value):
     return None
 
 
+#: The ``Rtau`` reading this audit applies, recorded in the manifest it writes.  Each
+#: suite's ``generate.dy_layout`` re-audits a manifest that does not carry this exact
+#: value, so kinematics written under an earlier reading are never reused.
+TAU_CONVENTION = "tau = Rtau**2"
+
+
+def tau_from_rtau(rtau):
+    """``tau = M^2/s`` from the fitpack workbooks' ``Rtau`` column, which is ``sqrt(tau)``.
+
+    Read as ``tau`` until 2026-09-11 (owner decision D6 of PIXEL's
+    ``plans/drell_yan_published_units.md``).  Three sources agree that it is the root:
+    fitpack's own reader squares it (``fitpack_legacy/obslib/dy/reader.py``,
+    ``READER.get_tau``); the database README defines ``Rtau = root(tau)``; and E866's
+    published table puts row 0 of 10001 in its ``4.2-4.7 GeV`` mass bin at
+    ``<M> = 4.64 GeV``, which ``Rtau = 0.120`` reproduces as ``0.120 * 38.8 = 4.66``.
+    Read as ``tau``, the same row sat at ``M = 13.44 GeV``, outside its bin.
+    """
+    rtau = np.asarray(rtau, dtype=float)
+    return rtau * rtau
+
+
 def convert_kinematics(rs, tau, xF):
-    """(RS, Rtau=tau, xF) -> (S, Q2, Y, x1, x2) for fixed-target Drell-Yan."""
+    """(RS, tau, xF) -> (S, Q2, Y, x1, x2) for fixed-target Drell-Yan.
+
+    ``tau`` is ``M^2/s``.  The workbooks' ``Rtau`` column is its square root; convert it
+    with :func:`tau_from_rtau` first.
+    """
     rs = np.asarray(rs, dtype=float)
     tau = np.asarray(tau, dtype=float)
     xF = np.asarray(xF, dtype=float)
@@ -107,7 +133,8 @@ def audit_table(idx: int) -> dict:
     rec["obs"] = _str_field(df, "obs")
 
     rs = _col(df, "RS")
-    tau = _col(df, "Rtau", "rtau", "tau")
+    rtau = _col(df, "Rtau", "rtau")
+    tau = tau_from_rtau(rtau) if rtau is not None else _col(df, "tau")
     xF = _col(df, "xF")
     value = _col(df, "value")
     stat = _col(df, "stat_u")
@@ -209,6 +236,8 @@ def build_dy_manifest() -> dict:
         # column; dy_layout re-audits when it is missing, so a cached manifest
         # from before normalizations were recorded refreshes itself.
         "has_norm_audit": True,
+        # The Rtau reading used above; dy_layout re-audits a manifest without it.
+        "tau_convention": TAU_CONVENTION,
         "audit_status_counts": counts,
         "tables": tables,
         "audit": audit,

@@ -13,7 +13,7 @@
     "src/pixel/core/evidence.py (BilinearFactorBlock, _bilinear_prediction_from_second -- called for real, not mocked, in tests 1-3)"
   ],
   "drives_non_pixel": "Primary subject is the closure_*/plot_datasets.py plotting-orchestration layer across all 4 closure driver packages (closure_JAM_truth(_small), closure_NNPDF_truth(_small)), not a pixel module directly. It does import pixel.core.evidence.BilinearFactorBlock directly, and, transitively through _bilinear_predictive_band, calls the real (unmocked) pixel.core.evidence._bilinear_prediction_from_second in tests 1-3.",
-  "n_tests": 14,
+  "n_tests": 15,
   "n_parametrized_cases": 8,
   "tests": [
     {
@@ -59,6 +59,17 @@
       "bar": "none numeric; file-existence only",
       "strength": "S3",
       "catches": "a dropped output format, a wrong suffix-derivation in save_figure_both, or an exception from a malformed/mismatched record (wrong array lengths, missing keys). Does NOT catch wrong rendered content (wrong data, wrong color, wrong scale, missing legend/title/footnote) -- pixel.plotting's sibling suite already has that pattern (tests/test_plotting.py:381, figures[1].axes[0].get_xscale()) and this file has no equivalent."
+    },
+    {
+      "name": "test_records_are_drawn_in_the_published_unit_of_a_scaled_dataset",
+      "line": 1147,
+      "claim": "build_records_from_result draws a unit-scaled dataset multiplied back into its published unit and carries the declared unit; chi2 and dimensionless datasets are untouched.",
+      "actual": "Mixed linear + DY fixture built twice by the same call, with and without a 2**-10 unit_scale record on the DY dataset: every DY array (data, sigma, truth, reproduction, fit_std) equals the control's times the scale exactly; the dimensionless linear record is unchanged; DY chi2 equal; units 'GeV^-4' for DY and None for the pure number.",
+      "how": "SimpleNamespace model/dataset stand-ins as in the mixed-records test, with metadata.meta added",
+      "oracle": "A3",
+      "bar": "assert_array_equal",
+      "strength": "S1",
+      "catches": "records drawn in the scaled unit after pixel.Analysis.add's power-of-two scale (MEASURED 2026-09-11: forcing unit_scale_of to 1.0 in the plotting module fails it). Does NOT check the y-label plot_records draws, nor fit.py's shift_rms multiply-back."
     }
   ],
   "weaknesses": [

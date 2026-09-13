@@ -121,3 +121,26 @@ dropped. It carries a median 3–4% of each row's variance. Records declare it a
   un-mutated.
 - Test 12 parses `build_datasets` with a regex over `manifest.get("...")`. A refactor to a
   dispatch table would make it find nothing and fail — safe direction, misleading message.
+
+**2026-09-11 — what W7.7 changed underneath this file.** Owner decisions D6–D8 of PIXEL's
+`plans/drell_yan_published_units.md` changed the collider records these tests build, without
+changing a line of the tests themselves:
+
+- every dilepton record now carries its published **mass window** instead of the zero-width
+  Z pole, and `generate._collider_dy_record` refuses one that does not. The collider tests
+  here (the split-table partition, the edge-bracket refusal, and the end-to-end fold) build
+  windowed records from now on;
+- collider Drell-Yan is **γ\*/Z** with per-row `RunningCouplings`, so those rows run
+  `alpha_s(Q^2)` rather than the fixed `DY_ALPHA_S`;
+- **the end-to-end fold got materially dearer, and it is a property of the quadrature, not
+  of the box.** A 66–116 GeV window containing the Z pole splits into three mass panels of
+  `mass_nodes` each — 15 nodes at the shipped 5 — where the pole route took one node of unit
+  weight. So `test_a_collider_record_builds_and_folds_through_the_real_dy_arm` assembles
+  about fifteen times the hard tensors it did on 2026-09-10. Re-measure with
+  `venv/bin/python -m pytest tests/test_closure_nnpdf_datasets.py -k real_dy_arm -q
+  --durations=5` rather than quoting a wall time; if that cost stops being worth its
+  coverage, the honest fix is a cheaper *fixture* (fewer rows are already used), never a
+  coarser mass axis, which would stop testing the observable the suite now folds.
+
+The windows, the exchange and the E866 kinematics are pinned in
+`tests/test_closure_dy_published_kinematics.py`; this file's claims are unchanged.

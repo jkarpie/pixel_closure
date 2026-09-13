@@ -1,0 +1,143 @@
+{
+  "file": "tests/test_closure_dy_published_kinematics.py",
+  "area": "closure-suite",
+  "ast_check": "AST_IDENTICAL",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "closure_*/dy_audit.py (tau_from_rtau, convert_kinematics, audit_table, build_dy_manifest) in all eight suites",
+    "closure_*/generate.py (dy_layout in all eight; _mass_edges, _collider_dy_record, _public in the six full ones)",
+    "closure_*/config.py (COLLIDER_DY_SPECS, DY_ANALYSIS, DY_X_MAX, DY_Q2_MIN, DY_MAX_ROWS)",
+    "closure_NNPDF_truth_NNPDF_data/datasets.py (collider_exchange, build_drell_yan, build_drell_yan_binned, build_drell_yan_bin_integrated, build_drell_yan_mass_spectrum, dy_builder)",
+    "src/pixel/data/drell_yan.py (DrellYan, _bin_kinematics, _declared_units)",
+    "src/pixel/kernels/drell_yan/kernel.py (DYBinIntegratedKernel._nodes, _mass_resonance, DYKernel._row_couplings)",
+    "src/pixel/kernels/drell_yan/electroweak.py + couplings.py (DrellYanElectroweak, RunningCouplings)",
+    "src/pixel/data/contracts.py (load_observable_contracts, contract_index)"
+  ],
+  "drives_non_pixel": "Drives all eight closure packages (not under src/pixel/), imported via importlib. The E866 tests are parametrized over every suite because owner decision D6 says 'in every closure package'; the collider tests drive closure_NNPDF_truth_NNPDF_data, whose CONTRACT_MODE selects every collider Z record the closure can build.",
+  "n_tests": 8,
+  "n_parametrized_cases": 36,
+  "tests": [
+    {
+      "name": "test_e866_row_zero_sits_in_its_published_mass_bin",
+      "claim": "Row 0 of fitpack table 10001 sits in E866's published 4.2-4.7 GeV bin at <M> = 4.64, because Rtau is sqrt(tau); the old tau = Rtau reading puts it outside that bin.",
+      "actual": "Reads RS/Rtau/xF from the workbook, converts with tau_from_rtau, asserts bin containment and |M - <M>| < 0.05 GeV, then converts again with the unsquared column and asserts that result is NOT in the bin.",
+      "how": "dy_audit.convert_kinematics against the LANL published table shipped as NNPDF rawdata.",
+      "oracle": "D2",
+      "bar": "bin containment; 0.05 GeV of the published <M> (Rtau is stored to three decimals, i.e. about 0.02 GeV at sqrt(s) = 38.8)",
+      "strength": "S1",
+      "catches": "The reading D6 fixes. Mutation arm 1 (tau_from_rtau returns Rtau) fails this in all eight suites.",
+      "mutation": "w77_mut_tau: 32 failed, 4 passed"
+    },
+    {
+      "name": "test_every_audited_e866_pp_row_lands_in_its_published_mass_bin",
+      "claim": "Every retained pp row lands in its own published mass bin and reproduces its published <M>.",
+      "actual": "Asserts n_retained_precut equals the published table's row count, requires each workbook central value to equal the table's radiatively corrected column (so the index mapping is checked, not assumed), then compares each retained row's M against that row's Min/Max and <M>.",
+      "how": "dy_audit.audit_table plus numpy.loadtxt on DYE866_Z0_800GEV/rawdata/table.csv.",
+      "oracle": "D2",
+      "bar": "bin containment; 0.05 GeV on <M>; rtol=1e-12 on the ordering identity",
+      "strength": "S1",
+      "catches": "A per-row kinematics error that row 0 alone would miss, and a reordering of the workbook relative to the published table.",
+      "mutation": "w77_mut_tau: fails in all eight suites"
+    },
+    {
+      "name": "test_the_audited_e866_row_counts_are_the_contract_counts",
+      "claim": "The audit retains every row of each E866 table, and the contract's selected_rows and source_rows record exactly that.",
+      "actual": "Compares n_retained_precut against the contract and against the workbook length, and recomputes the old reading's mask to show the cut is capable of removing rows.",
+      "how": "audit_table + contract_index(load_observable_contracts()); mask rebuilt from cfg.DY_X_MAX/DY_Q2_MIN.",
+      "oracle": "D2",
+      "bar": "exact",
+      "strength": "S1",
+      "catches": "A contract drifting from the cut, in either direction. The anti-vacuity arm shows the cut bites under the old reading (179 of 184 pp, 183 of 191 pd), so the equality is not trivially true.",
+      "mutation": "w77_mut_tau: fails in all eight suites"
+    },
+    {
+      "name": "test_a_dy_manifest_audited_under_the_old_reading_is_rebuilt",
+      "claim": "dy_layout re-audits a manifest that does not carry the tau_convention marker, and does not re-audit one that does.",
+      "actual": "Writes a stale manifest (has_norm_audit true, matching max_rows, no marker, one row at the old M = 13.44 GeV) to tmp_path, points cfg.DIS_MANIFEST_PATH at it, and requires dy_layout to return re-audited kinematics and to stamp the marker; then call-counts augment_manifest on a second call and requires zero.",
+      "how": "monkeypatch on cfg.DIS_MANIFEST_PATH and dy_audit.augment_manifest.",
+      "oracle": "F1",
+      "bar": "exact",
+      "strength": "S1",
+      "catches": "The cached-manifest path carrying old kinematics into a new generation -- the one route by which every other test here could pass while the fit still folded 13.44 GeV rows. The second half stops the fix from being 'always re-audit'.",
+      "mutation": "w77_mut_marker (TAU_CONVENTION = None): 8 failed, 28 passed -- this test in all eight suites and nothing else"
+    },
+    {
+      "name": "test_every_collider_z_record_integrates_its_published_mass_window",
+      "claim": "Each of the nine formerly-pole records integrates the mass window its HEPData table states, and no dilepton record anywhere in the layout has zero Q2 width.",
+      "actual": "Parses the mass qualifier out of each set's rawdata HEPData yaml and compares its square with the record's Q2_low/Q2_high; then sweeps every drell_yan_binned / bin_integrated / mass_spectrum record in the layout for non-zero width.",
+      "how": "generate.nnpdf_layout (module-scoped) + yaml.safe_load of the rawdata tables.",
+      "oracle": "D2",
+      "bar": "rtol=1e-12",
+      "strength": "S1",
+      "catches": "A window transcribed wrongly into COLLIDER_DY_SPECS, and any Z set left at the pole. The windows are compared against the publication, not against the spec, so this is not the config checked against itself.",
+      "mutation": "w77_mut_nowindow: 3 failed (this, the exchange test, and the round trip)"
+    },
+    {
+      "name": "test_a_z_record_left_at_the_pole_is_refused",
+      "claim": "A dilepton spec with no mass_edges is refused at record-build time; the gated W arm still takes the pole.",
+      "actual": "Pops mass_edges from the cdf_zrap spec and requires RuntimeError; builds a real W record and asserts its Q2_low is None.",
+      "how": "generate._collider_dy_record with a synthetic entry.",
+      "oracle": "F1",
+      "bar": "exact",
+      "strength": "S1",
+      "catches": "The guard being removed or narrowed. The W half stops the guard from being widened into the arm that legitimately has no dilepton mass window.",
+      "mutation": "w77_mut_pole (specs back to the pole): 4 errors -- the guard refuses inside the layout fixture"
+    },
+    {
+      "name": "test_collider_builders_take_gamma_z_and_fixed_target_stays_photon",
+      "claim": "All three collider builders carry a gamma_z provider whose running alpha_EM is the one in the hard prefactor, the mass axis takes the Z pole where the window contains it, the declared unit is GeV^-2; the fixed-target builder stays photon-only at GeV^-4.",
+      "actual": "Builds one record per collider kind with DY_EVOLVE off, asserts the boson, that couplings.eweak IS electroweak.neutral, that _row_couplings agrees with the provider to rel=1e-13 (it raises otherwise), the resonance, the node-count relation in both directions, and the declared units; then builds E866 and asserts electroweak is None with the fixed alpha_em.",
+      "how": "datasets.dy_builder on real layout records; kernel introspection.",
+      "oracle": "F1",
+      "bar": "rel=1e-13 on alpha_EM; exact elsewhere",
+      "strength": "S1",
+      "catches": "Collider DY reverting to photon-only, a second alpha_EM implementation drifting from the provider's, and a fixed-target record silently acquiring a Z. The both-directions node assertion also pins that the Breit-Wigner panel is spent only where the pole is: z.atlas7_himass (116-1500 GeV) sits above the pole and correctly keeps uniform nodes.",
+      "mutation": "w77_mut_photon (collider_exchange returns {}): 1 failed, 35 passed -- this test alone"
+    },
+    {
+      "name": "test_the_window_survives_the_manifest_into_the_fit_builder",
+      "claim": "The window generation writes is the window the fit rebuilds: layout record -> _public -> JSON -> builder keeps the Q2 edges and the GeV^-2 unit.",
+      "actual": "Round-trips a truncated cdf_zrap record through a file with mean/cov present, as the fit side has them, and compares the built dataset's nu columns 3 and 4 with the published window.",
+      "how": "generate._public + json + datasets.dy_builder.",
+      "oracle": "D2",
+      "bar": "rtol=1e-12",
+      "strength": "S1",
+      "catches": "A window that lives only in the layout, leaving generation and fit integrating different observables with nothing to say so -- datasets.py never sees the in-memory record, only manifest.json.",
+      "mutation": "w77_mut_nowindow: failed"
+    }
+  ],
+  "weaknesses": [],
+  "missing": [
+    {
+      "id": "test_closure_dy_published_kinematics-M01",
+      "topic": "dy-window-value",
+      "title": "No test compares a windowed prediction's value against an independent calculation",
+      "rationale": "Every assertion here is about kinematics, units and wiring. The window changes the folded number by roughly the width of the window and the exchange changes it again, but no independent prediction of either exists in this repository, so a numerically wrong gamma*/Z weight table or a mis-weighted mass quadrature would pass. The natural oracle is NNPDF's own FK prediction for one of these sets, which assert_native_campaign_ready still blocks on NNLO/theory-200 grounds; a weaker one is additivity of adjacent mass sub-windows, which is theory-side and self-consistent but would catch a missing Jacobian."
+    },
+    {
+      "id": "test_closure_dy_published_kinematics-M02",
+      "topic": "e866-pd-bins",
+      "title": "The pd table (10002) has no per-bin mass check",
+      "rationale": "The NNPDF commondata ships E866's published pp table only, so pd rows are checked for counts and re-audit but not against their own published bins. Its row 0 lands at M = 4.97 GeV, which is consistent with the same 0.5 GeV binning, but nothing asserts it. Fixing this means obtaining the published pd table (the LANL release ships it alongside the pp one)."
+    }
+  ],
+  "unjustified_tolerances": [],
+  "measurements": [
+    {
+      "id": "e866-bin-containment",
+      "what": "With tau = Rtau^2 all 184 pp rows land inside their published mass bins; with tau = Rtau none of them does (0 of 184). Row 0 moves from M = 13.441 GeV to 4.656 GeV against a published <M> of 4.64.",
+      "command": "venv/bin/python -m pytest tests/test_closure_dy_published_kinematics.py -q"
+    },
+    {
+      "id": "e866-retained-rows",
+      "what": "Retained rows per table: pp 179 -> 184 of 184, pd 183 -> 191 of 191. The rows the old reading cut failed x1, x2 < 1 only because tau was wrong.",
+      "command": "venv/bin/python -m pytest tests/test_closure_dy_published_kinematics.py -k counts -q"
+    },
+    {
+      "id": "mass-node-count",
+      "what": "A 66-116 GeV window with the Z pole resolves into three panels of mass_nodes each (15 nodes at the shipped 5) where the pole route used one node of unit weight; a window above the pole (116-1500 GeV) keeps one uniform panel. This is a property of the quadrature rule, not of the machine.",
+      "command": "venv/bin/python -m pytest tests/test_closure_dy_published_kinematics.py -k gamma_z -q"
+    }
+  ],
+  "notes_for_readme": "Covers owner decisions D6-D8 of PIXEL's plans/drell_yan_published_units.md (W7.7). The committed truth data of every closure package is stale against it until regenerated."
+}

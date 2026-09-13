@@ -615,7 +615,7 @@ DY_MAX_ROWS = 6
 #: sides use it identically, so the closure stays self-consistent.
 DY_ORDER = "LO"
 DY_ALPHA_EM = 1.0 / 137.035999
-DY_ALPHA_S = 0.20                                 # fixed alpha_s at the DY scale
+DY_ALPHA_S = 0.20                                 # fixed alpha_s at the DY scale; this suite has no collider route, so it governs every DY row
 DY_NF = 4                                         # active flavors (u,d,s,c)
 DY_CHANNELS = (("qA,qbB", "qbA,qB") if DY_ORDER == "LO" else
                ("qA,qbB", "qbA,qB", "qA,gB", "gA,qB"))

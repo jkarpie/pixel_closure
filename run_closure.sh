@@ -12,10 +12,10 @@ Options:
   --truth TRUTH            Truth source to use: JAM or NNPDF. Defaults to JAM.
                            Also accepts the full package names directly.
   --data DATA              Which dataset selection to fit.  Defaults to union.
-                             union      everything either analysis uses (36 sets,
-                                        4291 rows)          -> closure_<T>_truth
-                             JAM        JAM24 only (27 sets) -> closure_<T>_truth_JAM_data
-                             NNPDF      NNPDF4.0 only (35)   -> closure_<T>_truth_NNPDF_data
+                             union      everything either analysis uses (46 sets,
+                                        4462 rows)          -> closure_<T>_truth
+                             JAM        JAM24 only (29 sets) -> closure_<T>_truth_JAM_data
+                             NNPDF      NNPDF4.0 only (45)   -> closure_<T>_truth_NNPDF_data
                              mock       small smoke-test     -> closure_<T>_truth_small
   --scale SCALE            The same axis under its older name, kept working:
                            full = union, small = mock, JAM_data, NNPDF_data.
@@ -548,10 +548,10 @@ resolve_package
 report_concurrency
 data_label() {
     case "$scale" in
-        full)       echo "union (JAM u NNPDF), 36 sets" ;;
+        full)       echo "union (JAM u NNPDF), 46 sets" ;;
         small)      echo "mock smoke-test" ;;
-        JAM_data)   echo "JAM24, 27 sets" ;;
-        NNPDF_data) echo "NNPDF4.0, 35 sets" ;;
+        JAM_data)   echo "JAM24, 29 sets" ;;
+        NNPDF_data) echo "NNPDF4.0, 45 sets" ;;
         *)          echo "$scale" ;;
     esac
 }

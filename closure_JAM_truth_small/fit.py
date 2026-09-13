@@ -18,6 +18,7 @@ import warnings
 import numpy as np
 
 import pixel
+from pixel.data.unit_scale import unit_scale_of
 from pixel.data import families
 import numpy as np
 from pixel import priors, kernels
@@ -1084,6 +1085,7 @@ def dy_normalization_report(q_key, model, vec, fitted_stats=None) -> dict:
             if std > 0.0 else None,
             "shift_rms": None,
         }
+    by_name = {dataset.name: dataset for dataset in model.datasets}
     for row in model.nuisance_pulls(vec):
         if row["name"] != "normalization" or row["dataset"] not in truth_beta:
             continue
@@ -1105,7 +1107,9 @@ def dy_normalization_report(q_key, model, vec, fitted_stats=None) -> dict:
             "expected_pull": float(expected),
             "pull_minus_expected": float(row["pull"] - expected),
             "pull_z": _finite_or_none(z) if z is not None else None,
-            "shift_rms": row["shift_rms"],
+            # nuisance_pulls reports the shift in the fitted, unit-scaled rows;
+            # quote it in the dataset's published unit.
+            "shift_rms": row["shift_rms"] * unit_scale_of(by_name[row["dataset"]]),
         }
     return report
 

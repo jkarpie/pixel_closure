@@ -131,17 +131,24 @@ def test_the_three_selections_have_their_measured_compositions():
     * ``dis.hermes_p_10007`` is JAM-only -- HERMES sigma_r is not on the NNPDF4.0 roster;
     * ``dis.chorus_nu``/``dis.chorus_nb`` are NNPDF-only -- CHORUS is not in JAM's
       ``input.py``;
+    * the 2026-09-10 collider Drell-Yan wiring added ten Z records, two of which JAM24
+      also fits (so they are in both lists, and in neither's difference); the W records
+      it contracted stay reader_only;
     * ``dy.e866_pd_10002`` left *all three*.  Verified from the workbooks: JAM fits
       E866 pp absolute + the pd/2pp ratios, NNPDF4.0 fits ``DYE886P`` (pp absolute) +
       ``DYE886R`` (the ratio).  Neither fits E866 pd absolute, which is why the DY count
       is 1 and not 2.
     """
-    assert _by_prefix("jam_data") == {"lattice": 13, "dis": 13, "dy": 1}
-    assert _by_prefix("nnpdf_data") == {"lattice": 13, "dis": 15, "dy": 2, "z": 5}
+    # 2026-09-10: the collider Drell-Yan wiring.  jam_data gains its first two Z records
+    # (JAM24's zrap/1000 and wzhep ATLAS7C_Z, realized from NNPDF's copies of the same
+    # measurements); nnpdf_data gains ten.  No W record is selected anywhere: the
+    # lepton-level kernel composes no evolution (closure_datatypes, 2026-09-10).
+    assert _by_prefix("jam_data") == {"lattice": 13, "dis": 13, "dy": 1, "z": 2}
+    assert _by_prefix("nnpdf_data") == {"lattice": 13, "dis": 15, "dy": 2, "z": 15}
     # **UNION since 2026-09-09**, at the owner's request -- "the larger set which
     # contains everything used in both or either". It was the intersection for one
     # afternoon; both are defensible and the union is what the suites run.
-    union = {"lattice": 13, "dis": 16, "dy": 2, "z": 5}
+    union = {"lattice": 13, "dis": 16, "dy": 2, "z": 15}
     assert _by_prefix("jam_full") == union
     assert _by_prefix("nnpdf_full") == union
 
@@ -155,14 +162,21 @@ def test_the_three_selections_have_their_measured_compositions():
     assert full != jam & nnpdf, "a union that equals the intersection means the two selections stopped differing"
     assert full == {r["id"] for r in full_closure_selection("nnpdf_full")}
     assert jam - nnpdf == {"dis.hermes_p_10007"}
-    # These are exactly the ten the union adds over the intersection.
+    # JAM's two Z records are NNPDF records, not twins: a fitpack twin in the union would
+    # count the same measurement twice.
+    assert {"z.cdf_zrap", "z.atlas7_46fb_cc_peak"} <= jam & nnpdf
+    assert not {"z.cdf_1000", "z.atlas7c_peak", "w.atlas7c_wplus", "w.atlas7c_wminus"} & full
+    assert not any(i.startswith("w.") for i in full), "a W record cannot be folded yet"
     assert nnpdf - jam == {
         "dis.chorus_nu", "dis.chorus_nb",
-        # Promoted 2026-09-09 with their builders; all NNPDF-only, none in JAM's
-        # input.py, so none of them enters the intersection either.
+        # Promoted 2026-09-09 with their builders; all NNPDF-only.
         "dis.heracomb_bottom", "dy.e605_copper",
         "z.lhcb7_dielectron", "z.lhcb8_dielectron", "z.lhcb13_dimuon",
         "z.lhcb13_dielectron", "z.atlas8_lomass_2d",
+        # 2026-09-10, NNPDF-only.
+        "z.atlas7_himass", "z.atlas8_himass_2d", "z.atlas7_46fb_cf",
+        "z.lhcb7_muon", "z.lhcb8_muon",
+        "z.atlas7_46fb_cc_low", "z.atlas7_46fb_cc_high", "z.atlas7_36pb",
     }
     assert not any("e866_pd" in i for i in jam | nnpdf)
 

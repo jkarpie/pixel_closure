@@ -25,12 +25,15 @@ this closure can build:
 * **NNPDF4.0** (arXiv:2109.02653), from `nnpdf40_dis_dy_roster.yaml`, keeping only
   `linear` and `bilinear` predictions -- no ratios, no asymmetries.
 
-The two `_truth` suites run their **union** -- 36 datasets, 4291 rows, everything
+The two `_truth` suites run their **union** -- 46 datasets, 4467 rows, everything
 either analysis fits. Both run the *same* dataset, so a JAM-vs-NNPDF truth comparison
 there is still unconfounded by any dataset difference; the union just makes it on more
-data than the intersection would (2926 rows). The ten datasets the union adds over the
-intersection are `dis.hermes_p_10007` (JAM-only) and, all NNPDF-only, CHORUS nu+nubar,
-the HERACOMB bottom set, E605 copper Drell-Yan and the five collider Z sets.
+data than the intersection would (28 datasets, 2971 rows). The eighteen datasets the union
+adds over the intersection are `dis.hermes_p_10007` (JAM-only) and, all NNPDF-only, CHORUS
+nu+nubar, the HERACOMB bottom set, E605 copper Drell-Yan and thirteen collider Z sets.
+No W data is fitted yet; `DATASETS.md` says why, and what running the collider sets costs.
+`DATASETS.md` is generated: `../pixel/venv/bin/python tools/make_datasets_md.py` rebuilds it
+from the contracts, and `--check` exits 1 when it is stale.
 Each suite names its selection once, as `config.CONTRACT_MODE`, resolved against
 `observable_contracts.yaml`. Everything held out is carried there as a `reader_only`
 record with measured source rows and a `drop_reason`.
@@ -384,3 +387,50 @@ Results and figures ship under `results/` (per suite) and `campaign/`.
    interleaved. One `both` fit peaks at ~6.6 GB and ~550% CPU. Always
    `XLA_FLAGS=--xla_cpu_multi_thread_eigen=false` -- without it BLAS threads
    deadlock the suite in XLA's Eigen pool.
+
+## 10. Units and the O(1) scale (2026-09-11)
+
+Since 2026-09-11, PIXEL divides every dimensionful dataset (Drell-Yan, jets, DVCS, absolute
+SIA) by one exact power of two when `pixel.Analysis.add` receives it. See
+`pixel.data.unit_scale` and PIXEL's `guides/units_and_normalization.md`. Every `fit.py` here
+builds through `Analysis.add`, so the fits see O(1) numbers with no other change in this repo.
+What that means here:
+
+* **Generation is unaffected.** `generate.py` builds datasets with PIXEL's builders directly,
+  and those do not scale. So the truth folds, the uncertainty floors and the manifest means
+  all stay in the published unit, and the fit rebuilds from them exactly as before. Keep it
+  that way: a dataset taken out of an `Analysis` and folded again would carry the scale.
+* **What is reported comes back in the published unit.**
+  - The dataset-reproduction plots (`plot_datasets.py`) multiply the recorded scale back
+    into data, sigma, truth, reproduction and band, and label the y-axis with the declared
+    unit.
+  - The DY normalization report does the same for `shift_rms` (`fit.py`).
+  - chi2, pulls and `pull_z` are scale-free.
+* **The saddle and Hessian caches are safe despite their name-only key.** Under
+  `INFERENCE_CACHE_ROOT` they are keyed `{truth}_{mode}`, but PIXEL checks each against a
+  fingerprint of the full evidence blocks before reusing it. A cache written before the scale
+  is therefore recomputed, not reused.
+* **Absolute `-2 log Z` shifts by `meta["unit_scale"]["minus_2_log_z_shift"]`** for each
+  scaled dataset. Comparing fits of the same datasets is unaffected.
+
+## 11. Drell-Yan rows are the published measurement (2026-09-11)
+
+Three owner decisions landed together (PIXEL's `plans/drell_yan_published_units.md`, W7.7).
+All three change what the suites fold, so **every package's committed truth data is stale
+until regenerated**; `tests/test_closure_dy_published_kinematics.py` pins each one.
+
+* **E866 kinematics.** The fitpack workbooks' `Rtau` column is `sqrt(tau) = M/sqrt(s)`, and
+  the audit had been reading it as `tau` (`dy_audit.tau_from_rtau`). Row 0 of table 10001
+  now sits in its published `4.2-4.7 GeV` bin instead of at `13.44 GeV`, and no physical row
+  is cut any more, so the contracts' `selected_rows` rose to E866's full tables. A manifest
+  audited under the old reading is rebuilt rather than reused: `dy_audit` stamps
+  `tau_convention` into it and `generate.dy_layout` re-audits when it is missing.
+* **Collider Z sets integrate their published mass window.** Nine records were evaluated at
+  `m_Z^2` with zero `Q^2` width; each now carries the window its HEPData table states (LHCb
+  `60-120`, CDF and ATLAS `66-116 GeV`), and `generate._collider_dy_record` refuses a
+  dilepton record left at the default `"pole"`. The rows are bin integrals in `GeV^-2`
+  rather than `GeV^-4`, and the mass axis costs quadrature nodes it did not before.
+* **Collider Drell-Yan is `gamma*/Z`.** `datasets.collider_exchange` supplies the provider
+  and the per-row `RunningCouplings` its running `alpha_EM` requires, so these rows also run
+  `alpha_s(Q^2)` rather than the fixed `DY_ALPHA_S` -- PIXEL has no provider pairing a fixed
+  `alpha_s` with a running `alpha_EM`. Fixed-target E866 and E605 stay photon-only.

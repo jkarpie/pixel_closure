@@ -72,28 +72,30 @@ truth_laws:
 full_closure_modes:
   # Three selections over one registry.  ``jam_data`` and ``nnpdf_data`` are the two
   # published analyses' own dataset choices, restricted to what this closure can
-  # actually build; ``jam_full``/``nnpdf_full`` are their INTERSECTION and are what the
-  # two headline suites run.  The truth family and the dataset selection are independent
+  # actually build; ``jam_full``/``nnpdf_full`` are their UNION (since 2026-09-09) and are
+  # what the two headline suites run.  The truth family and the dataset selection are independent
   # axes: closure_NNPDF_truth_JAM_data is the NNPDF4.0 truth on JAM24's data.
   #
   # **The buildable universe is set by the closure, not by the papers.**
-  # ``closure_*/datasets.py::_EXP_BUILDERS`` is exactly {f2, sigma_r, sigma_r_cc,
-  # drell_yan} plus the lattice ``pseudoitd``/``mellin`` pair.  A kernel existing inside
-  # PIXEL does not make a dataset constructible here -- inclusive jets have a native
-  # ``InclusiveJetKernel`` (LO only, and it raises above LO) and collider Drell-Yan has
-  # both ``DrellYanElectroweak`` and transcribed fiducial cuts for 18 sets in
-  # ``nnpdf40_fiducial_cuts.yaml``, and neither can be selected because no closure
-  # builder consumes them.  Every such case is carried below as a reader_only record
-  # with its own drop_reason, so a future builder is a one-line promotion here.
+  # ``pixel.data.closure_datatypes`` lists every datatype with its gate: lattice, linear
+  # DIS, heavy-flavour-tagged DIS and four Drell-Yan arms are ready (2026-09-10); the
+  # single-lepton W arm is not.  A
+  # kernel existing inside PIXEL does not make a dataset constructible here -- inclusive
+  # jets have a native ``InclusiveJetKernel`` (LO only, and it raises above LO) and no
+  # closure arm.  Every such case is carried below as a reader_only record with its own
+  # drop_reason, so a future builder is a one-line promotion here.
 
   #: JAM24 (arXiv:2501.00665), PDF-relevant subset.  Source of truth for the selection is
   #: ``fitpack_legacy/examples/input.py`` (uncommented entries).  Excluded there:
   #: ``sia``/``sidis``/``psidis``/``pp_hadron`` (need fragmentation functions, per the
   #: owner's scope) and ``pidis``/``pjet`` (polarized -- they constrain helicity PDFs and
   #: this suite carries nine *unpolarized* fields, so there is nothing for them to fit).
-  #: Dropped for want of a builder: ``wc`` (5), ``wzrv`` (11), ``wasym`` (2), ``zrap``
-  #: (2), ``jet`` (4), ``ln`` (2), plus idis 10021 (d/p ratio) and dy 20001/20002
-  #: (E866/E906 pd-over-2pp ratios).  idis 10003 (JLab Hall C) is in JAM's list and has a
+  #: Not fitted here, by class of reason (2026-09-10): ``wzrv`` (11) and ``wasym`` (2) are
+  #: asymmetries or ratios and ``zrap/1001`` a normalized distribution; idis 10021 (d/p)
+  #: and dy 20001/20002 (pd-over-2pp) are ratios -- all scope.  ``wc`` (5), ``jet`` (4)
+  #: and ``ln`` (2) need physics PIXEL lacks at this closure's order.  ``zrap/1000`` and
+  #: ``wzhep`` ATLAS7C_Z ARE fitted, realized from NNPDF's copies of the same
+  #: measurements (see the list); ATLAS7C_Wp / Wm are blocked with the lepton-level arm.  idis 10003 (JLab Hall C) is in JAM's list and has a
   #: ``sigma_r`` builder, but every row fails the Q2 >= mc^2 / W2 > 10 closure cuts.
   jam_data:
     classifications: [physics, legacy_compatibility, synthetic_proxy]
@@ -130,16 +132,27 @@ full_closure_modes:
       # 10001/20001/20002; the latter two are pd-over-2pp ratios.  E866 *pd* absolute
       # (10002) is deliberately absent -- see the note on nnpdf_data.
       - dy.e866_pp_10001
+      # JAM24's collider Z tables that are absolute cross sections, added 2026-09-10.
+      # Each is realized from NNPDF's transcription of the SAME measurement (value for
+      # value, checked 2026-09-10), because the NNPDF copy carries the bin edges:
+      # fitpack zrap/1000 = z.cdf_zrap, and wzhep ATLAS7C_Z = the Z-peak rows of NNPDF's
+      # ATLASWZRAP11CC.  wzhep ATLAS7C_Wp / Wm are the same measurement as
+      # w.atlas7_46fb_wplus / wminus, which are blocked on the lepton-level kernel's
+      # missing evolution.  The fitpack records stay reader_only as duplicates.
+      - z.cdf_zrap
+      - z.atlas7_46fb_cc_peak
 
   #: NNPDF4.0 (arXiv:2109.02653), linear/bilinear subset.  Source of truth is
   #: ``nnpdf40_dis_dy_roster.yaml``, whose own ``scope`` already excludes jets, dijets,
   #: top, single top, prompt photon, V+jet and Z-pT.  Of its 43 DIS/DY entries the
   #: owner's linear-or-bilinear rule keeps 36, dropping the 7 ratio/asymmetry sets
   #: (NMCPD, DYE886R, DYE906R, D0ZRAP_40, D0WMASY, CMSWEASY840PB, CMSWMASY47FB).
-  #: Of those 36, buildable here: NMC/SLACP/SLACD/BCDMSP/BCDMSD, CHORUS nu+nb, the seven
-  #: HERACOMB sets, and DYE886P.  Not buildable: NuTeV nu/nb (CC dimuon charm),
-  #: HERACOMB_SIGMARED_B (needs the FONLL-B/C two-loop massive coefficient), DYE605
-  #: (copper nuclear DY) and all 17 collider DY sets (no bin-integrated W/Z builder).
+  #: Of those 36, NOT fitted here (2026-09-10): NuTeV nu/nb (CC dimuon charm -- physics),
+  #: ATLASLOMASSDY11EXT (Born acceptance zero below 18 GeV -- physics), CMSDY2D11
+  #: (mass-bin edges absent -- data), ATLAS_WZ_TOT_13TEV (inclusive totals --
+  #: closure_builder), CMSWMU8TEV, and the W rows of the LHCb and ATLAS W/Z tables (the
+  #: lepton-level kernel composes no evolution -- physics).  A mixed W/Z table appears
+  #: as one record per boson.
   nnpdf_data:
     classifications: [physics, legacy_compatibility, synthetic_proxy]
     dataset_ids: &nnpdf_data_ids
@@ -210,13 +223,28 @@ full_closure_modes:
       # nucleus is one number (Z/A) and the nuclear uncertainty rides in the _dw_
       # covariance variant, so "no approved copper nuclear law" was not the blocker.
       - dy.e605_copper
+      # Collider Z added 2026-09-10: the mass-spectrum and full-phase-space arms and
+      # per-channel cut views for the two ATLAS W/Z concatenations.  Mixed W/Z tables are
+      # one record per boson (and per Z mass slice for ATLASWZRAP11CC), discriminated by
+      # selector label; their W records are reader_only (lepton-level evolution gap).
+      - z.atlas7_himass
+      - z.atlas8_himass_2d
+      - z.atlas7_46fb_cf
+      - z.cdf_zrap
+      - z.lhcb7_muon
+      - z.lhcb8_muon
+      - z.atlas7_46fb_cc_low
+      - z.atlas7_46fb_cc_peak
+      - z.atlas7_46fb_cc_high
+      - z.atlas7_36pb
 
   #: The UNION of the two selections above -- everything either analysis fits, which is
   #: what the two headline suites run.  **Changed from the intersection 2026-09-09** at
   #: the owner's request: "the larger set which contains everything used in both or
   #: either".
   #:
-  #: 36 datasets / 4291 rows, against the intersection's 26 / 2926.  The ten it adds:
+  #: 46 datasets / 4462 rows since 2026-09-10 (36 / 4291 before the collider Drell-Yan
+  #: wiring; the intersection was 26 / 2926).  jam_data is 29 / 3000, nnpdf_data 45 / 4428.  The ten it adds:
   #: ``dis.hermes_p_10007`` (JAM-only, 34 rows) and, all NNPDF-only, ``dis.chorus_nu``
   #: + ``dis.chorus_nb`` (520 each), ``dis.heracomb_bottom`` (27), ``dy.e605_copper``
   #: (119) and the five collider Z sets (145 between them).
@@ -225,7 +253,7 @@ full_closure_modes:
   #: exactly the same dataset, so ``closure_JAM_truth`` vs ``closure_NNPDF_truth`` is
   #: still a pure truth-vs-truth comparison with no dataset difference confounding it;
   #: the union simply makes that comparison on more data than the intersection did.
-  #: What changes is cost -- 4291 rows against 2926, and the added rows include the
+  #: What changes is cost -- 4462 rows against 2926, and the added rows include the
   #: expensive ones (CHORUS is 1040, the bin-integrated collider Z sets are the
   #: slowest per row in the suite).
   #:
@@ -273,6 +301,18 @@ full_closure_modes:
       - z.lhcb13_dimuon
       - z.lhcb13_dielectron
       - z.atlas8_lomass_2d
+      # Collider Z added 2026-09-10.  JAM24's two (z.cdf_zrap and the ATLAS 4.6 fb^-1
+      # Z-peak record) are among these, not beside them.
+      - z.atlas7_himass
+      - z.atlas8_himass_2d
+      - z.atlas7_46fb_cf
+      - z.cdf_zrap
+      - z.lhcb7_muon
+      - z.lhcb8_muon
+      - z.atlas7_46fb_cc_low
+      - z.atlas7_46fb_cc_peak
+      - z.atlas7_46fb_cc_high
+      - z.atlas7_36pb
   nnpdf_full:
     classifications: [physics, legacy_compatibility, synthetic_proxy]
     dataset_ids: *union_ids
@@ -358,8 +398,8 @@ datasets:
   - id: dy.e866_pp_10001
     selector: {section: dy, table_id: 10001}
     source: fitpack_legacy/database/dy/expdata/10001.xlsx
-    source_rows: 179
-    selected_rows: 179
+    source_rows: 184
+    selected_rows: 184
     likelihood_group: dy.e866_pp
     classification: legacy_compatibility
     selectable: true
@@ -367,16 +407,17 @@ datasets:
     inspire_ids: [613362]
     covariance_scope: "table-local point errors plus configured normalization"
     drop_reason: "legacy fixed-Q0 operator until row-specific evolution lands"
-    observable: &e866_observable {quantity: "fixed-target dimuon Drell-Yan differential cross section", units: "fitpack published cross-section units", reaction: "800 GeV proton on proton/deuteron", beam: proton, target: "record-specific proton or deuteron", binning: "published mass and xF/rapidity point approximation", mass_integration: "fitpack_legacy_fixed_scale compatibility prescription", rapidity_integration: "fitpack point prescription", decay_channel: dimuon, fiducial: "source acceptance as encoded by fitpack compatibility table", qed_fsr: "source convention"}
+    observable: &e866_observable {quantity: "fixed-target dimuon Drell-Yan differential cross section M^3 dsigma/dM dx_F", units: "nb*GeV^2 per nucleon", reaction: "800 GeV proton on proton/deuteron", beam: proton, target: "record-specific proton or deuteron", binning: "published mass and xF/rapidity point approximation", mass_integration: "fitpack_legacy_fixed_scale compatibility prescription", rapidity_integration: "fitpack point prescription", decay_channel: dimuon, fiducial: "source acceptance as encoded by fitpack compatibility table", qed_fsr: "source convention"}
     operator: &e866_operator {kind: drell_yan, perturbative_order: LO, scale: "legacy Q0^2=mc^2 without row evolution", flavour_scheme: "Nf=4 compatibility", nuclear: "proton or isoscalar deuteron map", returns: "pointwise differential cross section with legacy normalization"}
+    published_form: &e866_published_form {units: "nb*GeV^2", natural_power: -4, jacobian: e866_jacobian, jacobian_power: 4, status: closes, source: "fitpack's own obs/units columns read 'M3 dsig/dM dxF' and 'nb GeV2'; the form is eq. (1) of NuSea:2003qoe (hep-ex/0302019), and E866's table README says nb GeV^2 per nucleon", note: "The route is pointwise Drell-Yan, GeV^-4. pixel builds this end to end through data.experimental.fixed_target_dy.build_e866_dataset from the frozen other_lib_compare/dy/e866/e866_dy_tables.json; W7.4."}
     evidence: &e866_evidence {local: ["../fitpack_legacy/database/dy/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/DYE866_Z0_800GEV/metadata.yaml", "closure_JAM_truth/data/truthQ_mc/manifest.json"], paper: "NuSea:2003qoe", gate_evidence: ["184-row absolute-cross-section table identity and point count reconciled with NNPDF commondata and the absolute-cross-section paper"]}
-  - {id: dy.e866_pd_10002, selector: {section: dy, table_id: 10002}, source: fitpack_legacy/database/dy/expdata/10002.xlsx, source_rows: 183, selected_rows: 183, likelihood_group: dy.e866_pd, classification: legacy_compatibility, selectable: true, citation_keys: ["NuSea:2003qoe"], inspire_ids: [613362], covariance_scope: "table-local point errors plus configured normalization", drop_reason: "legacy fixed-Q0 operator until row-specific evolution lands", observable: *e866_observable, operator: *e866_operator, evidence: *e866_evidence}
+  - {id: dy.e866_pd_10002, selector: {section: dy, table_id: 10002}, source: fitpack_legacy/database/dy/expdata/10002.xlsx, source_rows: 191, selected_rows: 191, likelihood_group: dy.e866_pd, classification: legacy_compatibility, selectable: true, citation_keys: ["NuSea:2003qoe"], inspire_ids: [613362], covariance_scope: "table-local point errors plus configured normalization", drop_reason: "legacy fixed-Q0 operator until row-specific evolution lands", observable: *e866_observable, operator: *e866_operator, published_form: *e866_published_form, evidence: *e866_evidence}
 
   # Electroweak and NNPDF commondata candidates.  They remain reader-only and
   # non-selectable until the exact operator, covariance, support, and cost
   # gates recorded here pass.  Reading a table never promotes it to physics.
   - id: z.cdf_1000
-    selector: {section: datasets, commondata_name: "fitpack:zrap/1000"}
+    selector: {section: dy, commondata_name: "fitpack:zrap/1000"}
     source: fitpack_legacy/database/zrap/expdata/1000.xlsx
     source_rows: 28
     selected_rows: 0
@@ -385,25 +426,25 @@ datasets:
     selectable: false
     citation_keys: ["CDF:2010vek"]
     inspire_ids: [856131]
-    covariance_scope: "pending raw covariance audit"
-    drop_reason: "conditional: acceptance/unfolding, bin edges, covariance, NLO full-bin, and evolution gates unresolved"
+    covariance_scope: "duplicate of z.cdf_zrap"
+    drop_reason: "duplicate source: the same 28 rows as z.cdf_zrap, NNPDF's CDFZRAP_NEW (value for value, checked 2026-09-10). JAM24 fits this table; jam_data realizes it through z.cdf_zrap, whose commondata carries the bin edges, so the two must never be selected together"
     observable: &z_boson_candidate {quantity: "differential Z/gamma* cross section in boson rapidity", units: "published cross-section per rapidity", reaction: "hadron-hadron neutral-current Drell-Yan", beam: "record-specific pp or ppbar", target: "record-specific proton or antiproton", binning: "mass and rapidity bin edges required from source/HEPData", mass_integration: "full published mass window", rapidity_integration: "full published rapidity bin", decay_channel: "record-specific dilepton channel", fiducial: "unknown until source qualifiers prove inclusive/unfolded or a differential decay operator is available", qed_fsr: "unknown until source audit"}
     operator: &z_full_bin_operator {kind: "bin_integrated gamma*/Z Drell-Yan", perturbative_order: NLO, scale: "muF^2=muR^2=Q2 at every mass node", flavour_scheme: "Nf=4 to 5 VFNS with generated b,bbar", nuclear: none, returns: "bin-integrated or explicitly declared bin-average cross section"}
     evidence: {local: ["../fitpack_legacy/database/zrap/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/CDF_Z0_1P96TEV/metadata.yaml"], paper: "CDF:2010vek", gate_evidence: ["table-to-paper identity and 28 rows established; raw observable audit pending"]}
-  - {id: z.star_1020, selector: {section: datasets, commondata_name: "fitpack:zrap/1020"}, source: fitpack_legacy/database/zrap/expdata/1020.xlsx, source_rows: 5, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["STAR:2020vuq"], inspire_ids: [1829350], covariance_scope: "pending source covariance audit", drop_reason: "published rapidity bin edges and fiducial/unfolding contract unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md"], paper: "STAR:2020vuq", gate_evidence: ["paper identity and 5 centers established; edges absent from workbook"]}}
-  - {id: z.atlas7c_low, selector: {section: datasets, commondata_name: "fitpack:wzhep/ATLAS7C_Z_low"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7C_Z_low.xlsx, source_rows: 6, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "shared ATLAS central/forward and mass-region covariance must be retained", drop_reason: "fiducial decay/acceptance operator and legal covariance merge unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: &atlas_z_evidence {local: ["../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_WPWM_7TEV_46FB/metadata.yaml", "../fitpack_legacy/database/zrap/README.md"], paper: "ATLAS:2016nqi", gate_evidence: ["paper and source family established; fiducial qualifiers remain blocking"]}}
-  - {id: z.atlas7c_peak, selector: {section: datasets, commondata_name: "fitpack:wzhep/ATLAS7C_Z"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7C_Z.xlsx, source_rows: 12, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "shared ATLAS central/forward and mass-region covariance must be retained", drop_reason: "fiducial decay/acceptance operator and legal covariance merge unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
-  - {id: z.atlas7c_high, selector: {section: datasets, commondata_name: "fitpack:wzhep/ATLAS7C_Z_high"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7C_Z_high.xlsx, source_rows: 6, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "shared ATLAS central/forward and mass-region covariance must be retained", drop_reason: "fiducial decay/acceptance operator and legal covariance merge unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
-  - {id: z.atlas7f_peak, selector: {section: datasets, commondata_name: "fitpack:wzhep/ATLAS7F_Z_peak"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7F_Z_peak.xlsx, source_rows: 9, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "shared ATLAS central/forward and mass-region covariance must be retained", drop_reason: "fiducial decay/acceptance operator and legal covariance merge unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
-  - {id: z.atlas7f_high, selector: {section: datasets, commondata_name: "fitpack:wzhep/ATLAS7F_Z_high"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7F_Z_high.xlsx, source_rows: 6, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "shared ATLAS central/forward and mass-region covariance must be retained", drop_reason: "fiducial decay/acceptance operator and legal covariance merge unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
-  - {id: z.lhcb7_1032, selector: {section: datasets, commondata_name: "fitpack:zrap/1032"}, source: fitpack_legacy/database/zrap/expdata/1032.xlsx, source_rows: 17, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["LHCb:2015okr"], inspire_ids: [1373300], covariance_scope: "LHCb 7 TeV measurement covariance; never merge coarser duplicate binnings", drop_reason: "fiducial muon cuts require differential decay/acceptance operator; workbook cms sequence is untrusted", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_Z0_7TEV_MUON/metadata.yaml"], paper: "LHCb:2015okr", gate_evidence: ["17-row finest 7 TeV binning retained as candidate; nominal sqrt(s) must override corrupted row sequence"]}}
-  - {id: z.lhcb8_1033, selector: {section: datasets, commondata_name: "fitpack:zrap/1033"}, source: fitpack_legacy/database/zrap/expdata/1033.xlsx, source_rows: 18, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["LHCb:2015mad"], inspire_ids: [1406555], covariance_scope: "LHCb 8 TeV measurement covariance", drop_reason: "fiducial muon cuts require differential decay/acceptance operator; workbook cms sequence is untrusted", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_Z0_8TEV_MUON/metadata.yaml"], paper: "LHCb:2015mad", gate_evidence: ["18-row 8 TeV table established; nominal sqrt(s) must override corrupted row sequence"]}}
-  - {id: z.atlas_duplicate_1011, selector: {section: datasets, commondata_name: "fitpack:zrap/1011"}, source: fitpack_legacy/database/zrap/expdata/1011.xlsx, source_rows: 12, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "duplicate of retained ATLAS source", drop_reason: "byte-equivalent kinematics/values to wzhep/ATLAS7C_Z after pb-to-fb conversion", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
-  - {id: z.lhcb7_coarse_1030, selector: {section: datasets, commondata_name: "fitpack:zrap/1030"}, source: fitpack_legacy/database/zrap/expdata/1030.xlsx, source_rows: 5, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["LHCb:2012lki"], inspire_ids: [1107729], covariance_scope: "same 7 TeV event sample; correlated with finer successors", drop_reason: "coarser earlier LHCb 7 TeV measurement excluded from joint candidate roster", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md"], paper: "LHCb:2012lki", gate_evidence: ["same-measurement overlap recorded"]}}
-  - {id: z.lhcb7_coarse_1031, selector: {section: datasets, commondata_name: "fitpack:zrap/1031"}, source: fitpack_legacy/database/zrap/expdata/1031.xlsx, source_rows: 9, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["LHCb:2012gii"], inspire_ids: [1208102], covariance_scope: "same 7 TeV measurement family; correlated with finer successor", drop_reason: "coarser/electron-channel 7 TeV source excluded pending exact overlap and channel audit", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md"], paper: "LHCb:2012gii", gate_evidence: ["overlap and channel difference recorded; cannot be counted independently without covariance"]}}
-  - {id: z.atlas_old_1010, selector: {section: datasets, commondata_name: "fitpack:zrap/1010"}, source: fitpack_legacy/database/zrap/expdata/1010.xlsx, source_rows: 8, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2011qdp"], inspire_ids: [928289], covariance_scope: "overlap with later ATLAS sample must be established", drop_reason: "provisional drop: supersession/event-sample/covariance relation unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md"], paper: "ATLAS:2011qdp", gate_evidence: ["older paper identified; duplicate status deliberately not asserted"]}}
+  - {id: z.star_1020, selector: {section: dy, commondata_name: "fitpack:zrap/1020"}, source: fitpack_legacy/database/zrap/expdata/1020.xlsx, source_rows: 5, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["STAR:2020vuq"], inspire_ids: [1829350], covariance_scope: "pending source covariance audit", drop_reason: "published rapidity bin edges and fiducial/unfolding contract unresolved", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md"], paper: "STAR:2020vuq", gate_evidence: ["paper identity and 5 centers established; edges absent from workbook"]}}
+  - {id: z.atlas7c_low, selector: {section: dy, commondata_name: "fitpack:wzhep/ATLAS7C_Z_low"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7C_Z_low.xlsx, source_rows: 6, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "duplicate of z.atlas7_46fb_cc_low", drop_reason: "duplicate source of z.atlas7_46fb_cc_low (value for value, checked 2026-09-10); not in JAM24's input.py", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: &atlas_z_evidence {local: ["../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_WPWM_7TEV_46FB/metadata.yaml", "../fitpack_legacy/database/zrap/README.md"], paper: "ATLAS:2016nqi", gate_evidence: ["paper and source family established; fiducial qualifiers remain blocking"]}}
+  - {id: z.atlas7c_peak, selector: {section: dy, commondata_name: "fitpack:wzhep/ATLAS7C_Z"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7C_Z.xlsx, source_rows: 12, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "duplicate of z.atlas7_46fb_cc_peak", drop_reason: "duplicate source of z.atlas7_46fb_cc_peak (value for value, checked 2026-09-10). JAM24 fits this table; jam_data selects z.atlas7_46fb_cc_peak in its place, whose commondata carries the edges. Never select both", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
+  - {id: z.atlas7c_high, selector: {section: dy, commondata_name: "fitpack:wzhep/ATLAS7C_Z_high"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7C_Z_high.xlsx, source_rows: 6, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "duplicate of z.atlas7_46fb_cc_high", drop_reason: "duplicate source of z.atlas7_46fb_cc_high (value for value, checked 2026-09-10); not in JAM24's input.py", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
+  - {id: z.atlas7f_peak, selector: {section: dy, commondata_name: "fitpack:wzhep/ATLAS7F_Z_peak"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7F_Z_peak.xlsx, source_rows: 9, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "duplicate of z.atlas7_46fb_cf", drop_reason: "duplicate source of rows 0-8 of z.atlas7_46fb_cf (value for value, checked 2026-09-10); not in JAM24's input.py", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
+  - {id: z.atlas7f_high, selector: {section: dy, commondata_name: "fitpack:wzhep/ATLAS7F_Z_high"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7F_Z_high.xlsx, source_rows: 6, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "duplicate of z.atlas7_46fb_cf", drop_reason: "duplicate source of rows 9-14 of z.atlas7_46fb_cf (value for value, checked 2026-09-10); not in JAM24's input.py", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
+  - {id: z.lhcb7_1032, selector: {section: dy, commondata_name: "fitpack:zrap/1032"}, source: fitpack_legacy/database/zrap/expdata/1032.xlsx, source_rows: 17, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["LHCb:2015okr"], inspire_ids: [1373300], covariance_scope: "LHCb 7 TeV measurement covariance; never merge coarser duplicate binnings", drop_reason: "fiducial muon cuts require differential decay/acceptance operator; workbook cms sequence is untrusted", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_Z0_7TEV_MUON/metadata.yaml"], paper: "LHCb:2015okr", gate_evidence: ["17-row finest 7 TeV binning retained as candidate; nominal sqrt(s) must override corrupted row sequence"]}}
+  - {id: z.lhcb8_1033, selector: {section: dy, commondata_name: "fitpack:zrap/1033"}, source: fitpack_legacy/database/zrap/expdata/1033.xlsx, source_rows: 18, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["LHCb:2015mad"], inspire_ids: [1406555], covariance_scope: "LHCb 8 TeV measurement covariance", drop_reason: "fiducial muon cuts require differential decay/acceptance operator; workbook cms sequence is untrusted", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_Z0_8TEV_MUON/metadata.yaml"], paper: "LHCb:2015mad", gate_evidence: ["18-row 8 TeV table established; nominal sqrt(s) must override corrupted row sequence"]}}
+  - {id: z.atlas_duplicate_1011, selector: {section: dy, commondata_name: "fitpack:zrap/1011"}, source: fitpack_legacy/database/zrap/expdata/1011.xlsx, source_rows: 12, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "duplicate of retained ATLAS source", drop_reason: "byte-equivalent kinematics/values to wzhep/ATLAS7C_Z after pb-to-fb conversion", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: *atlas_z_evidence}
+  - {id: z.lhcb7_coarse_1030, selector: {section: dy, commondata_name: "fitpack:zrap/1030"}, source: fitpack_legacy/database/zrap/expdata/1030.xlsx, source_rows: 5, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["LHCb:2012lki"], inspire_ids: [1107729], covariance_scope: "same 7 TeV event sample; correlated with finer successors", drop_reason: "coarser earlier LHCb 7 TeV measurement excluded from joint candidate roster", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md"], paper: "LHCb:2012lki", gate_evidence: ["same-measurement overlap recorded"]}}
+  - {id: z.lhcb7_coarse_1031, selector: {section: dy, commondata_name: "fitpack:zrap/1031"}, source: fitpack_legacy/database/zrap/expdata/1031.xlsx, source_rows: 9, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["LHCb:2012gii"], inspire_ids: [1208102], covariance_scope: "same 7 TeV measurement family; correlated with finer successor", drop_reason: "coarser/electron-channel 7 TeV source excluded pending exact overlap and channel audit", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md"], paper: "LHCb:2012gii", gate_evidence: ["overlap and channel difference recorded; cannot be counted independently without covariance"]}}
+  - {id: z.atlas_old_1010, selector: {section: dy, commondata_name: "fitpack:zrap/1010"}, source: fitpack_legacy/database/zrap/expdata/1010.xlsx, source_rows: 8, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2011qdp"], inspire_ids: [928289], covariance_scope: "overlap with later ATLAS sample must be established", drop_reason: "the Z rows of z.atlas7_36pb times a constant 9.816e-4 (pb to fb and a 0.9816 normalisation not reconciled here; checked 2026-09-10). Not in JAM24's input.py, so never selected", observable: *z_boson_candidate, operator: *z_full_bin_operator, evidence: {local: ["../fitpack_legacy/database/zrap/README.md"], paper: "ATLAS:2011qdp", gate_evidence: ["older paper identified; duplicate status deliberately not asserted"]}}
   - id: z.d0_normalized_1001
-    selector: {section: datasets, commondata_name: "fitpack:zrap/1001"}
+    selector: {section: dy, commondata_name: "fitpack:zrap/1001"}
     source: fitpack_legacy/database/zrap/expdata/1001.xlsx
     source_rows: 28
     selected_rows: 0
@@ -419,7 +460,7 @@ datasets:
     evidence: {local: ["../fitpack_legacy/database/zrap/README.md", "../nnpdf/nnpdf_data/nnpdf_data/commondata/D0_Z0_1P96TEV/metadata.yaml"], paper: "D0:2007djv", gate_evidence: ["NNPDF metadata operation=RATIO and two FK tables; covariance support remains blocking"]}
 
   - id: w.cdf_1000
-    selector: {section: datasets, commondata_name: "fitpack:wasym/1000"}
+    selector: {section: dy, commondata_name: "fitpack:wasym/1000"}
     source: fitpack_legacy/database/wasym/expdata/1000.xlsx
     source_rows: 13
     selected_rows: 0
@@ -433,10 +474,10 @@ datasets:
     observable: &w_asym_observable {quantity: "[d sigma(W+)/dy - d sigma(W-)/dy] / [d sigma(W+)/dy + d sigma(W-)/dy]", units: dimensionless, reaction: "ppbar charged-current Drell-Yan", beam: proton, target: antiproton, binning: "published true boson-rapidity bins", mass_integration: "on-shell W prescription from source", rapidity_integration: "full published boson-rapidity bin", decay_channel: "unfolded from W decay by experiment", fiducial: "true boson-rapidity observable; source unfolding/cuts retained", qed_fsr: "source convention"}
     operator: &w_ratio_operator {kind: drell_yan_ratio, perturbative_order: NLO, scale: "muF^2=muR^2=Q2 per bin node", flavour_scheme: "Nf=5 VFNS with full active CKM pairs", nuclear: none, returns: "exact ratio of bilinear W+/- cross sections"}
     evidence: {local: ["../fitpack_legacy/database/wasym/README.md"], paper: "CDF:2009cjw", gate_evidence: ["true W rapidity and 13 rows established; README denominator typo rejected in favor of paper definition"]}
-  - {id: w.d0_1001, selector: {section: datasets, commondata_name: "fitpack:wasym/1001"}, source: fitpack_legacy/database/wasym/expdata/1001.xlsx, source_rows: 14, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["D0:2013lql"], inspire_ids: [1268647], covariance_scope: "table covariance/systematics must be preserved in the direct target", drop_reason: "conditional: exact W bilinear ratio, ppbar/CKM/Nf=5 evolution, denominator support, covariance-rank, and direct-sampler gates", observable: *w_asym_observable, operator: *w_ratio_operator, evidence: {local: ["../fitpack_legacy/database/wasym/README.md"], paper: "D0:2013lql", gate_evidence: ["true W rapidity and 14 rows established; not the lepton-asymmetry dataset INSPIRE 1253555"]}}
+  - {id: w.d0_1001, selector: {section: dy, commondata_name: "fitpack:wasym/1001"}, source: fitpack_legacy/database/wasym/expdata/1001.xlsx, source_rows: 14, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["D0:2013lql"], inspire_ids: [1268647], covariance_scope: "table covariance/systematics must be preserved in the direct target", drop_reason: "conditional: exact W bilinear ratio, ppbar/CKM/Nf=5 evolution, denominator support, covariance-rank, and direct-sampler gates", observable: *w_asym_observable, operator: *w_ratio_operator, evidence: {local: ["../fitpack_legacy/database/wasym/README.md"], paper: "D0:2013lql", gate_evidence: ["true W rapidity and 14 rows established; not the lepton-asymmetry dataset INSPIRE 1253555"]}}
 
   - id: dy.e906_ratio
-    selector: {section: datasets, commondata_name: DYE906_Z0_120GEV_DW_PDXSECRATIO}
+    selector: {section: dy, commondata_name: DYE906_Z0_120GEV_DW_PDXSECRATIO}
     source: nnpdf_data/commondata/DYE906_Z0_120GEV_DW
     source_rows: 6
     selected_rows: 0
@@ -451,7 +492,7 @@ datasets:
     operator: {kind: drell_yan_ratio, perturbative_order: NLO, scale: "row/sub-bin Q2 with row-specific evolution", flavour_scheme: "Nf=4 VFNS at fixed-target scales", nuclear: "explicit isoscalar deuteron map", returns: "exact ratio of two sums of ten bilinear cross sections"}
     evidence: {local: ["../nnpdf/nnpdf_data/nnpdf_data/commondata/DYE906_Z0_120GEV_DW/metadata.yaml", "../nnpdf/nnpdf_data/nnpdf_data/commondata/DYE906_Z0_120GEV_DW/kinematics.yaml"], paper: "SeaQuest:2021zxb", gate_evidence: ["NNPDF operation COM and 10+10 FK table aggregation verified"]}
   - id: dy.e605_copper
-    selector: {section: datasets, commondata_name: DYE605_Z0_38P8GEV_DW_PXSEC}
+    selector: {section: dy, commondata_name: DYE605_Z0_38P8GEV_DW_PXSEC}
     source: nnpdf_data/commondata/DYE605_Z0_38P8GEV_DW
     source_rows: 119
     selected_rows: 119
@@ -462,9 +503,10 @@ datasets:
     inspire_ids: [302822]
     covariance_scope: "commondata table covariance; subset eigenspectrum must be audited"
     drop_reason: null
-    observable: {quantity: "proton-copper fixed-target dimuon Drell-Yan cross section", units: "published cross-section units", reaction: "800 GeV proton on copper", beam: proton, target: copper, binning: "published mass/xF bins", mass_integration: "full published bins", rapidity_integration: "full published bins", decay_channel: dimuon, fiducial: "source acceptance/corrections", qed_fsr: "source convention"}
+    observable: {quantity: "proton-copper fixed-target dimuon Drell-Yan cross section s d^2sigma/d sqrt(tau) dy", units: "nb*GeV^2 per nucleon", reaction: "800 GeV proton on copper", beam: proton, target: copper, binning: "published sqrt(tau) abscissae at seven fixed rapidities y = -0.2 to +0.4, HEPData ins302822 Tables 1-7 (the paper's Table VIII); corrected 2026-09-11 from 'published mass/xF bins', which described the paper's Table IX instead", mass_integration: "none: the rows are pointwise in sqrt(tau), which is why the operator returns a pointwise cross section", rapidity_integration: "none: each table is one fixed YRAP value, not a bin", decay_channel: dimuon, fiducial: "source acceptance/corrections", qed_fsr: "source convention"}
     operator: {kind: "drell_yan.fixed_target.nuclear", perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: VFNS, nuclear: "copper isospin weighting at Z/A = 29/63.546 = 0.45636, applied through config.nuclear_parton_basis (static) and kernels.evolution.flavor_transition.nuclear_projection (evolved); this is isospin only and carries no shadowing/antishadowing/EMC correction. The nuclear uncertainty is carried by the NNPDF _dw_ (deweighted) covariance variant rather than by a structure-function correction, which is the same convention dis.chorus_* uses for lead. A proton proxy remains forbidden and is not what this is.", returns: "pointwise cross section"}
-    evidence: {local: ["../nnpdf/nnpdf_data/nnpdf_data/commondata/DYE605_Z0_38P8GEV_DW/metadata.yaml"], paper: "Moreno:1990sf", gate_evidence: ["119 source rows and copper target established", "all 119 rows pass the closure DY cuts (Q2 >= 1.6384, x1/x2 < 1): measured 2026-09-09, Q2 spans 50.5-286.0, x1 <= 0.650, x2 <= 0.482", "same pointwise observable as E866, so it reuses build_drell_yan unchanged; only the copper parton map is new", "structurally validated only; not compared row-by-row against NNPDF FK predictions"]}
+    published_form: {units: "nb*GeV^2", natural_power: -4, jacobian: e605_jacobian, jacobian_power: 4, status: closes, source: "HEPData ins302822's own column header, verbatim: 'S*D2(SIG)/D(SQRT(TAU))/DYRAP [NB*GEV**2/NUCLEON]'. The form also matches the paper's Table VIII (Moreno:1990sf, PRD 43 (1991) 2815, DOI 10.1103/PhysRevD.43.2815; no arXiv).", note: "The units close, but two things about this row are NOT settled by that. (1) The target is copper and PIXEL's Drell-Yan is a free-nucleon calculation, so a real-data prediction is missing a nuclear correction; the operator's isospin-only copper map is not one. Owner decision 2026-09-11: freeze the transcription (other_lib_compare/dy/e605/e605_dy_tables.json, 119 rows), defer pixel's real-data builder. (2) The point-to-point systematic disagrees between sources -- HEPData's tables say 5%, the paper's p. 2826 says about 10% -- and the owner chose the paper's 10% on 2026-09-11. Both readings are recorded in the frozen file."}
+    evidence: {local: ["../nnpdf/nnpdf_data/nnpdf_data/commondata/DYE605_Z0_38P8GEV_DW/metadata.yaml", "../pixel/other_lib_compare/dy/e605/e605_dy_tables.json"], paper: "Moreno:1990sf", gate_evidence: ["119 source rows and copper target established", "all 119 rows pass the closure DY cuts (Q2 >= 1.6384, x1/x2 < 1): measured 2026-09-09, Q2 spans 50.5-286.0, x1 <= 0.650, x2 <= 0.482", "same pointwise observable as E866, so it reuses build_drell_yan unchanged; only the copper parton map is new", "structurally validated only; not compared row-by-row against NNPDF FK predictions"]}
   - id: dis.chorus_nb
     selector: {section: datasets, commondata_name: CHORUS_CC_NOTFIXED_PB_NB-SIGMARED}
     source: nnpdf_data/commondata/CHORUS_CC_NOTFIXED_PB
@@ -571,144 +613,148 @@ datasets:
       - HeavyNCSigmaRFONLL assembles at variant=fonll_a, nf=4, flavour_mode=vfns from the
         closure's own sigma/g/t15 fields; fonll_b and fonll_c raise NotImplementedError,
         but fonll_a is pdf_order=NLO which is the order this closure runs
-  # ATLASZHIGHMASS49FB: NNPDF4.0 roster entry, bilinear in the PDFs and so inside
-  # the owner's linear-or-bilinear scope, held out only for want of an operator here.
+  # ATLASZHIGHMASS49FB: promoted 2026-09-10 with the mass-spectrum arm.
   - id: z.atlas7_himass
-    selector: {section: datasets, commondata_name: ATLAS_Z0_7TEV_49FB_HIMASS}
-    source: nnpdf_data/commondata/ATLAS_Z0_7TEV_49FB_HIMASS
+    selector: {section: dy, commondata_name: ATLAS_Z0_7TEV_49FB_HIMASS}
+    source: "nnpdf_data/commondata/ATLAS_Z0_7TEV_49FB_HIMASS"
     source_rows: 13
-    selected_rows: 0
-    likelihood_group: null
-    classification: reader_only
-    selectable: false
+    selected_rows: 13
+    likelihood_group: z.atlas7_himass
+    classification: physics
+    selectable: true
     citation_keys:
-    - ATLAS:2013xny
+    - "ATLAS:2013xny"
     inspire_ids:
     - 1234228
-    covariance_scope: NNPDF commondata sources read but not yet audited for closure use
-    drop_reason: >-
-      commondata carries m_ll only -- no sqrts, no rapidity, no bin edges (measured
-      2026-09-09). The closure builder exists (build_drell_yan_mass_spectrum); the beam
-      energy and the mass/rapidity integration ranges must come from the paper
+    covariance_scope: "NNPDF ordinary sources distinct; multiplicative sources kept relative"
+    drop_reason: null
     observable:
-      quantity: high-mass Drell-Yan cross section
-      units: published cross section
-      reaction: hadron-hadron electroweak Drell-Yan
-      beam: pp 7 TeV
-      target: proton
-      binning: published NNPDF commondata bin centres
-      mass_integration: full published mass window
-      rapidity_integration: full published rapidity bin
-      decay_channel: dielectron/dimuon
-      fiducial: published fiducial lepton cuts, transcribed in nnpdf40_fiducial_cuts.yaml
-      qed_fsr: published QED FSR level; see the fiducial-cut record
+      quantity: "high-mass Drell-Yan cross section differential in dilepton mass"
+      units: "published cross section per unit mass"
+      reaction: "hadron-hadron neutral-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "13 mass bins 116-1500 GeV; edges from HEPData ins1234228 (rawdata csv), the commondata kinematics carry centres"
+      mass_integration: "each published mass bin"
+      rapidity_integration: "the whole fiducial acceptance, both electrons within |eta| < 2.5"
+      decay_channel: "dielectron"
+      fiducial: "p_T,e > 25 GeV and |eta_e| < 2.5 on both electrons, 116 < m_ee < 1500 GeV"
+      qed_fsr: "Born, carried by the fiducial-cut record"
     operator:
-      kind: bin_integrated gamma*/Z Drell-Yan
-      perturbative_order: NLO
-      scale: muF^2=muR^2=Q2
-      flavour_scheme: Nf=4 to 5 VFNS with generated b,bbar
-      nuclear: none
-      returns: bin-integrated cross section
+      kind: "drell_yan.mass_spectrum.fiducial"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "rapidity-integrated fiducial cross section per mass bin"
+    published_form: {units: "pb/GeV", natural_power: -2, jacobian: "1/Delta_m", jacobian_power: -1, status: closes, source: "HEPData ins1234228 Table 1, verbatim: name: 'D(SIG)/DM(EE)'  units: 'PB/GEV' (BORN and DRESSED columns; the Born one). Paper ATLAS:2013xny (arXiv:1305.4192) Table 2 caption: 'Measured differential cross-sections dsigma/dm (in pb/GeV) at the Born and dressed levels'.", note: "Rapidity-integrated, 13 mass bins 116-1500 GeV. No rapidity fold factor. No published total exists on a matching fiducial definition, so this row rests on the header and caption rather than on a closed sum. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
     evidence:
       local:
-      - ../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_Z0_7TEV_49FB_HIMASS/metadata.yaml
-      paper: ATLAS:2013xny
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_Z0_7TEV_49FB/metadata.yaml"
+      paper: "ATLAS:2013xny"
       gate_evidence:
-      - 13 source rows read from the NNPDF commondata on 2026-09-09
-      - listed in nnpdf40_dis_dy_roster.yaml as prediction=bilinear
-  # ATLASLOMASSDY11EXT: NNPDF4.0 roster entry, bilinear in the PDFs and so inside
-  # the owner's linear-or-bilinear scope, held out only for want of an operator here.
+      - "13 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "mass-bin edges from rawdata/ATLAS-49fb-Zhighmass.csv; sqrts = 7000 GeV from the HEPData table qualifiers"
+      - "fiducial cuts resolved with zero open questions in nnpdf40_fiducial_cuts.yaml"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  # ATLASLOMASSDY11EXT: held back 2026-09-10 on physics, not wiring -- see drop_reason.
   - id: z.atlas7_lomass
-    selector: {section: datasets, commondata_name: ATLAS_Z0_7TEV_LOMASS_M}
-    source: nnpdf_data/commondata/ATLAS_Z0_7TEV_LOMASS_M
+    selector: {section: dy, commondata_name: ATLAS_Z0_7TEV_LOMASS_M}
+    source: "nnpdf_data/commondata/ATLAS_Z0_7TEV_LOMASS_M"
     source_rows: 6
     selected_rows: 0
     likelihood_group: null
     classification: reader_only
     selectable: false
     citation_keys:
-    - ATLAS:2014ape
+    - "ATLAS:2014ape"
     inspire_ids:
     - 1288706
-    covariance_scope: NNPDF commondata sources read but not yet audited for closure use
+    covariance_scope: "NNPDF commondata sources read; audited for closure use only if the physics gate clears"
     drop_reason: >-
-      buildable once wired: commondata carries m_ll/m_ll_min/m_ll_max/sqrts (measured
-      2026-09-09) and the closure builder exists (build_drell_yan_mass_spectrum). What is
-      missing is only the layout arm that reads the fiducial rapidity range from
-      nnpdf40_fiducial_cuts.yaml and emits the record
+      physics (measured 2026-09-10): the fiducial region's 9 GeV leading-lepton threshold
+      makes PIXEL's Born acceptance identically zero below m_ll = 18 GeV, because at Born
+      both leptons carry p_T = (m/2) sin(theta*). The first published mass bin (12-17 GeV)
+      therefore predicts exactly zero and the next is cut into. Curing that needs the
+      recoil (q_T) correction to the acceptance, which PIXEL does not implement;
+      nnpdf40_native.py records 'recoil bound required' (bound 9.4e-2, measured
+      2026-08-24). Edges, sqrts, cuts and the mass-spectrum builder are all present, so
+      this is the only gate.
     observable:
-      quantity: low-mass Drell-Yan cross section
-      units: published cross section
-      reaction: hadron-hadron electroweak Drell-Yan
-      beam: pp 7 TeV
-      target: proton
-      binning: published NNPDF commondata bin centres
-      mass_integration: full published mass window
-      rapidity_integration: full published rapidity bin
-      decay_channel: dilepton
-      fiducial: published fiducial lepton cuts, transcribed in nnpdf40_fiducial_cuts.yaml
-      qed_fsr: published QED FSR level; see the fiducial-cut record
+      quantity: "low-mass Drell-Yan cross section differential in dilepton mass"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron neutral-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "6 mass bins 12-66 GeV, edges in the NNPDF commondata kinematics"
+      mass_integration: "each published mass bin"
+      rapidity_integration: "full published rapidity bin"
+      decay_channel: "dilepton"
+      fiducial: "p_T > 9 GeV leading and 6 GeV sub-leading, |eta| < 2.4, 12 < m_ll < 66 GeV"
+      qed_fsr: "Born, carried by the fiducial-cut record"
     operator:
-      kind: bin_integrated gamma*/Z Drell-Yan
-      perturbative_order: NLO
-      scale: muF^2=muR^2=Q2
-      flavour_scheme: Nf=4 to 5 VFNS with generated b,bbar
-      nuclear: none
-      returns: bin-integrated cross section
+      kind: "drell_yan.mass_spectrum.fiducial"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "rapidity-integrated fiducial cross section per mass bin"
     evidence:
       local:
-      - ../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_Z0_7TEV_LOMASS_M/metadata.yaml
-      paper: ATLAS:2014ape
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_Z0_7TEV_LOMASS/metadata.yaml"
+      paper: "ATLAS:2014ape"
       gate_evidence:
-      - 6 source rows read from the NNPDF commondata on 2026-09-09
-      - listed in nnpdf40_dis_dy_roster.yaml as prediction=bilinear
-  # ATLASDY2D8TEV: NNPDF4.0 roster entry, bilinear in the PDFs and so inside
-  # the owner's linear-or-bilinear scope, held out only for want of an operator here.
+      - "6 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "Born acceptance zero below 18 GeV: p_T,min = 9 GeV and p_T <= m/2 at Born"
+  # ATLASDY2D8TEV: promoted 2026-09-10.  Its two caveats (photon-induced signal,
+  # Born-degenerate p_T pair) bear on NNPDF parity, not on this closure; see below.
   - id: z.atlas8_himass_2d
-    selector: {section: datasets, commondata_name: ATLAS_Z0_8TEV_HIMASS_M-Y}
-    source: nnpdf_data/commondata/ATLAS_Z0_8TEV_HIMASS_M-Y
+    selector: {section: dy, commondata_name: ATLAS_Z0_8TEV_HIMASS_M-Y}
+    source: "nnpdf_data/commondata/ATLAS_Z0_8TEV_HIMASS_M-Y"
     source_rows: 48
-    selected_rows: 0
-    likelihood_group: null
-    classification: reader_only
-    selectable: false
+    selected_rows: 48
+    likelihood_group: z.atlas8_himass_2d
+    classification: physics
+    selectable: true
     citation_keys:
-    - ATLAS:2016gic
+    - "ATLAS:2016gic"
     inspire_ids:
     - 1467454
-    covariance_scope: NNPDF commondata sources read but not yet audited for closure use
-    drop_reason: >-
-      no closure builder for bin-integrated W/Z: PIXEL carries DrellYanElectroweak and the Born acceptance operator, and nnpdf40_fiducial_cuts.yaml transcribes this dataset's published cuts, but closure_*/datasets.py::_EXP_BUILDERS is {f2, sigma_r, sigma_r_cc, drell_yan} and none of them consumes a bin-integrated electroweak boson rapidity/mass spectrum
+    covariance_scope: "NNPDF ordinary sources distinct; multiplicative sources kept relative"
+    drop_reason: null
     observable:
-      quantity: double-differential Drell-Yan cross section in mass and rapidity
-      units: published cross section
-      reaction: hadron-hadron electroweak Drell-Yan
-      beam: pp 8 TeV
-      target: proton
-      binning: published NNPDF commondata bin centres
-      mass_integration: full published mass window
-      rapidity_integration: full published rapidity bin
-      decay_channel: dilepton
-      fiducial: published fiducial lepton cuts, transcribed in nnpdf40_fiducial_cuts.yaml
-      qed_fsr: published QED FSR level; see the fiducial-cut record
+      quantity: "double-differential Drell-Yan cross section in dilepton mass and |y_ll|"
+      units: "pb/GeV, d2sigma/dm_ll d|y_ll| per signed y; corrected 2026-09-12 -- the NNPDF commondata value is a DIFFERENT quantity (x 2 Delta_m), not a rescaling"
+      reaction: "hadron-hadron neutral-current Drell-Yan"
+      beam: "pp 8 TeV"
+      target: "proton"
+      binning: "mass and |y_ll| bin edges, both carried by the NNPDF commondata kinematics"
+      mass_integration: "each published mass bin, 116-1500 GeV"
+      rapidity_integration: "full published rapidity bin"
+      decay_channel: "dilepton"
+      fiducial: "p_T > 40 GeV leading and 30 GeV sub-leading, |eta| < 2.5; the Born acceptance applies the leading threshold to both leptons"
+      qed_fsr: "Born, carried by the fiducial-cut record"
     operator:
-      kind: bin_integrated gamma*/Z Drell-Yan
-      perturbative_order: NLO
-      scale: muF^2=muR^2=Q2
-      flavour_scheme: Nf=4 to 5 VFNS with generated b,bbar
-      nuclear: none
-      returns: bin-integrated cross section
+      kind: "drell_yan.bin_integrated.fiducial"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated fiducial cross section"
+    published_form: {units: "pb/GeV", natural_power: -2, jacobian: "1/(Delta_m * 2 Delta_abs_y)", jacobian_power: -1, status: closes, source: "HEPData ins1467454 Table 2, verbatim: name: 'D(SIG)/DM(LL)/DY(LL)'  units: 'PB/GEV'. Paper ATLAS:2016gic (arXiv:1606.01736) eq. (3) carries 1/(Delta_m_ll * 2 Delta_abs_y_ll) and says 'The factor of two in the denominator accounts for the modulus in the rapidity bin width'; its Table 3 header reads d2sigma/dm_ll d|y_ll| [pb/GeV].", note: "The published value is per SIGNED y: the |y| bin of width d|y| covers 2 d|y| of signed rapidity, so sigma_bin = 2 * value * d|y|. Verified on the committed HEPData: the paper's own eq. (3). 5 mass bins 116-1500 GeV x |y|<2.4. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
     evidence:
       local:
-      - ../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_Z0_8TEV_HIMASS_M-Y/metadata.yaml
-      paper: ATLAS:2016gic
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_Z0_8TEV_HIMASS/metadata.yaml"
+      paper: "ATLAS:2016gic"
       gate_evidence:
-      - 48 source rows read from the NNPDF commondata on 2026-09-09
-      - listed in nnpdf40_dis_dy_roster.yaml as prediction=bilinear
+      - "48 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "the measurement counts gamma gamma -> ll as signal and PIXEL has no photon PDF; the closure generates and fits with one operator, so this bears on NNPDF parity (nnpdf40_native records it) and not on closure consistency"
+      - "the 40/30 GeV p_T pair collapses to 40 GeV at Born; recoil bound 1.226e-3 (measured 2026-08-24)"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
   # ATLAS_DY_2D_8TEV_LOWMASS: NNPDF4.0 roster entry, bilinear in the PDFs and so inside
   # the owner's linear-or-bilinear scope, held out only for want of an operator here.
   - id: z.atlas8_lomass_2d
-    selector: {section: datasets, commondata_name: ATLAS_Z0_8TEV_LOWMASS_M-Y}
+    selector: {section: dy, commondata_name: ATLAS_Z0_8TEV_LOWMASS_M-Y}
     source: nnpdf_data/commondata/ATLAS_Z0_8TEV_LOWMASS_M-Y
     source_rows: 84
     selected_rows: 84
@@ -740,6 +786,7 @@ datasets:
       flavour_scheme: Nf=4 to 5 VFNS with generated b,bbar
       nuclear: none
       returns: bin-integrated cross section
+    published_form: {units: "pb/GeV", natural_power: -2, jacobian: "1/(Delta_m * 2 Delta_abs_y)", jacobian_power: -1, status: closes, source: "Paper ATLAS:2017rue (arXiv:1710.05167) Table 6, rendered p. 51: column header d2sigma/dm_ll d|y_ll| over [pb/GeV]. This OVERRIDES HEPData ins1630886 Table 5, whose unit string reads 'pb/GeV^2' in both v1 and v3.", note: "A source disagreement, decided by the owner on 2026-09-12 in favour of the paper. Adjudicated from outside both renderings: pb/GeV^2 cannot close dimensionally (|y| and cos theta* are dimensionless); HEPData's first value 0.18496 IS the paper's Table 6 entry 1.85e-1 for the same bin; and projecting 2*Sum_y(v*d|y|)/Delta_m against the paper's Table 5 dsigma/dm closes on all seven mass bins to between 4.2e-5 and 2.0e-3 -- only with pb/GeV and only with the factor 2. Reading: the HEPData unit string is an error in that record. 7 mass bins 46-200 GeV x |y|<2.4. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
     evidence:
       local:
       - ../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_Z0_8TEV_LOWMASS_M-Y/metadata.yaml
@@ -747,147 +794,203 @@ datasets:
       gate_evidence:
       - 84 source rows read from the NNPDF commondata on 2026-09-09
       - listed in nnpdf40_dis_dy_roster.yaml as prediction=bilinear
-  # ATLAS_WZ_TOT_13TEV: NNPDF4.0 roster entry, bilinear in the PDFs and so inside
-  # the owner's linear-or-bilinear scope, held out only for want of an operator here.
+  # ATLAS_WZ_TOT_13TEV: an inclusive total, not a spectrum; its gate is a datatype.
   - id: z.atlas13_wz_tot
-    selector: {section: datasets, commondata_name: ATLAS_DY_13TEV_TOT}
-    source: nnpdf_data/commondata/ATLAS_DY_13TEV_TOT
+    selector: {section: dy, commondata_name: ATLAS_DY_13TEV_TOT}
+    source: "nnpdf_data/commondata/ATLAS_DY_13TEV_TOT"
     source_rows: 3
     selected_rows: 0
     likelihood_group: null
     classification: reader_only
     selectable: false
     citation_keys:
-    - ATLAS:2016fij
+    - "ATLAS:2016fij"
     inspire_ids:
     - 1436497
-    covariance_scope: NNPDF commondata sources read but not yet audited for closure use
+    covariance_scope: "NNPDF commondata sources read but not yet audited for closure use"
     drop_reason: >-
-      no closure builder for bin-integrated W/Z: PIXEL carries DrellYanElectroweak and the Born acceptance operator, and nnpdf40_fiducial_cuts.yaml transcribes this dataset's published cuts, but closure_*/datasets.py::_EXP_BUILDERS is {f2, sigma_r, sigma_r_cc, drell_yan} and none of them consumes a bin-integrated electroweak boson rapidity/mass spectrum
+      closure_builder (2026-09-10): three inclusive numbers (commondata process_type INC),
+      which no rapidity- or mass-binned arm consumes. Registered as its own datatype,
+      drell_yan_total, in pixel.data.closure_datatypes, which carries the blocker in full.
     observable:
-      quantity: total W and Z production cross sections
-      units: published cross section
-      reaction: hadron-hadron electroweak Drell-Yan
-      beam: pp 13 TeV
-      target: proton
-      binning: published NNPDF commondata bin centres
-      mass_integration: full published mass window
-      rapidity_integration: full published rapidity bin
-      decay_channel: lepton+neutrino / dilepton
-      fiducial: published fiducial lepton cuts, transcribed in nnpdf40_fiducial_cuts.yaml
-      qed_fsr: published QED FSR level; see the fiducial-cut record
+      quantity: "total W+, W- and Z production cross sections"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron electroweak Drell-Yan"
+      beam: "pp 13 TeV"
+      target: "proton"
+      binning: "three inclusive numbers"
+      mass_integration: "as published"
+      rapidity_integration: "the whole boson rapidity range"
+      decay_channel: "lepton+neutrino / dilepton"
+      fiducial: "total or fiducial not transcribed; no nnpdf40_fiducial_cuts.yaml record"
+      qed_fsr: "Born, carried by the fiducial-cut record"
     operator:
-      kind: bin_integrated gamma*/Z Drell-Yan
-      perturbative_order: NLO
-      scale: muF^2=muR^2=Q2
-      flavour_scheme: Nf=4 to 5 VFNS with generated b,bbar
-      nuclear: none
-      returns: bin-integrated cross section
+      kind: "drell_yan_total"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "total cross section"
     evidence:
       local:
-      - ../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_DY_13TEV_TOT/metadata.yaml
-      paper: ATLAS:2016fij
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_DY_13TEV/metadata.yaml"
+      paper: "ATLAS:2016fij"
       gate_evidence:
-      - 3 source rows read from the NNPDF commondata on 2026-09-09
-      - listed in nnpdf40_dis_dy_roster.yaml as prediction=bilinear
-  # CMSDY2D11: NNPDF4.0 roster entry, bilinear in the PDFs and so inside
-  # the owner's linear-or-bilinear scope, held out only for want of an operator here.
+      - "3 source rows read from the NNPDF commondata on 2026-09-10"
+  # CMSDY2D11: held back on DATA (mass-bin edges), re-measured 2026-09-10.
   - id: z.cms7_dimuon_2d
-    selector: {section: datasets, commondata_name: CMS_Z0_7TEV_DIMUON_2D}
-    source: nnpdf_data/commondata/CMS_Z0_7TEV_DIMUON_2D
+    selector: {section: dy, commondata_name: CMS_Z0_7TEV_DIMUON_2D}
+    source: "nnpdf_data/commondata/CMS_Z0_7TEV_DIMUON_2D"
     source_rows: 132
     selected_rows: 0
     likelihood_group: null
     classification: reader_only
     selectable: false
     citation_keys:
-    - CMS:2013zfg
+    - "CMS:2013zfg"
     inspire_ids:
     - 1262319
-    covariance_scope: NNPDF commondata sources read but not yet audited for closure use
+    covariance_scope: "NNPDF commondata sources read but not yet audited for closure use"
     drop_reason: >-
-      commondata carries bin CENTRES only: rapidity/m_Z2/sqrts with no _min/_max (measured
-      2026-09-09, 6 masses x 36 rapidities). The closure builder exists
-      (build_drell_yan_bin_integrated, which correctly applies no acceptance for this
-      full_phase_space observable); the published bin edges must come from the paper or
-      HEPData first
+      data (re-measured 2026-09-10): the mass-bin EDGES exist nowhere locally. rawdata/
+      holds only CMS-DY2D11-ABS.data (index, y, M, sigma) and covmat.corr, and no HEPData
+      yaml exists for this set in the nnpdf tree. The rapidity edges are inferable (five
+      mass slices of 24 bins of width 0.1 over 0-2.4, plus a 200-1500 GeV slice of 12 bins
+      of width 0.2); the mass edges are not. Fetch HEPData ins1262319 (arXiv 1310.7291).
+      Separately, the paper publishes four versions of the distribution (pre/post-FSR x
+      full/detector acceptance) and NNPDF does not say which it fits; that choice decides
+      whether an acceptance applies at all. The builder exists
+      (build_drell_yan_bin_integrated).
     observable:
-      quantity: double-differential dimuon Drell-Yan cross section
-      units: published cross section
-      reaction: hadron-hadron electroweak Drell-Yan
-      beam: pp 7 TeV
-      target: proton
-      binning: published NNPDF commondata bin centres
-      mass_integration: full published mass window
-      rapidity_integration: full published rapidity bin
-      decay_channel: dimuon
-      fiducial: published fiducial lepton cuts, transcribed in nnpdf40_fiducial_cuts.yaml
-      qed_fsr: published QED FSR level; see the fiducial-cut record
+      quantity: "double-differential Drell-Yan cross section in dimuon mass and rapidity"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron neutral-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "bin centres only in the commondata; edges needed"
+      mass_integration: "each published mass bin, 15-1500 GeV"
+      rapidity_integration: "full published rapidity bin"
+      decay_channel: "dimuon"
+      fiducial: "corrected to full phase space per the abstract; see the cut record's open questions"
+      qed_fsr: "Born, carried by the fiducial-cut record"
     operator:
-      kind: bin_integrated gamma*/Z Drell-Yan
-      perturbative_order: NLO
-      scale: muF^2=muR^2=Q2
-      flavour_scheme: Nf=4 to 5 VFNS with generated b,bbar
-      nuclear: none
-      returns: bin-integrated cross section
+      kind: "drell_yan.bin_integrated.full_phase_space"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated cross section"
     evidence:
       local:
-      - ../nnpdf/nnpdf_data/nnpdf_data/commondata/CMS_Z0_7TEV_DIMUON_2D/metadata.yaml
-      paper: CMS:2013zfg
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/CMS_Z0_7TEV_DIMUON/metadata.yaml"
+      paper: "CMS:2013zfg"
       gate_evidence:
-      - 132 source rows read from the NNPDF commondata on 2026-09-09
-      - listed in nnpdf40_dis_dy_roster.yaml as prediction=bilinear
-  # CMSWMU8TEV: NNPDF4.0 roster entry, bilinear in the PDFs and so inside
-  # the owner's linear-or-bilinear scope, held out only for want of an operator here.
-  - id: w.cms8_muon
-    selector: {section: datasets, commondata_name: CMS_WPWM_8TEV_MUON_Y}
-    source: nnpdf_data/commondata/CMS_WPWM_8TEV_MUON_Y
-    source_rows: 22
+      - "132 source rows read from the NNPDF commondata on 2026-09-10"
+      - "no HEPData yaml for ins1262319 anywhere under ../nnpdf (searched 2026-09-10)"
+  # CMSWMU8TEV: two records, one per charge; held back 2026-09-10 on the lepton-level
+  # kernel's missing evolution (see drop_reason).
+  - id: w.cms8_wplus
+    selector: {section: dy, commondata_name: CMS_WPWM_8TEV_MUON_Y, label: dy_cms8_wp_mu}
+    source: "nnpdf_data/commondata/CMS_WPWM_8TEV_MUON_Y"
+    source_rows: 11
     selected_rows: 0
     likelihood_group: null
     classification: reader_only
     selectable: false
     citation_keys:
-    - CMS:2016qqr
+    - "CMS:2016qqr"
     inspire_ids:
     - 1426517
-    covariance_scope: NNPDF commondata sources read but not yet audited for closure use
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
     drop_reason: >-
-      commondata records no per-row lepton charge: CMS_WPWM_8TEV_MUON's metadata carries
-      only dataset_label/plot_x/y_label, with no extra_labels (measured 2026-09-09). The
-      closure builder exists (build_drell_yan_fiducial_lepton) and W+ vs W- sets the flavour
-      decomposition, so the charge must come from the paper or HEPData rather than be
-      guessed
+      physics (PIXEL, measured 2026-09-10): the single-lepton kernel DYLeptonEtaKernel 
+      defines bilinear_tensor only -- no evolved_tensor -- so 
+      BilinearContribution.assemble raises TypeError whenever evolution is supplied, and 
+      this closure evolves every Drell-Yan row from Q0 = mc to the hard scale. Built 
+      without evolution the record would fold input-scale PDFs at Q = m_W, a different 
+      operator. Everything else is in place -- the row slice (from filter.py), edges, 
+      charge and cuts -- so this unblocks when DYLeptonEtaKernel composes evolution per 
+      quadrature node, as DYBinIntegratedKernel does.
     observable:
-      quantity: W+ and W- muon pseudorapidity cross sections
-      units: published cross section
-      reaction: hadron-hadron electroweak Drell-Yan
-      beam: pp 8 TeV
-      target: proton
-      binning: published NNPDF commondata bin centres
-      mass_integration: full published mass window
-      rapidity_integration: full published rapidity bin
-      decay_channel: muon+neutrino
-      fiducial: published fiducial lepton cuts, transcribed in nnpdf40_fiducial_cuts.yaml
-      qed_fsr: published QED FSR level; see the fiducial-cut record
+      quantity: "W+ -> mu+ nu cross section differential in muon |eta|"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron charged-current Drell-Yan"
+      beam: "pp 8 TeV"
+      target: "proton"
+      binning: "11 |eta_mu| bins 0-2.4, edges in the NNPDF commondata kinematics"
+      mass_integration: "on-shell W; a W decay has no dilepton mass"
+      rapidity_integration: "full published lepton pseudorapidity bin"
+      decay_channel: "muon + neutrino"
+      fiducial: "p_T,mu > 25 GeV, |eta_mu| < 2.4, no neutrino or m_T cut"
+      qed_fsr: "Born, carried by the fiducial-cut record"
     operator:
-      kind: bin_integrated gamma*/Z Drell-Yan
-      perturbative_order: NLO
-      scale: muF^2=muR^2=Q2
-      flavour_scheme: Nf=4 to 5 VFNS with generated b,bbar
-      nuclear: none
-      returns: bin-integrated cross section
+      kind: "drell_yan.fiducial_lepton"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated single-lepton fiducial cross section"
     evidence:
       local:
-      - ../nnpdf/nnpdf_data/nnpdf_data/commondata/CMS_WPWM_8TEV_MUON_Y/metadata.yaml
-      paper: CMS:2016qqr
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/CMS_WPWM_8TEV_MUON/metadata.yaml"
+      paper: "CMS:2016qqr"
       gate_evidence:
-      - 22 source rows read from the NNPDF commondata on 2026-09-09
-      - listed in nnpdf40_dis_dy_roster.yaml as prediction=bilinear
+      - "rows 0-10 are W+ and 11-21 W-: filter.py reads HEPData Table 1 then Table 2 (TABLES = {1: [0], 2: [0]}), whose headers are dsigma^+/deta and dsigma^-/deta (read 2026-09-10); that settles the per-row charge this record's old drop_reason asked for"
+      - "22 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  - id: w.cms8_wminus
+    selector: {section: dy, commondata_name: CMS_WPWM_8TEV_MUON_Y, label: dy_cms8_wm_mu}
+    source: "nnpdf_data/commondata/CMS_WPWM_8TEV_MUON_Y"
+    source_rows: 11
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys:
+    - "CMS:2016qqr"
+    inspire_ids:
+    - 1426517
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: >-
+      physics (PIXEL, measured 2026-09-10): the single-lepton kernel DYLeptonEtaKernel 
+      defines bilinear_tensor only -- no evolved_tensor -- so 
+      BilinearContribution.assemble raises TypeError whenever evolution is supplied, and 
+      this closure evolves every Drell-Yan row from Q0 = mc to the hard scale. Built 
+      without evolution the record would fold input-scale PDFs at Q = m_W, a different 
+      operator. Everything else is in place -- the row slice (from filter.py), edges, 
+      charge and cuts -- so this unblocks when DYLeptonEtaKernel composes evolution per 
+      quadrature node, as DYBinIntegratedKernel does.
+    observable:
+      quantity: "W- -> mu- nubar cross section differential in muon |eta|"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron charged-current Drell-Yan"
+      beam: "pp 8 TeV"
+      target: "proton"
+      binning: "11 |eta_mu| bins 0-2.4, edges in the NNPDF commondata kinematics"
+      mass_integration: "on-shell W; a W decay has no dilepton mass"
+      rapidity_integration: "full published lepton pseudorapidity bin"
+      decay_channel: "muon + neutrino"
+      fiducial: "p_T,mu > 25 GeV, |eta_mu| < 2.4, no neutrino or m_T cut"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.fiducial_lepton"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated single-lepton fiducial cross section"
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/CMS_WPWM_8TEV_MUON/metadata.yaml"
+      paper: "CMS:2016qqr"
+      gate_evidence:
+      - "rows 0-10 are W+ and 11-21 W-: filter.py reads HEPData Table 1 then Table 2 (TABLES = {1: [0], 2: [0]}), whose headers are dsigma^+/deta and dsigma^-/deta (read 2026-09-10); that settles the per-row charge this record's old drop_reason asked for"
+      - "22 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
   # LHCBZEE2FB_40: NNPDF4.0 roster entry, bilinear in the PDFs and so inside
   # the owner's linear-or-bilinear scope, held out only for want of an operator here.
   - id: z.lhcb8_dielectron
-    selector: {section: datasets, commondata_name: LHCB_Z0_8TEV_DIELECTRON_Y}
+    selector: {section: dy, commondata_name: LHCB_Z0_8TEV_DIELECTRON_Y}
     source: nnpdf_data/commondata/LHCB_Z0_8TEV_DIELECTRON_Y
     source_rows: 17
     selected_rows: 17
@@ -902,7 +1005,7 @@ datasets:
     drop_reason: null
     observable:
       quantity: Z boson rapidity cross section
-      units: published cross section
+      units: "pb per unit signed rapidity"
       reaction: hadron-hadron electroweak Drell-Yan
       beam: pp 8 TeV
       target: proton
@@ -919,6 +1022,7 @@ datasets:
       flavour_scheme: Nf=4 to 5 VFNS with generated b,bbar
       nuclear: none
       returns: bin-integrated cross section
+    published_form: {units: "pb", natural_power: -2, jacobian: "1/Delta_y", jacobian_power: 0, status: closes, source: "HEPData ins1347133 Table 2, verbatim: name: '${\\rm d}\\sigma / {\\rm d} y_{Z}$'  units: 'pb', qualifier M(E+ E-) GeV: '60.0-120.0'.", note: "Per unit signed forward rapidity, 60-120 GeV. Data-side sum rule on the committed HEPData: Sum(v*Delta_y) = 93.815 against the published 93.81 pb, 5.3e-5. No fold factor. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
     evidence:
       local:
       - ../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_Z0_8TEV_DIELECTRON_Y/metadata.yaml
@@ -929,7 +1033,7 @@ datasets:
   # LHCB_Z_13TEV_DIMUON: NNPDF4.0 roster entry, bilinear in the PDFs and so inside
   # the owner's linear-or-bilinear scope, held out only for want of an operator here.
   - id: z.lhcb13_dimuon
-    selector: {section: datasets, commondata_name: LHCB_Z0_13TEV_DIMUON-Y}
+    selector: {section: dy, commondata_name: LHCB_Z0_13TEV_DIMUON-Y}
     source: nnpdf_data/commondata/LHCB_Z0_13TEV_DIMUON-Y
     source_rows: 18
     selected_rows: 18
@@ -944,7 +1048,7 @@ datasets:
     drop_reason: null
     observable:
       quantity: Z boson rapidity cross section
-      units: published cross section
+      units: "pb per unit signed rapidity"
       reaction: hadron-hadron electroweak Drell-Yan
       beam: pp 13 TeV
       target: proton
@@ -961,6 +1065,7 @@ datasets:
       flavour_scheme: Nf=4 to 5 VFNS with generated b,bbar
       nuclear: none
       returns: bin-integrated cross section
+    published_form: {units: "pb", natural_power: -2, jacobian: "1/Delta_y", jacobian_power: 0, status: closes, source: "HEPData ins1477581 Table_5a, verbatim: name: '{$\\rm{d}\\sigma_{ Z}^{\\mu\\mu}/\\rm{d}y_ Z$'  units: 'pb'.", note: "Per unit signed forward rapidity, 60-120 GeV. Sum rule: Sum(v*Delta_y) = 197.975 against the published 198.0 pb, 1.3e-4. No fold factor. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
     evidence:
       local:
       - ../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_Z0_13TEV_DIMUON-Y/metadata.yaml
@@ -971,7 +1076,7 @@ datasets:
   # LHCB_Z_13TEV_DIELECTRON: NNPDF4.0 roster entry, bilinear in the PDFs and so inside
   # the owner's linear-or-bilinear scope, held out only for want of an operator here.
   - id: z.lhcb13_dielectron
-    selector: {section: datasets, commondata_name: LHCB_Z0_13TEV_DIELECTRON-Y}
+    selector: {section: dy, commondata_name: LHCB_Z0_13TEV_DIELECTRON-Y}
     source: nnpdf_data/commondata/LHCB_Z0_13TEV_DIELECTRON-Y
     source_rows: 17
     selected_rows: 17
@@ -986,7 +1091,7 @@ datasets:
     drop_reason: null
     observable:
       quantity: Z boson rapidity cross section
-      units: published cross section
+      units: "pb per unit signed rapidity"
       reaction: hadron-hadron electroweak Drell-Yan
       beam: pp 13 TeV
       target: proton
@@ -1003,6 +1108,7 @@ datasets:
       flavour_scheme: Nf=4 to 5 VFNS with generated b,bbar
       nuclear: none
       returns: bin-integrated cross section
+    published_form: {units: "pb", natural_power: -2, jacobian: "1/Delta_y", jacobian_power: 0, status: closes, source: "HEPData ins1477581 Table_5b, verbatim: name: '{$\\rm{d}\\sigma_{ Z}^{\\rm{ee}}/\\rm{d}y_ Z$'  units: 'pb'.", note: "Per unit signed forward rapidity, 60-120 GeV. Sum rule: Sum(v*Delta_y) = 189.488 against the published 190.2 pb, 3.7e-3, the residual being one empty bin. No fold factor. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
     evidence:
       local:
       - ../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_Z0_13TEV_DIELECTRON-Y/metadata.yaml
@@ -1014,7 +1120,7 @@ datasets:
   # nnpdf40_fiducial_cuts.yaml record is resolved with no open questions, which is the
   # gate -- an unresolved fiducial region is a silent normalization error.
   - id: z.lhcb7_dielectron
-    selector: {section: datasets, commondata_name: LHCB_Z0_7TEV_DIELECTRON_Y}
+    selector: {section: dy, commondata_name: LHCB_Z0_7TEV_DIELECTRON_Y}
     source: nnpdf_data/commondata/LHCB_Z0_7TEV_DIELECTRON
     source_rows: 9
     selected_rows: 9
@@ -1029,12 +1135,12 @@ datasets:
     drop_reason: null
     observable:
       quantity: Z boson cross section differential in boson rapidity
-      units: published cross section per rapidity bin
+      units: "pb per unit signed rapidity"
       reaction: hadron-hadron neutral-current Drell-Yan
       beam: pp
       target: proton
       binning: published rapidity bin edges from the NNPDF commondata kinematics
-      mass_integration: degenerate at the Z pole; the measurement is a rapidity scan
+      mass_integration: "60 < m_ee < 120 GeV, from HEPData ins1208102 Table 2 qualifier LEPTONS MASS 60.0-120.0; corrected 2026-09-12 from degenerate at the Z pole, which was wrong"
       rapidity_integration: full published rapidity bin
       decay_channel: dielectron
       fiducial: published fiducial lepton cuts, resolved via nnpdf40_fiducial_cuts.yaml
@@ -1046,6 +1152,7 @@ datasets:
       flavour_scheme: Nf=5 with b,bbar generated by evolution from the Nf=4 input basis
       nuclear: none
       returns: bin-integrated fiducial cross section
+    published_form: {units: "pb", natural_power: -2, jacobian: "1/Delta_y", jacobian_power: 0, status: closes, source: "HEPData ins1208102 Table 2, verbatim: name: 'D(SIG)/DYRAP'  units: 'PB', qualifiers LEPTONS MASS 60.0-120.0 and QED FSR level: Born.", note: "Per unit signed forward rapidity, 60-120 GeV. Sum rule: Sum(v*Delta_y) = 75.915 against the published 76.0 pb, 1.1e-3. No fold factor. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
     evidence:
       local:
       - ../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_Z0_7TEV_DIELECTRON/metadata.yaml
@@ -1054,3 +1161,766 @@ datasets:
       - 9 rows read from the NNPDF commondata; no kinematic cut applies at Q ~ m_Z
       - fiducial cuts resolved with zero open questions in nnpdf40_fiducial_cuts.yaml
       - structurally validated only; not compared row-by-row against NNPDF FK predictions
+  # ATLASWZRAP11CF: the forward Z of the 2011 ATLAS W/Z measurement, added 2026-09-10.
+  - id: z.atlas7_46fb_cf
+    selector: {section: dy, commondata_name: ATLAS_Z0_7TEV_46FB_CF-Y}
+    source: "nnpdf_data/commondata/ATLAS_Z0_7TEV_46FB_CF-Y"
+    source_rows: 15
+    selected_rows: 15
+    likelihood_group: z.atlas7_46fb_cf
+    classification: physics
+    selectable: true
+    citation_keys:
+    - "ATLAS:2016nqi"
+    inspire_ids:
+    - 1502620
+    covariance_scope: "NNPDF ordinary sources distinct; multiplicative sources kept relative"
+    drop_reason: null
+    observable:
+      quantity: "forward Z/gamma* cross section differential in |y_ll|"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron neutral-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "|y_ll| edges from HEPData ins1502620 Tables 14 and 15, the commondata kinematics carry centres"
+      mass_integration: "per row: 66-116 GeV (rows 0-8) or 116-150 GeV (rows 9-14)"
+      rapidity_integration: "full published rapidity bin"
+      decay_channel: "dielectron"
+      fiducial: "p_T > 20 GeV; one electron |eta| < 2.5, the other 2.5 < |eta| < 4.9"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.bin_integrated.fiducial"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated fiducial cross section"
+    published_form: {units: "pb", natural_power: -2, jacobian: "1/(2 Delta_abs_y)", jacobian_power: 0, status: closes, source: "HEPData ins1502620 Tables 14 and 15, verbatim: name: '$d\\sigma / d|y_{\\ell\\ell}|$'  units: 'PB', qualifier MLL 66-116 / 116-150. Paper ATLAS:2016nqi (arXiv:1612.03016) Table 14 column header dsigma/d|y_ll| over [pb].", note: "The published value is per SIGNED y: the |y| bin of width d|y| covers 2 d|y| of signed rapidity, so sigma_bin = 2 * value * d|y|. Verified on the committed HEPData: Sum(v*d|y|) = 107.976 pb over 66-116, while the paper's Table 2 gives 160.2 pb for a STRICTLY SMALLER fiducial region, so the unfolded sum is impossible and 2*Sum = 216.0 pb is the only consistent reading -- the same convention proved at the CC peak. Rows 0-8 are 66-116 GeV, rows 9-14 are 116-150 GeV. OPEN: no published total exists on the common fiducial definition, so the absolute normalisation (a x1.348 extrapolation) is unclosed. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_Z0_7TEV_46FB/metadata.yaml"
+      paper: "ATLAS:2016nqi"
+      gate_evidence:
+      - "15 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "the binning variable is |y_ll|: HEPData Tables 14/15 name it 'absolute dilepton y', which settles the cut record's labelling question"
+      - "LeptonCuts carries the central-forward pair (eta_forward_min/max); lepton_cuts_for('ATLASWZRAP11CF') resolves"
+      - "wzhep ATLAS7F_Z_peak / ATLAS7F_Z_high are these 9 + 6 rows value for value"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  # CDFZRAP_NEW: unfolded Z rapidity, added 2026-09-10.  Also JAM24's zrap/1000.
+  - id: z.cdf_zrap
+    selector: {section: dy, commondata_name: CDF_Z0_1P96TEV_ZRAP}
+    source: "nnpdf_data/commondata/CDF_Z0_1P96TEV_ZRAP"
+    source_rows: 28
+    selected_rows: 28
+    likelihood_group: z.cdf_zrap
+    classification: physics
+    selectable: true
+    citation_keys:
+    - "CDF:2010vek"
+    inspire_ids:
+    - 856131
+    covariance_scope: "NNPDF ordinary sources distinct; multiplicative sources kept relative"
+    drop_reason: null
+    observable:
+      quantity: "Z/gamma* cross section differential in boson rapidity"
+      units: "published cross section per unit rapidity"
+      reaction: "hadron-hadron neutral-current Drell-Yan"
+      beam: "ppbar 1.96 TeV"
+      target: "antiproton"
+      binning: "28 |y| bins 0-2.9, edges in the NNPDF commondata kinematics"
+      mass_integration: "66 < m_ee < 116 GeV"
+      rapidity_integration: "full published rapidity bin"
+      decay_channel: "dielectron"
+      fiducial: "none: corrected to full phase space; the HEPData table is qualified by the mass window alone"
+      qed_fsr: "as published by CDF; not stated in the HEPData record"
+    operator:
+      kind: "drell_yan.bin_integrated.full_phase_space"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated cross section, no acceptance"
+    published_form: {units: "pb", natural_power: -2, jacobian: "1/(2 Delta_abs_y)", jacobian_power: 0, status: closes, source: "HEPData ins856131 Table 2, verbatim: name: 'D(SIG)/YRAP'  units: 'PB', qualifier M(P=3_4) in GEV: '66.0-116.0'.", note: "The published value is per SIGNED y: the |y| bin of width d|y| covers 2 d|y| of signed rapidity, so sigma_bin = 2 * value * d|y|. Verified on the committed HEPData: 2*Sum(v*d|y|) = 256.538 against the published 256.6 pb, 2.4e-4. 66-116 GeV. This is the ONE set of the fifteen whose NNPDF data.yaml values equal the published ones (ratio exactly 1)."}
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/CDF_Z0_1P96TEV/metadata.yaml"
+      paper: "CDF:2010vek"
+      gate_evidence:
+      - "28 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "HEPData ins856131 Table 2 qualifiers: M(ee) 66-116 GeV, PBAR P --> E+ E- X, sqrt(s) = 1960 GeV; no lepton p_T or eta qualifier, and the bins span the whole rapidity range"
+      - "fitpack zrap/1000 (z.cdf_1000, which JAM24 fits) is these 28 rows value for value; jam_data selects this record in its place"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  # LHCBWZMU7TEV: added 2026-09-10 as three records, Z / W+ / W-, one per operator.
+  - id: z.lhcb7_muon
+    selector: {section: dy, commondata_name: LHCB_DY_7TEV_MUON_Y, label: dy_lhcb7_z_mumu}
+    source: "nnpdf_data/commondata/LHCB_DY_7TEV_MUON_Y"
+    source_rows: 17
+    selected_rows: 17
+    likelihood_group: z.lhcb7_muon
+    classification: physics
+    selectable: true
+    citation_keys:
+    - "LHCb:2015okr"
+    inspire_ids:
+    - 1373300
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: null
+    observable:
+      quantity: "Z -> mu mu cross section differential in boson rapidity"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron neutral-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "17 y_Z bins 2.0-4.25 as the set's filter selects them, edges in the commondata kinematics"
+      mass_integration: "60 < m_mumu < 120 GeV"
+      rapidity_integration: "full published rapidity bin"
+      decay_channel: "dimuon"
+      fiducial: "p_T,mu > 20 GeV and 2.0 < eta_mu < 4.5 on both muons"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.bin_integrated.fiducial"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated fiducial cross section"
+    published_form: {units: "pb", natural_power: -2, jacobian: null, jacobian_power: 0, status: closes, source: "HEPData ins1373300 Table 1, verbatim: name: '$\\sigma_{Z \\to \\mu^{+}\\mu^{-}}$'  units: 'PB' -- sigma, NOT dsigma/dy.", note: "This row is a cross section integrated over its rapidity bin, so no Jacobian applies: the conversion is the barn factor alone. Sum rule: Sum(v) = 75.982 against the published 76.0 pb, 2.4e-4. 60-120 GeV. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_DY_7TEV_MUON/metadata.yaml"
+      paper: "LHCb:2015okr"
+      gate_evidence:
+      - "rows 0-16 Z, 17-24 W+, 25-32 W-: filter.py TABLES = {1: [0], 4: [0, 2]}, NB_POINTS = [17, 8, 8]; HEPData Table 1 is sigma(Z -> mu mu) in y_Z and Table 4 columns 0/2 are sigma(W+ -> mu+ nu) / sigma(W- -> mu- nubar) (read 2026-09-10)"
+      - "the metadata Boson labels agree: 17 Z, 8 W+, 8 W-"
+      - "33 rows read from the NNPDF commondata on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  - id: w.lhcb7_wplus
+    selector: {section: dy, commondata_name: LHCB_DY_7TEV_MUON_Y, label: dy_lhcb7_wp_mu}
+    source: "nnpdf_data/commondata/LHCB_DY_7TEV_MUON_Y"
+    source_rows: 8
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys:
+    - "LHCb:2015okr"
+    inspire_ids:
+    - 1373300
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: >-
+      physics (PIXEL, measured 2026-09-10): the single-lepton kernel DYLeptonEtaKernel 
+      defines bilinear_tensor only -- no evolved_tensor -- so 
+      BilinearContribution.assemble raises TypeError whenever evolution is supplied, and 
+      this closure evolves every Drell-Yan row from Q0 = mc to the hard scale. Built 
+      without evolution the record would fold input-scale PDFs at Q = m_W, a different 
+      operator. Everything else is in place -- the row slice (from filter.py), edges, 
+      charge and cuts -- so this unblocks when DYLeptonEtaKernel composes evolution per 
+      quadrature node, as DYBinIntegratedKernel does.
+    observable:
+      quantity: "W+ -> mu+ nu cross section differential in muon pseudorapidity"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron charged-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "8 eta_mu bins 2.0-4.5, edges in the NNPDF commondata kinematics"
+      mass_integration: "on-shell W; a W decay has no dilepton mass"
+      rapidity_integration: "full published lepton pseudorapidity bin"
+      decay_channel: "muon + neutrino"
+      fiducial: "p_T,mu > 20 GeV, 2.0 < eta_mu < 4.5, no neutrino or m_T cut"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.fiducial_lepton"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated single-lepton fiducial cross section"
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_DY_7TEV_MUON/metadata.yaml"
+      paper: "LHCb:2015okr"
+      gate_evidence:
+      - "rows 0-16 Z, 17-24 W+, 25-32 W-: filter.py TABLES = {1: [0], 4: [0, 2]}, NB_POINTS = [17, 8, 8]; HEPData Table 1 is sigma(Z -> mu mu) in y_Z and Table 4 columns 0/2 are sigma(W+ -> mu+ nu) / sigma(W- -> mu- nubar) (read 2026-09-10)"
+      - "the metadata Boson labels agree: 17 Z, 8 W+, 8 W-"
+      - "33 rows read from the NNPDF commondata on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  - id: w.lhcb7_wminus
+    selector: {section: dy, commondata_name: LHCB_DY_7TEV_MUON_Y, label: dy_lhcb7_wm_mu}
+    source: "nnpdf_data/commondata/LHCB_DY_7TEV_MUON_Y"
+    source_rows: 8
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys:
+    - "LHCb:2015okr"
+    inspire_ids:
+    - 1373300
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: >-
+      physics (PIXEL, measured 2026-09-10): the single-lepton kernel DYLeptonEtaKernel 
+      defines bilinear_tensor only -- no evolved_tensor -- so 
+      BilinearContribution.assemble raises TypeError whenever evolution is supplied, and 
+      this closure evolves every Drell-Yan row from Q0 = mc to the hard scale. Built 
+      without evolution the record would fold input-scale PDFs at Q = m_W, a different 
+      operator. Everything else is in place -- the row slice (from filter.py), edges, 
+      charge and cuts -- so this unblocks when DYLeptonEtaKernel composes evolution per 
+      quadrature node, as DYBinIntegratedKernel does.
+    observable:
+      quantity: "W- -> mu- nubar cross section differential in muon pseudorapidity"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron charged-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "8 eta_mu bins 2.0-4.5, edges in the NNPDF commondata kinematics"
+      mass_integration: "on-shell W; a W decay has no dilepton mass"
+      rapidity_integration: "full published lepton pseudorapidity bin"
+      decay_channel: "muon + neutrino"
+      fiducial: "p_T,mu > 20 GeV, 2.0 < eta_mu < 4.5, no neutrino or m_T cut"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.fiducial_lepton"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated single-lepton fiducial cross section"
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_DY_7TEV_MUON/metadata.yaml"
+      paper: "LHCb:2015okr"
+      gate_evidence:
+      - "rows 0-16 Z, 17-24 W+, 25-32 W-: filter.py TABLES = {1: [0], 4: [0, 2]}, NB_POINTS = [17, 8, 8]; HEPData Table 1 is sigma(Z -> mu mu) in y_Z and Table 4 columns 0/2 are sigma(W+ -> mu+ nu) / sigma(W- -> mu- nubar) (read 2026-09-10)"
+      - "the metadata Boson labels agree: 17 Z, 8 W+, 8 W-"
+      - "33 rows read from the NNPDF commondata on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  # LHCBWZMU8TEV: added 2026-09-10 as three records, Z / W+ / W-, one per operator.
+  - id: z.lhcb8_muon
+    selector: {section: dy, commondata_name: LHCB_DY_8TEV_MUON_Y, label: dy_lhcb8_z_mumu}
+    source: "nnpdf_data/commondata/LHCB_DY_8TEV_MUON_Y"
+    source_rows: 18
+    selected_rows: 18
+    likelihood_group: z.lhcb8_muon
+    classification: physics
+    selectable: true
+    citation_keys:
+    - "LHCb:2015mad"
+    inspire_ids:
+    - 1406555
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: null
+    observable:
+      quantity: "Z -> mu mu cross section differential in boson rapidity"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron neutral-current Drell-Yan"
+      beam: "pp 8 TeV"
+      target: "proton"
+      binning: "18 y_Z bins 2.0-4.5, edges in the commondata kinematics"
+      mass_integration: "60 < m_mumu < 120 GeV"
+      rapidity_integration: "full published rapidity bin"
+      decay_channel: "dimuon"
+      fiducial: "p_T,mu > 20 GeV and 2.0 < eta_mu < 4.5 on both muons"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.bin_integrated.fiducial"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated fiducial cross section"
+    published_form: {units: "pb", natural_power: -2, jacobian: null, jacobian_power: 0, status: closes, source: "HEPData ins1406555 Table 2, verbatim: name: '$\\sigma_{Z \\to \\mu^{+}\\mu^{-}}$'  units: 'PB' -- sigma, NOT dsigma/dy.", note: "A bin-integrated cross section, so no Jacobian: the barn factor alone. Sum rule: Sum(v) = 94.983 against the published 95.0 pb, 1.8e-4. 60-120 GeV. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_DY_8TEV_MUON/metadata.yaml"
+      paper: "LHCb:2015mad"
+      gate_evidence:
+      - "rows 0-17 Z, 18-25 W+, 26-33 W-: filter.py TABLES = {2: [0], 1: [0, 2]}, NB_POINTS = [18, 8, 8], and the kinematics agree (18 rows at m_V^2 = m_Z^2, then 16 at m_W^2)"
+      - "the metadata's plotting.extra_labels claims 16 Z / 9 W+ / 9 W- and is WRONG; never read the split from it"
+      - "34 rows read from the NNPDF commondata on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  - id: w.lhcb8_wplus
+    selector: {section: dy, commondata_name: LHCB_DY_8TEV_MUON_Y, label: dy_lhcb8_wp_mu}
+    source: "nnpdf_data/commondata/LHCB_DY_8TEV_MUON_Y"
+    source_rows: 8
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys:
+    - "LHCb:2015mad"
+    inspire_ids:
+    - 1406555
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: >-
+      physics (PIXEL, measured 2026-09-10): the single-lepton kernel DYLeptonEtaKernel 
+      defines bilinear_tensor only -- no evolved_tensor -- so 
+      BilinearContribution.assemble raises TypeError whenever evolution is supplied, and 
+      this closure evolves every Drell-Yan row from Q0 = mc to the hard scale. Built 
+      without evolution the record would fold input-scale PDFs at Q = m_W, a different 
+      operator. Everything else is in place -- the row slice (from filter.py), edges, 
+      charge and cuts -- so this unblocks when DYLeptonEtaKernel composes evolution per 
+      quadrature node, as DYBinIntegratedKernel does.
+    observable:
+      quantity: "W+ -> mu+ nu cross section differential in muon pseudorapidity"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron charged-current Drell-Yan"
+      beam: "pp 8 TeV"
+      target: "proton"
+      binning: "8 eta_mu bins 2.0-4.5, edges in the NNPDF commondata kinematics"
+      mass_integration: "on-shell W; a W decay has no dilepton mass"
+      rapidity_integration: "full published lepton pseudorapidity bin"
+      decay_channel: "muon + neutrino"
+      fiducial: "p_T,mu > 20 GeV, 2.0 < eta_mu < 4.5, no neutrino or m_T cut"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.fiducial_lepton"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated single-lepton fiducial cross section"
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_DY_8TEV_MUON/metadata.yaml"
+      paper: "LHCb:2015mad"
+      gate_evidence:
+      - "rows 0-17 Z, 18-25 W+, 26-33 W-: filter.py TABLES = {2: [0], 1: [0, 2]}, NB_POINTS = [18, 8, 8], and the kinematics agree (18 rows at m_V^2 = m_Z^2, then 16 at m_W^2)"
+      - "the metadata's plotting.extra_labels claims 16 Z / 9 W+ / 9 W- and is WRONG; never read the split from it"
+      - "34 rows read from the NNPDF commondata on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  - id: w.lhcb8_wminus
+    selector: {section: dy, commondata_name: LHCB_DY_8TEV_MUON_Y, label: dy_lhcb8_wm_mu}
+    source: "nnpdf_data/commondata/LHCB_DY_8TEV_MUON_Y"
+    source_rows: 8
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys:
+    - "LHCb:2015mad"
+    inspire_ids:
+    - 1406555
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: >-
+      physics (PIXEL, measured 2026-09-10): the single-lepton kernel DYLeptonEtaKernel 
+      defines bilinear_tensor only -- no evolved_tensor -- so 
+      BilinearContribution.assemble raises TypeError whenever evolution is supplied, and 
+      this closure evolves every Drell-Yan row from Q0 = mc to the hard scale. Built 
+      without evolution the record would fold input-scale PDFs at Q = m_W, a different 
+      operator. Everything else is in place -- the row slice (from filter.py), edges, 
+      charge and cuts -- so this unblocks when DYLeptonEtaKernel composes evolution per 
+      quadrature node, as DYBinIntegratedKernel does.
+    observable:
+      quantity: "W- -> mu- nubar cross section differential in muon pseudorapidity"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron charged-current Drell-Yan"
+      beam: "pp 8 TeV"
+      target: "proton"
+      binning: "8 eta_mu bins 2.0-4.5, edges in the NNPDF commondata kinematics"
+      mass_integration: "on-shell W; a W decay has no dilepton mass"
+      rapidity_integration: "full published lepton pseudorapidity bin"
+      decay_channel: "muon + neutrino"
+      fiducial: "p_T,mu > 20 GeV, 2.0 < eta_mu < 4.5, no neutrino or m_T cut"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.fiducial_lepton"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated single-lepton fiducial cross section"
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/LHCB_DY_8TEV_MUON/metadata.yaml"
+      paper: "LHCb:2015mad"
+      gate_evidence:
+      - "rows 0-17 Z, 18-25 W+, 26-33 W-: filter.py TABLES = {2: [0], 1: [0, 2]}, NB_POINTS = [18, 8, 8], and the kinematics agree (18 rows at m_V^2 = m_Z^2, then 16 at m_W^2)"
+      - "the metadata's plotting.extra_labels claims 16 Z / 9 W+ / 9 W- and is WRONG; never read the split from it"
+      - "34 rows read from the NNPDF commondata on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  # ATLASWZRAP11CC: a legacy W/Z concatenation, added 2026-09-10 as one record per boson
+  # and Z mass slice.  Edges come from the split siblings' HEPData tables.
+  - id: w.atlas7_46fb_wplus
+    selector: {section: dy, commondata_name: ATLAS_DY_7TEV_46FB_CC, label: dy_atlas7_46fb_wp}
+    source: "nnpdf_data/commondata/ATLAS_DY_7TEV_46FB_CC"
+    source_rows: 11
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys:
+    - "ATLAS:2016nqi"
+    inspire_ids:
+    - 1502620
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: >-
+      physics (PIXEL, measured 2026-09-10): the single-lepton kernel DYLeptonEtaKernel 
+      defines bilinear_tensor only -- no evolved_tensor -- so 
+      BilinearContribution.assemble raises TypeError whenever evolution is supplied, and 
+      this closure evolves every Drell-Yan row from Q0 = mc to the hard scale. Built 
+      without evolution the record would fold input-scale PDFs at Q = m_W, a different 
+      operator. Everything else is in place -- the row slice (from filter.py), edges, 
+      charge and cuts -- so this unblocks when DYLeptonEtaKernel composes evolution per 
+      quadrature node, as DYBinIntegratedKernel does.
+    observable:
+      quantity: "W+ -> l+ nu cross section differential in lepton |eta|"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron charged-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "11 |eta_l| bins 0-2.5; edges from HEPData ins1502620 Tables 9/10, read by the split sibling ATLAS_WPWM_7TEV_46FB"
+      mass_integration: "on-shell W; a W decay has no dilepton mass"
+      rapidity_integration: "full published lepton pseudorapidity bin"
+      decay_channel: "lepton + neutrino"
+      fiducial: "p_T,l > 25 GeV, |eta_l| < 2.5, p_T,nu > 25 GeV, m_T > 40 GeV"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.fiducial_lepton"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated single-lepton fiducial cross section"
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_DY_7TEV_46FB/metadata.yaml"
+      paper: "ATLAS:2016nqi"
+      gate_evidence:
+      - "row layout W+ 0-10, W- 11-21, Z_low 22-27, Z_peak 28-39, Z_high 40-45, from the per-point Boson labels in the commondata metadata"
+      - "fiducial cuts read per channel: fiducial_cuts_for('ATLASWZRAP11CC', channel='w' or 'z')"
+      - "fitpack wzhep ATLAS7C_Wp / ATLAS7C_Wm / ATLAS7C_Z_low / ATLAS7C_Z / ATLAS7C_Z_high are these rows value for value (checked 2026-09-10); JAM24 fits Wp, Wm and Z, so jam_data selects w.atlas7_46fb_wplus, w.atlas7_46fb_wminus and z.atlas7_46fb_cc_peak"
+      - "46 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  - id: w.atlas7_46fb_wminus
+    selector: {section: dy, commondata_name: ATLAS_DY_7TEV_46FB_CC, label: dy_atlas7_46fb_wm}
+    source: "nnpdf_data/commondata/ATLAS_DY_7TEV_46FB_CC"
+    source_rows: 11
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys:
+    - "ATLAS:2016nqi"
+    inspire_ids:
+    - 1502620
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: >-
+      physics (PIXEL, measured 2026-09-10): the single-lepton kernel DYLeptonEtaKernel 
+      defines bilinear_tensor only -- no evolved_tensor -- so 
+      BilinearContribution.assemble raises TypeError whenever evolution is supplied, and 
+      this closure evolves every Drell-Yan row from Q0 = mc to the hard scale. Built 
+      without evolution the record would fold input-scale PDFs at Q = m_W, a different 
+      operator. Everything else is in place -- the row slice (from filter.py), edges, 
+      charge and cuts -- so this unblocks when DYLeptonEtaKernel composes evolution per 
+      quadrature node, as DYBinIntegratedKernel does.
+    observable:
+      quantity: "W- -> l- nubar cross section differential in lepton |eta|"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron charged-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "11 |eta_l| bins 0-2.5; edges from HEPData ins1502620 Tables 9/10, read by the split sibling ATLAS_WPWM_7TEV_46FB"
+      mass_integration: "on-shell W; a W decay has no dilepton mass"
+      rapidity_integration: "full published lepton pseudorapidity bin"
+      decay_channel: "lepton + neutrino"
+      fiducial: "p_T,l > 25 GeV, |eta_l| < 2.5, p_T,nu > 25 GeV, m_T > 40 GeV"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.fiducial_lepton"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated single-lepton fiducial cross section"
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_DY_7TEV_46FB/metadata.yaml"
+      paper: "ATLAS:2016nqi"
+      gate_evidence:
+      - "row layout W+ 0-10, W- 11-21, Z_low 22-27, Z_peak 28-39, Z_high 40-45, from the per-point Boson labels in the commondata metadata"
+      - "fiducial cuts read per channel: fiducial_cuts_for('ATLASWZRAP11CC', channel='w' or 'z')"
+      - "fitpack wzhep ATLAS7C_Wp / ATLAS7C_Wm / ATLAS7C_Z_low / ATLAS7C_Z / ATLAS7C_Z_high are these rows value for value (checked 2026-09-10); JAM24 fits Wp, Wm and Z, so jam_data selects w.atlas7_46fb_wplus, w.atlas7_46fb_wminus and z.atlas7_46fb_cc_peak"
+      - "46 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  - id: z.atlas7_46fb_cc_low
+    selector: {section: dy, commondata_name: ATLAS_DY_7TEV_46FB_CC, label: dy_atlas7_46fb_z_cc_low}
+    source: "nnpdf_data/commondata/ATLAS_DY_7TEV_46FB_CC"
+    source_rows: 6
+    selected_rows: 6
+    likelihood_group: z.atlas7_46fb_cc_low
+    classification: physics
+    selectable: true
+    citation_keys:
+    - "ATLAS:2016nqi"
+    inspire_ids:
+    - 1502620
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: null
+    observable:
+      quantity: "central Z/gamma* cross section differential in |y_ll|, 46-66 GeV"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron neutral-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "|y_ll| edges from HEPData ins1502620 Tables 11-13, read by the split sibling ATLAS_Z0_7TEV_46FB"
+      mass_integration: "46 < m_ll < 66 GeV"
+      rapidity_integration: "full published rapidity bin"
+      decay_channel: "dilepton"
+      fiducial: "p_T,l > 20 GeV and |eta_l| < 2.5 on both leptons"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.bin_integrated.fiducial"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated fiducial cross section"
+    published_form: {units: "pb", natural_power: -2, jacobian: "1/(2 Delta_abs_y)", jacobian_power: 0, status: closes, source: "HEPData ins1502620 Table 11, verbatim: name: '$d\\sigma / d|y_{\\ell\\ell}|$'  units: 'PB', qualifier MLL 46-66.", note: "The published value is per SIGNED y: the |y| bin of width d|y| covers 2 d|y| of signed rapidity, so sigma_bin = 2 * value * d|y|. Verified on the committed HEPData: the convention is proved at the peak (Table 12) against the paper's Table 7. 46-66 GeV. No published total exists for this window alone, so it inherits the peak's convention. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_DY_7TEV_46FB/metadata.yaml"
+      paper: "ATLAS:2016nqi"
+      gate_evidence:
+      - "row layout W+ 0-10, W- 11-21, Z_low 22-27, Z_peak 28-39, Z_high 40-45, from the per-point Boson labels in the commondata metadata"
+      - "fiducial cuts read per channel: fiducial_cuts_for('ATLASWZRAP11CC', channel='w' or 'z')"
+      - "fitpack wzhep ATLAS7C_Wp / ATLAS7C_Wm / ATLAS7C_Z_low / ATLAS7C_Z / ATLAS7C_Z_high are these rows value for value (checked 2026-09-10); JAM24 fits Wp, Wm and Z, so jam_data selects w.atlas7_46fb_wplus, w.atlas7_46fb_wminus and z.atlas7_46fb_cc_peak"
+      - "46 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  - id: z.atlas7_46fb_cc_peak
+    selector: {section: dy, commondata_name: ATLAS_DY_7TEV_46FB_CC, label: dy_atlas7_46fb_z_cc_peak}
+    source: "nnpdf_data/commondata/ATLAS_DY_7TEV_46FB_CC"
+    source_rows: 12
+    selected_rows: 12
+    likelihood_group: z.atlas7_46fb_cc_peak
+    classification: physics
+    selectable: true
+    citation_keys:
+    - "ATLAS:2016nqi"
+    inspire_ids:
+    - 1502620
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: null
+    observable:
+      quantity: "central Z/gamma* cross section differential in |y_ll|, 66-116 GeV"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron neutral-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "|y_ll| edges from HEPData ins1502620 Tables 11-13, read by the split sibling ATLAS_Z0_7TEV_46FB"
+      mass_integration: "66 < m_ll < 116 GeV"
+      rapidity_integration: "full published rapidity bin"
+      decay_channel: "dilepton"
+      fiducial: "p_T,l > 20 GeV and |eta_l| < 2.5 on both leptons"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.bin_integrated.fiducial"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated fiducial cross section"
+    published_form: {units: "pb", natural_power: -2, jacobian: "1/(2 Delta_abs_y)", jacobian_power: 0, status: closes, source: "HEPData ins1502620 Table 12, verbatim: name: '$d\\sigma / d|y_{\\ell\\ell}|$'  units: 'PB', qualifier MLL 66-116.", note: "The published value is per SIGNED y: the |y| bin of width d|y| covers 2 d|y| of signed rapidity, so sigma_bin = 2 * value * d|y|. Verified on the committed HEPData: 2*Sum(v*d|y|) = 501.032 against the paper's Table 7 value of 502.2 pb, 2.3e-3. 66-116 GeV. This is the window that establishes the fold for the whole 46fb family. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_DY_7TEV_46FB/metadata.yaml"
+      paper: "ATLAS:2016nqi"
+      gate_evidence:
+      - "row layout W+ 0-10, W- 11-21, Z_low 22-27, Z_peak 28-39, Z_high 40-45, from the per-point Boson labels in the commondata metadata"
+      - "fiducial cuts read per channel: fiducial_cuts_for('ATLASWZRAP11CC', channel='w' or 'z')"
+      - "fitpack wzhep ATLAS7C_Wp / ATLAS7C_Wm / ATLAS7C_Z_low / ATLAS7C_Z / ATLAS7C_Z_high are these rows value for value (checked 2026-09-10); JAM24 fits Wp, Wm and Z, so jam_data selects w.atlas7_46fb_wplus, w.atlas7_46fb_wminus and z.atlas7_46fb_cc_peak"
+      - "46 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  - id: z.atlas7_46fb_cc_high
+    selector: {section: dy, commondata_name: ATLAS_DY_7TEV_46FB_CC, label: dy_atlas7_46fb_z_cc_high}
+    source: "nnpdf_data/commondata/ATLAS_DY_7TEV_46FB_CC"
+    source_rows: 6
+    selected_rows: 6
+    likelihood_group: z.atlas7_46fb_cc_high
+    classification: physics
+    selectable: true
+    citation_keys:
+    - "ATLAS:2016nqi"
+    inspire_ids:
+    - 1502620
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: null
+    observable:
+      quantity: "central Z/gamma* cross section differential in |y_ll|, 116-150 GeV"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron neutral-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "|y_ll| edges from HEPData ins1502620 Tables 11-13, read by the split sibling ATLAS_Z0_7TEV_46FB"
+      mass_integration: "116 < m_ll < 150 GeV"
+      rapidity_integration: "full published rapidity bin"
+      decay_channel: "dilepton"
+      fiducial: "p_T,l > 20 GeV and |eta_l| < 2.5 on both leptons"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.bin_integrated.fiducial"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated fiducial cross section"
+    published_form: {units: "pb", natural_power: -2, jacobian: "1/(2 Delta_abs_y)", jacobian_power: 0, status: closes, source: "HEPData ins1502620 Table 13, verbatim: name: '$d\\sigma / d|y_{\\ell\\ell}|$'  units: 'PB', qualifier MLL 116-150.", note: "The published value is per SIGNED y: the |y| bin of width d|y| covers 2 d|y| of signed rapidity, so sigma_bin = 2 * value * d|y|. Verified on the committed HEPData: the convention is proved at the peak (Table 12). 116-150 GeV. No published total for this window alone. NNPDF's stored data.yaml values are NOT the published ones (x1000, i.e. fb) and its plotting y_label is not a unit statement; both were checked and rejected as sources."}
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_DY_7TEV_46FB/metadata.yaml"
+      paper: "ATLAS:2016nqi"
+      gate_evidence:
+      - "row layout W+ 0-10, W- 11-21, Z_low 22-27, Z_peak 28-39, Z_high 40-45, from the per-point Boson labels in the commondata metadata"
+      - "fiducial cuts read per channel: fiducial_cuts_for('ATLASWZRAP11CC', channel='w' or 'z')"
+      - "fitpack wzhep ATLAS7C_Wp / ATLAS7C_Wm / ATLAS7C_Z_low / ATLAS7C_Z / ATLAS7C_Z_high are these rows value for value (checked 2026-09-10); JAM24 fits Wp, Wm and Z, so jam_data selects w.atlas7_46fb_wplus, w.atlas7_46fb_wminus and z.atlas7_46fb_cc_peak"
+      - "46 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  # ATLASWZRAP36PB: a legacy W/Z concatenation, added 2026-09-10 as one record per boson
+  # and Z mass slice.  Edges come from the split siblings' HEPData tables.
+  - id: w.atlas7_36pb_wplus
+    selector: {section: dy, commondata_name: ATLAS_DY_7TEV_36PB_ETA, label: dy_atlas7_36pb_wp}
+    source: "nnpdf_data/commondata/ATLAS_DY_7TEV_36PB_ETA"
+    source_rows: 11
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys:
+    - "ATLAS:2011qdp"
+    inspire_ids:
+    - 928289
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: >-
+      physics (PIXEL, measured 2026-09-10): the single-lepton kernel DYLeptonEtaKernel 
+      defines bilinear_tensor only -- no evolved_tensor -- so 
+      BilinearContribution.assemble raises TypeError whenever evolution is supplied, and 
+      this closure evolves every Drell-Yan row from Q0 = mc to the hard scale. Built 
+      without evolution the record would fold input-scale PDFs at Q = m_W, a different 
+      operator. Everything else is in place -- the row slice (from filter.py), edges, 
+      charge and cuts -- so this unblocks when DYLeptonEtaKernel composes evolution per 
+      quadrature node, as DYBinIntegratedKernel does.
+    observable:
+      quantity: "W+ -> l+ nu cross section differential in lepton |eta|"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron charged-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "11 |eta_l| bins 0-2.5; edges from HEPData ins928289 Tables 5/3, read by the split sibling ATLAS_WPWM_7TEV_36PB"
+      mass_integration: "on-shell W; a W decay has no dilepton mass"
+      rapidity_integration: "full published lepton pseudorapidity bin"
+      decay_channel: "lepton + neutrino"
+      fiducial: "p_T,l > 20 GeV, |eta_l| < 2.5, p_T,nu > 25 GeV, m_T > 40 GeV"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.fiducial_lepton"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated single-lepton fiducial cross section"
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_DY_7TEV_36PB/metadata.yaml"
+      paper: "ATLAS:2011qdp"
+      gate_evidence:
+      - "row layout W+ 0-10, W- 11-21, Z 22-29, from the per-point Boson labels in the commondata metadata"
+      - "fiducial cuts read per channel: fiducial_cuts_for('ATLASWZRAP36PB', channel='w' or 'z')"
+      - "fitpack zrap/1010 is the Z rows up to a constant factor; JAM24 fits none of this set"
+      - "30 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  - id: w.atlas7_36pb_wminus
+    selector: {section: dy, commondata_name: ATLAS_DY_7TEV_36PB_ETA, label: dy_atlas7_36pb_wm}
+    source: "nnpdf_data/commondata/ATLAS_DY_7TEV_36PB_ETA"
+    source_rows: 11
+    selected_rows: 0
+    likelihood_group: null
+    classification: reader_only
+    selectable: false
+    citation_keys:
+    - "ATLAS:2011qdp"
+    inspire_ids:
+    - 928289
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: >-
+      physics (PIXEL, measured 2026-09-10): the single-lepton kernel DYLeptonEtaKernel 
+      defines bilinear_tensor only -- no evolved_tensor -- so 
+      BilinearContribution.assemble raises TypeError whenever evolution is supplied, and 
+      this closure evolves every Drell-Yan row from Q0 = mc to the hard scale. Built 
+      without evolution the record would fold input-scale PDFs at Q = m_W, a different 
+      operator. Everything else is in place -- the row slice (from filter.py), edges, 
+      charge and cuts -- so this unblocks when DYLeptonEtaKernel composes evolution per 
+      quadrature node, as DYBinIntegratedKernel does.
+    observable:
+      quantity: "W- -> l- nubar cross section differential in lepton |eta|"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron charged-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "11 |eta_l| bins 0-2.5; edges from HEPData ins928289 Tables 5/3, read by the split sibling ATLAS_WPWM_7TEV_36PB"
+      mass_integration: "on-shell W; a W decay has no dilepton mass"
+      rapidity_integration: "full published lepton pseudorapidity bin"
+      decay_channel: "lepton + neutrino"
+      fiducial: "p_T,l > 20 GeV, |eta_l| < 2.5, p_T,nu > 25 GeV, m_T > 40 GeV"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.fiducial_lepton"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated single-lepton fiducial cross section"
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_DY_7TEV_36PB/metadata.yaml"
+      paper: "ATLAS:2011qdp"
+      gate_evidence:
+      - "row layout W+ 0-10, W- 11-21, Z 22-29, from the per-point Boson labels in the commondata metadata"
+      - "fiducial cuts read per channel: fiducial_cuts_for('ATLASWZRAP36PB', channel='w' or 'z')"
+      - "fitpack zrap/1010 is the Z rows up to a constant factor; JAM24 fits none of this set"
+      - "30 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  - id: z.atlas7_36pb
+    selector: {section: dy, commondata_name: ATLAS_DY_7TEV_36PB_ETA, label: dy_atlas7_36pb_z}
+    source: "nnpdf_data/commondata/ATLAS_DY_7TEV_36PB_ETA"
+    source_rows: 8
+    selected_rows: 8
+    likelihood_group: z.atlas7_36pb
+    classification: physics
+    selectable: true
+    citation_keys:
+    - "ATLAS:2011qdp"
+    inspire_ids:
+    - 928289
+    covariance_scope: "NNPDF sources; rows of one table share correlated sources (luminosity among them) that the per-boson split does not carry across records"
+    drop_reason: null
+    observable:
+      quantity: "Z/gamma* cross section differential in |y_Z|"
+      units: "published cross section per bin"
+      reaction: "hadron-hadron neutral-current Drell-Yan"
+      beam: "pp 7 TeV"
+      target: "proton"
+      binning: "8 |y_Z| bins with edges 0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.6, from HEPData ins928289 Table 1 via the split sibling ATLAS_Z0_7TEV_36PB"
+      mass_integration: "66 < m_ll < 116 GeV"
+      rapidity_integration: "full published rapidity bin"
+      decay_channel: "dilepton"
+      fiducial: "p_T,l > 20 GeV and no lepton-eta cut: extrapolated to full lepton-eta phase space"
+      qed_fsr: "Born, carried by the fiducial-cut record"
+    operator:
+      kind: "drell_yan.bin_integrated.fiducial"
+      perturbative_order: "NLO"
+      scale: "muF^2=muR^2=Q2"
+      flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis"
+      nuclear: "none"
+      returns: "bin-integrated fiducial cross section"
+    published_form: {units: "pb", natural_power: -2, jacobian: "1/(2 Delta_abs_y)", jacobian_power: 0, status: closes, source: "Paper ATLAS:2011qdp (arXiv:1109.5141) TABLE XXIII, rendered p. 27: row header dsigma/dy [pb], caption 'Combined differential cross section dsigma/dy_Z for the Z -> l+l- process measured for 66 < m_ll < 116 GeV and p_T,l > 20 GeV'. HEPData ins928289 Table 1 reads name: 'D(SIG)/DABS(YRAP)'  units: 'PB'.", note: "The published value is per SIGNED y: the |y| bin of width d|y| covers 2 d|y| of signed rapidity, so sigma_bin = 2 * value * d|y|. Verified on the committed HEPData: Sum(v*d|y|) = 368.128 pb, while the paper's TABLE X gives 479 pb for a strictly SMALLER fiducial volume (|eta_l| < 2.5), so the unfolded sum is impossible; 2*Sum = 736.3 pb sits between 479 pb and the paper's 937 pb total. The owner accepted the factor 2 on this inequality on 2026-09-12. WEAK LINK, recorded deliberately: the argument depends on TABLE XXIII's caption omitting an eta_l cut, which was not confirmed from the paper body -- if that table were on a smaller volume the argument collapses. 66-116 GeV. NNPDF's stored values are x1018.7 exactly, a 1.0187 factor of unstated origin."}
+    evidence:
+      local:
+      - "../nnpdf/nnpdf_data/nnpdf_data/commondata/ATLAS_DY_7TEV_36PB/metadata.yaml"
+      paper: "ATLAS:2011qdp"
+      gate_evidence:
+      - "row layout W+ 0-10, W- 11-21, Z 22-29, from the per-point Boson labels in the commondata metadata"
+      - "fiducial cuts read per channel: fiducial_cuts_for('ATLASWZRAP36PB', channel='w' or 'z')"
+      - "fitpack zrap/1010 is the Z rows up to a constant factor; JAM24 fits none of this set"
+      - "30 rows read from the NNPDF commondata at variant legacy on 2026-09-10"
+      - "structurally validated only; not compared row-by-row against NNPDF FK predictions"
+  - {id: w.atlas7c_wplus, selector: {section: dy, commondata_name: "fitpack:wzhep/ATLAS7C_Wp"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7C_Wp.xlsx, source_rows: 11, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "duplicate of w.atlas7_46fb_wplus", drop_reason: "duplicate source of w.atlas7_46fb_wplus (value for value, checked 2026-09-10). JAM24 fits this table; its NNPDF twin w.atlas7_46fb_wplus carries the edges and is blocked on the lepton-level kernel's missing evolution. Never select both", observable: {quantity: "W+ -> l nu cross section differential in lepton |eta|", units: "published cross section per bin", reaction: "hadron-hadron charged-current Drell-Yan", beam: "pp 7 TeV", target: proton, binning: "11 |eta_l| centres; edges in the NNPDF twin", mass_integration: "on-shell W", rapidity_integration: "full published bin", decay_channel: "lepton + neutrino", fiducial: "see nnpdf40_fiducial_cuts.yaml ATLASWZRAP11CC, channel w", qed_fsr: Born}, operator: {kind: drell_yan.fiducial_lepton, perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis", nuclear: none, returns: "bin-integrated single-lepton fiducial cross section"}, evidence: {local: ["../fitpack_legacy/database/wzhep/expdata/ATLAS7C_Wp.xlsx"], paper: "ATLAS:2016nqi", gate_evidence: ["11 rows; identical values to w.atlas7_46fb_wplus, checked 2026-09-10"]}}
+  - {id: w.atlas7c_wminus, selector: {section: dy, commondata_name: "fitpack:wzhep/ATLAS7C_Wm"}, source: fitpack_legacy/database/wzhep/expdata/ATLAS7C_Wm.xlsx, source_rows: 11, selected_rows: 0, likelihood_group: null, classification: reader_only, selectable: false, citation_keys: ["ATLAS:2016nqi"], inspire_ids: [1502620], covariance_scope: "duplicate of w.atlas7_46fb_wminus", drop_reason: "duplicate source of w.atlas7_46fb_wminus (value for value, checked 2026-09-10). JAM24 fits this table; its NNPDF twin w.atlas7_46fb_wminus carries the edges and is blocked on the lepton-level kernel's missing evolution. Never select both", observable: {quantity: "W- -> l nu cross section differential in lepton |eta|", units: "published cross section per bin", reaction: "hadron-hadron charged-current Drell-Yan", beam: "pp 7 TeV", target: proton, binning: "11 |eta_l| centres; edges in the NNPDF twin", mass_integration: "on-shell W", rapidity_integration: "full published bin", decay_channel: "lepton + neutrino", fiducial: "see nnpdf40_fiducial_cuts.yaml ATLASWZRAP11CC, channel w", qed_fsr: Born}, operator: {kind: drell_yan.fiducial_lepton, perturbative_order: NLO, scale: "muF^2=muR^2=Q2", flavour_scheme: "Nf=5 with b,bbar generated by evolution from the Nf=4 input basis", nuclear: none, returns: "bin-integrated single-lepton fiducial cross section"}, evidence: {local: ["../fitpack_legacy/database/wzhep/expdata/ATLAS7C_Wm.xlsx"], paper: "ATLAS:2016nqi", gate_evidence: ["11 rows; identical values to w.atlas7_46fb_wminus, checked 2026-09-10"]}}

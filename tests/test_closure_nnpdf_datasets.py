@@ -1,4 +1,10 @@
-"""The ``datasets`` manifest section: CHORUS from NNPDF commondata, end to end.
+"""The ``datasets`` and ``dy`` manifest sections, from NNPDF commondata, end to end.
+
+**Since 2026-09-10 the walk feeds two sections.**  Linear DIS (CHORUS, the HERA bottom set)
+lands in ``datasets``; every Drell-Yan record -- E605 and the collider W/Z sets -- lands in
+``dy``, beside the fitpack E866 tables, with its own fold arm.  The tests at the end of this
+file pin that split, the per-boson row slices of the mixed W/Z tables, the edge sources, and
+the name-checked operator pairing that replaced a positional slice.
 
 **Suite: ``closure_NNPDF_truth_NNPDF_data``, since 2026-09-09.** This file used to run
 against ``closure_NNPDF_truth``, which carried CHORUS while there was a single shared
@@ -252,47 +258,42 @@ def test_the_shared_source_really_is_shared_across_the_two_records(chorus_layout
     assert float(np.corrcoef(nu, nb)[0, 1]) > 0.99
 
 
-def test_annotate_manifest_binds_every_datasets_record_to_its_contract(layout):
-    """The path ``pixel/tests/test_observable_contracts.py`` recorded as uncovered.
+def test_annotate_manifest_binds_every_record_in_its_own_section(layout):
+    """Every record matches exactly one contract, in the section it is written to.
 
-    ``annotate_manifest`` requires **exactly one** contract per record. The ``datasets``
-    selector matches on ``commondata_name``, a field no other section carries, so a
-    record reaching this with the wrong section or a missing name fails here rather than
-    in a fit.
+    ``annotate_manifest`` compares sections before anything else.  Since 2026-09-10 the
+    Drell-Yan records are written to ``dy`` and their contracts select there, so a record
+    in the wrong section matches zero contracts -- the last assertion shows that failure.
+    Each citation is checked against the record's OWN contract, so a record annotated from
+    a neighbour's contract fails on the citation as well as on the id.
     """
-    manifest = {
-        "lattice": [],
-        "exp": [],
-        "datasets": [
-            {k: v for k, v in rec.items() if not k.startswith("_")} for rec in layout
-        ],
-    }
-    from pixel.data.contracts import load_observable_contracts
+    from pixel.data.contracts import ContractError, load_observable_contracts
 
+    linear, bilinear = gen._split_sections(layout)
+    public = lambda records: [  # noqa: E731
+        {k: v for k, v in rec.items() if not k.startswith("_")} for rec in records
+    ]
+    manifest = {"lattice": [], "exp": [], "datasets": public(linear), "dy": public(bilinear)}
     annotated = annotate_manifest(manifest)
-    assert len(annotated["datasets"]) == len(layout)
-    by_label = {rec["label"]: rec["contract_id"] for rec in layout}
-    # Each record's citation must be ITS OWN contract's, checked against the contract
-    # file rather than against one hardcoded key.  It was ``== ["CHORUS:2005cpn"]`` until
-    # 2026-09-09, which was equivalent only while the layout was CHORUS-only; the
-    # per-contract form is what the test's own docstring claims and is strictly stronger,
-    # since a record annotated from the wrong contract now fails on the citation as well
-    # as on the id.
     contracts = {r["id"]: r for r in load_observable_contracts()["datasets"]}
-    assert len({by_label[rec["label"]] for rec in layout}) > 1, (
-        "this check is only meaningful across more than one contract"
-    )
-    for record in annotated["datasets"]:
-        # ``annotate_manifest`` *overwrites* ``contract_id`` from whatever the selector
-        # matched, so asserting it still equals what the layout wrote is a check on the
-        # selector, not a tautology: a record annotated as the other beam would fail here.
-        assert record["contract_id"] == by_label[record["label"]]
-        assert record["classification"] == "physics"
-        assert record["citation_keys"] == list(
-            contracts[record["contract_id"]]["citation_keys"]
-        )
-        assert record["provenance"]["contract_id"] == record["contract_id"]
-    assert len({r["contract_id"] for r in annotated["datasets"]}) == len(layout)
+    by_label = {rec["label"]: rec["contract_id"] for rec in layout}
+    seen = set()
+    for section in ("datasets", "dy"):
+        for record in annotated[section]:
+            # ``annotate_manifest`` *overwrites* ``contract_id`` from whatever the selector
+            # matched, so this is a check on the selector, not a tautology.
+            assert record["contract_id"] == by_label[record["label"]]
+            assert record["classification"] == "physics"
+            assert record["citation_keys"] == list(
+                contracts[record["contract_id"]]["citation_keys"]
+            )
+            assert record["provenance"]["contract_id"] == record["contract_id"]
+            seen.add(record["contract_id"])
+    assert seen == {rec["contract_id"] for rec in layout}
+
+    misplaced = {"lattice": [], "exp": [], "datasets": [manifest["dy"][0]]}
+    with pytest.raises(ContractError, match="matches 0 contracts"):
+        annotate_manifest(misplaced)
 
 
 def test_a_selected_contract_with_no_build_spec_stops_generation(monkeypatch, selected):
@@ -331,7 +332,10 @@ def test_build_datasets_emits_lattice_then_exp_then_datasets():
     assert order == ["lattice", "exp", "datasets", "dy"], order
 
     member = inspect.getsource(gen.generate_member)
-    assert "lattice_layout() + exp_layout() + nnpdf_layout()" in member
+    # Drell-Yan records left this list on 2026-09-10 for their own ``dy`` section, and the
+    # pairing is checked by name before the first slice rather than trusted by position.
+    assert "records = lattice_layout() + exp_layout() + nnpdf_linear" in member
+    assert member.index("_pair_operators(records, operators)") < member.index("lat_ops, exp_ops =")
 
 
 def test_the_nnpdf_section_is_opt_in_and_follows_the_dis_gate():
@@ -512,19 +516,38 @@ def test_an_unroutable_generic_contract_id_raises(tmp_path, monkeypatch):
         dsets.generic_section_family("mc")
 
 
-def test_generate_member_refuses_a_records_operators_length_mismatch():
+def test_the_operator_pairing_is_checked_by_identity_not_length():
     """The positional split's failure mode is a wrong number, not a crash.
 
-    ``lat_ops = operators[:len(lat_recs)]`` assumes the two lists correspond one to one.
-    If they do not, every record after the gap folds a real truth through the wrong
-    operator and generation completes successfully with wrong data.
+    Until 2026-09-10 the guard compared ``len(operators)`` with ``len(records)``. A swap
+    of two equal-length lists passes that, and it is how the 2026-09-09 layout would have
+    folded CHORUS through E605's operator: ``EXP_KINDS`` filtered the records while the
+    operator list stayed unfiltered.  ``_pair_operators`` checks every pair by name, and is
+    shown here able to fail on a swap, a short list and a wrong name.
     """
     import inspect
 
-    source = inspect.getsource(gen.generate_member)
-    assert "len(operators) != len(records)" in source
-    # The check must come *before* the split it protects.
-    assert source.index("len(operators) != len(records)") < source.index("lat_ops = operators[")
+    records = [
+        {"kind": "pseudoitd", "name": "a117m310_itd_t3_real",
+         "file": "lattice/a117m310/itd_t3_real.dat"},
+        {"kind": "sigma_r", "label": "hera", "file": "exp/hera.dat"},
+        {"kind": "sigma_r_cc", "name": "chorus_nu", "file": "datasets/chorus_nu.dat"},
+    ]
+    good = [("a117m310_itd_t3_real", "L"), ("hera", "H"), ("chorus_nu", "C")]
+    assert gen._pair_operators(records, good) == ["L", "H", "C"]
+    with pytest.raises(RuntimeError, match="out of order"):
+        gen._pair_operators(records, [good[0], good[2], good[1]])
+    with pytest.raises(RuntimeError, match="3 manifest records"):
+        gen._pair_operators(records, good[:2])
+    # A fitpack DIS record carries no ``name``; its builder names the dataset by the file
+    # stem, which is accepted, and nothing else is.
+    with pytest.raises(RuntimeError, match="out of order"):
+        gen._pair_operators(records[1:2], [("not_hera", "H")])
+
+    member = inspect.getsource(gen.generate_member)
+    assert member.index("_pair_operators(records, operators)") < member.index(
+        "lat_ops, exp_ops ="
+    )
 
 
 def _write_record(rec, directory, central):
@@ -749,3 +772,247 @@ def test_a_chorus_record_builds_and_folds_through_the_real_generation_arm(tmp_pa
 
     # Anti-vacuity: an all-zero operator would satisfy "finite" and predict nothing.
     assert total > 0.0
+
+
+# ---------------------------------------------------------------------------
+# The ``dy`` section, 2026-09-10
+# ---------------------------------------------------------------------------
+
+
+def test_every_drell_yan_record_is_written_to_the_dy_section(layout):
+    """Kind decides the section, and the generic section is left linear.
+
+    The generic ``datasets`` section is gated as one unit, so a Drell-Yan record there made
+    ``generic_section_family`` raise on every fit.  That was the third of the three
+    defects that stopped the 2026-09-09 promotions from generating.
+    """
+    linear, bilinear = gen._split_sections(layout)
+    assert linear and bilinear
+    assert {rec["kind"] for rec in bilinear} <= set(dsets.DY_KINDS)
+    assert not {rec["kind"] for rec in linear} & set(dsets.DY_KINDS)
+    assert all(rec["file"].startswith("dy/") for rec in bilinear)
+    assert all(rec["file"].startswith("datasets/") for rec in linear)
+    assert {families.family_for_contract_id(r["contract_id"]) for r in linear} == {"dis"}
+    assert {families.family_for_contract_id(r["contract_id"]) for r in bilinear} == {"dy"}
+    with pytest.raises(RuntimeError, match="unknown manifest section"):
+        gen._split_sections([{"contract_id": "z.x", "section": "datasets_typo"}])
+
+
+def test_a_drell_yan_kind_is_built_only_by_the_dy_table():
+    """A DY kind reaching the linear table is refused by name; a blocked one names its gate."""
+    from pixel.data.closure_datatypes import DatatypeGateError
+
+    for kind in dsets.DY_KINDS:
+        assert callable(dsets.dy_builder(kind))
+        with pytest.raises(ValueError, match="'dy' manifest section"):
+            dsets._experimental_builder(kind)
+    with pytest.raises(DatatypeGateError):
+        dsets.dy_builder("drell_yan_total")({}, None, None, None)
+    # A registered builder whose datatype the registry blocks does not build: the W arm
+    # constructs a Dataset, but assembling one raises because its kernel composes no
+    # evolution, so the gate answers first.
+    with pytest.raises(DatatypeGateError, match="evolved_tensor"):
+        dsets.dy_builder("drell_yan_fiducial_lepton")({}, None, None, None)
+    with pytest.raises(ValueError, match="unknown Drell-Yan closure kind"):
+        dsets.dy_builder("drell_yan_typo")
+
+
+def test_the_six_suites_carry_one_spec_table_and_one_layout():
+    """One spec block and one layout in every full suite, so the six cannot drift.
+
+    The JAM-truth suites carried a pre-2026-09-09 ``generate_member`` that never
+    materialized an NNPDF record, which is exactly the drift this pins against.  The spec
+    block is compared as text between its markers and the layout functions as source;
+    ``generate_member`` itself is not, because it names its own truth.
+    """
+    import importlib
+    import inspect
+    from pathlib import Path
+
+    suites = (
+        "closure_NNPDF_truth_NNPDF_data", "closure_NNPDF_truth", "closure_JAM_truth",
+        "closure_JAM_truth_NNPDF_data", "closure_NNPDF_truth_JAM_data",
+        "closure_JAM_truth_JAM_data",
+    )
+    root = Path(__file__).resolve().parents[1]
+    blocks = set()
+    for suite in suites:
+        text = (root / suite / "config.py").read_text()
+        blocks.add(text[text.index("# >>> canonical NNPDF specs"):
+                        text.index("# <<< canonical NNPDF specs")])
+    assert len(blocks) == 1, "the canonical spec blocks differ between suites"
+    for name in ("nnpdf_layout", "_collider_dy_record", "_fixed_target_dy_record",
+                 "fold_dy_record", "_pair_operators", "_split_sections",
+                 "_rapidity_edges", "_mass_edges", "_check_centres"):
+        sources = {
+            inspect.getsource(getattr(importlib.import_module(f"{suite}.generate"), name))
+            for suite in suites
+        }
+        assert len(sources) == 1, f"{name} differs between the six suites"
+
+
+def test_split_tables_are_partitioned_exactly_and_by_the_filter():
+    """A W/Z table split across records covers every row once, as its filter orders them.
+
+    Read from the spec table rather than the layout: the W halves are contracted but not
+    selected (the lepton-level kernel composes no evolution), and their wiring -- rows,
+    edges, charges -- is kept built so that promoting them is a contract edit.  Each
+    record is materialized through ``_collider_dy_record`` with its own synthetic entry.
+
+    The slices come from each set's ``filter.py``, not from metadata labels:
+    ``LHCB_DY_8TEV_MUON``'s labels say 16 Z / 9 W+ / 9 W- and are wrong (the filter and the
+    kinematics say 18 / 8 / 8).  So each record is checked against the kinematics -- W
+    rows sit at ``m_W^2`` and no Z row does -- and the 8 TeV labels are shown to disagree
+    while the 7 TeV ones agree.
+    """
+    from collections import Counter, defaultdict
+
+    import yaml
+
+    tables = defaultdict(list)
+    for contract_id, spec in cfg.COLLIDER_DY_SPECS.items():
+        if "rows" in spec:
+            tables[spec["commondata_name"]].append((contract_id, spec))
+    assert set(tables) == {
+        "CMS_WPWM_8TEV_MUON_Y", "LHCB_DY_7TEV_MUON_Y", "LHCB_DY_8TEV_MUON_Y",
+        "ATLAS_DY_7TEV_46FB_CC", "ATLAS_DY_7TEV_36PB_ETA",
+    }
+    for name, members in tables.items():
+        common = gen.read_nnpdf_source(cfg.NNPDF_COMMONDATA, name)
+        covered = sorted(i for _, spec in members for i in range(*spec["rows"]))
+        assert covered == list(range(len(common.value))), name
+        for contract_id, spec in members:
+            n = spec["rows"][1] - spec["rows"][0]
+            rec = gen._collider_dy_record(
+                {"id": contract_id, "selected_rows": n, "source_rows": n}, spec, common
+            )
+            is_w = contract_id.startswith("w.")
+            assert (rec.get("lepton_charge") in (1, -1)) == is_w, contract_id
+            at_w_mass = np.allclose(np.asarray(rec["Q2"]), 80.398 ** 2, rtol=1e-3)
+            assert at_w_mass == is_w, contract_id
+        charges = sorted(spec["lepton_charge"] for _, spec in members if "lepton_charge" in spec)
+        assert charges == [-1, 1], name
+
+    def labels(directory):
+        text = (cfg.NNPDF_COMMONDATA / directory / "metadata.yaml").read_text()
+        observable = yaml.safe_load(text)["implemented_observables"][0]
+        return Counter(observable["plotting"]["extra_labels"]["Boson"])
+
+    assert labels("LHCB_DY_8TEV_MUON") != Counter({"$Z$": 18, "$W^+$": 8, "$W^-$": 8})
+    assert labels("LHCB_DY_7TEV_MUON") == Counter({"$Z$": 17, "$W^+$": 8, "$W^-$": 8})
+
+
+def test_each_atlas_w_record_reads_the_edge_table_of_its_own_charge():
+    """The one swap an edge check cannot see: W+ and W- share their eta binning.
+
+    ``_check_centres`` refuses a table whose bins do not bracket the rows, which catches a
+    wrong-size or wrong-range table.  A swapped W+/W- pair passes it.  Each HEPData table
+    names its own reaction, so this reads that qualifier for every ATLAS W record and
+    requires it to match the record's charge.
+    """
+    import yaml
+
+    checked = 0
+    for contract_id, spec in cfg.COLLIDER_DY_SPECS.items():
+        how = spec.get("y_edges")
+        if not contract_id.startswith("w.") or not isinstance(how, tuple):
+            continue
+        sign, other = ("W+", "W-") if spec["lepton_charge"] == 1 else ("W-", "W+")
+        for directory, number in how[1]:
+            path = next((cfg.NNPDF_COMMONDATA / directory / "rawdata").glob(
+                f"HEPData-ins*-Table_{number}.yaml"))
+            qualifiers = yaml.safe_load(path.read_text())["dependent_variables"][0]["qualifiers"]
+            reaction = next(str(q["value"]) for q in qualifiers if q["name"] == "RE")
+            assert sign in reaction and other not in reaction, (contract_id, reaction)
+            checked += 1
+    assert checked == 4
+
+
+def test_an_edge_source_that_does_not_bracket_its_rows_is_refused():
+    """Shown able to fail: a wrong mass window, and a wrong-size rapidity table."""
+    common = gen.read_nnpdf_source(cfg.NNPDF_COMMONDATA, "ATLAS_DY_7TEV_46FB_CC")
+
+    spec = dict(cfg.COLLIDER_DY_SPECS["z.atlas7_46fb_cc_low"])
+    spec["mass_edges"] = ("windows", ((0, 6, 116.0, 150.0),))  # the HIGH slice's window
+    entry = {"id": "z.atlas7_46fb_cc_low", "selected_rows": 6, "source_rows": 6}
+    with pytest.raises(RuntimeError, match="centre outside its own bin"):
+        gen._collider_dy_record(entry, spec, common)
+
+    spec = dict(cfg.COLLIDER_DY_SPECS["z.atlas7_46fb_cc_peak"])
+    spec["y_edges"] = ("hepdata", (("ATLAS_Z0_7TEV_46FB", 11),))  # the LOW slice's 6 bins
+    entry = {"id": "z.atlas7_46fb_cc_peak", "selected_rows": 12, "source_rows": 12}
+    with pytest.raises(RuntimeError, match="6 rapidity edges for 12 rows"):
+        gen._collider_dy_record(entry, spec, common)
+
+
+def test_the_dy_fold_adds_each_source_once_and_keeps_the_fitpack_stream(monkeypatch):
+    """Additive and multiplicative sources enter the covariance once each, at ``|central|``.
+
+    With neither present the draw is ``draw_diag``, exactly as E866 always drew, so the
+    fitpack tables' random stream does not move when NNPDF records join the section.
+    ``dy_central`` is replaced by a fixed vector: this pins the arithmetic, not a kernel.
+    """
+    central = np.array([2.0, -3.0, 5.0])
+    monkeypatch.setattr(gen, "dy_central", lambda *args: central.copy())
+    base = {"reaction": "pp", "rel_stat": [0.1, 0.2, 0.05]}
+    additive = np.array([[0.01, 0.0], [0.02, 0.01], [0.0, 0.03]])  # rows x sources
+    multiplicative = np.array([[0.05, 0.05, 0.05]])                # sources x rows
+    record = dict(base, _additive_rel=additive, _multiplicative_rel=multiplicative)
+    _, measured, cov = gen.fold_dy_record(record, None, None, None,
+                                          np.random.default_rng(1), noise=False)
+    scale = np.abs(central)
+    sigma = np.asarray(base["rel_stat"]) * scale + gen.DY_RELATIVE_FLOOR * scale.max()
+    a = additive * scale[:, None]
+    m = multiplicative.T * scale[:, None]
+    np.testing.assert_allclose(cov, np.diag(sigma ** 2) + a @ a.T + m @ m.T,
+                               rtol=1e-14, atol=0.0)
+    np.testing.assert_array_equal(measured, central)
+
+    plain = dict(base, _additive_rel=np.zeros((3, 0)))
+    _, drawn, cov_plain = gen.fold_dy_record(plain, None, None, None,
+                                             np.random.default_rng(5))
+    np.testing.assert_array_equal(drawn, gen.draw_diag(central, sigma, np.random.default_rng(5)))
+    np.testing.assert_allclose(cov_plain, np.diag(sigma ** 2), rtol=1e-15, atol=0.0)
+
+    # The floor is relative, so a prediction in natural units keeps its stated errors.
+    # With the DIS arm's absolute 1e-6 this row -- a Z-pole scale -- came out at a
+    # relative error of 1e9 (measured 2026-09-10); E866 at about 2.2 against 0.15.
+    tiny = central * 1.0e-16
+    monkeypatch.setattr(gen, "dy_central", lambda *args: tiny.copy())
+    _, _, cov_tiny = gen.fold_dy_record(plain, None, None, None, np.random.default_rng(5),
+                                        noise=False)
+    relative = np.sqrt(np.diag(cov_tiny)) / np.abs(tiny)
+    np.testing.assert_allclose(relative, np.asarray(base["rel_stat"]), rtol=1e-4, atol=0.0)
+
+
+def test_a_collider_record_builds_and_folds_through_the_real_dy_arm():
+    """The generation path runs on a truncated real record, through the real code.
+
+    Layout, builder table and fold are each pinned above in isolation; this runs them in
+    sequence on ``z.cdf_zrap`` -- p pbar, full phase space, the arm with no acceptance --
+    truncated to one row, and folds the suite's own fixed truth through it.  The assembly
+    is row-wise, so one row exercises the same evolution, kernel and fold as twenty-eight.
+    Measured 2026-09-10 with the batched assembly: 135 s per row at NLO (43 min before).
+    """
+    record = next(r for r in gen.nnpdf_layout() if r["contract_id"] == "z.cdf_zrap")
+    keep, n = 1, record["retained_rows"]
+    trimmed = {
+        key: (list(value)[:keep] if isinstance(value, list) and len(value) == n else value)
+        for key, value in record.items()
+    }
+    trimmed["_additive_rel"] = np.asarray(record["_additive_rel"])[:keep]
+    trimmed["_multiplicative_rel"] = np.asarray(record["_multiplicative_rel"])[:, :keep]
+
+    fields = cfg.make_fields()
+    nodes = np.asarray(list(fields.values())[0].nodes).reshape(-1)
+    truth, _ = gen.pdf_guidance.nnpdf_truth_curves(nodes, q_key="2",
+                                                   member=cfg.FIXED_TRUTH_MEMBER)
+    truth = {f: np.asarray(truth[f], dtype=float).reshape(-1) for f in cfg.ALL_FIELDS}
+    dataset = dsets.dy_builder(trimmed["kind"])(trimmed, None, fields, None,
+                                                 with_systematics=False)
+    assert dataset.n_data == keep
+    central, measured, cov = gen.fold_dy_record(trimmed, dataset, truth, fields,
+                                                np.random.default_rng(3))
+    assert np.all(np.isfinite(central)) and np.all(central > 0.0), central
+    assert np.all(np.linalg.eigvalsh(cov) > 0.0)
+    assert not np.array_equal(measured, central), "noise=True must draw"

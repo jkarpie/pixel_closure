@@ -1,6 +1,6 @@
 # Closure test: NNPDF truth x NNPDF datasets
 
-> ## Dataset variant: **NNPDF4.0 data** (`CONTRACT_MODE = "nnpdf_data"`, 28 datasets)
+> ## Dataset variant: **NNPDF4.0 data** (`CONTRACT_MODE = "nnpdf_data"`, 45 datasets)
 >
 > Truth family and dataset selection are **independent axes**. This suite pairs the
 > the **NNPDF40_nnlo_as_01180** replica-ensemble truth with **NNPDF4.0's dataset list** (arXiv:2109.02653) from
@@ -8,16 +8,20 @@
 > in the PDFs.
 >
 > **In:** 13 lattice ensembles; NMC/SLAC/BCDMS p+d F2; the seven HERA combined sets;
-> **CHORUS nu + nubar**; E866 pp Drell-Yan (`DYE886P`).
+> **CHORUS nu + nubar**; the HERACOMB bottom set; E866 pp and E605 copper Drell-Yan
+> (`DYE886P`, `DYE605`); and 15 collider Z records (316 rows) from CDF, LHCb and ATLAS,
+> including the Z rows of the four mixed W/Z tables. `DATASETS.md` lists them.
 >
 > **Out, by the owner's scope:** the 7 ratio/asymmetry entries — `NMCPD`, `DYE886R`,
 > `DYE906R`, `D0ZRAP_40`, `D0WMASY`, `CMSWEASY840PB`, `CMSWMASY47FB`. The roster's own
 > `scope` already excludes jets, dijets, top, single top, prompt photon, V+jet and Z-pT.
 >
-> **Out, no builder:** NuTeV nu/nb (CC dimuon charm), `HERACOMB_SIGMARED_B` (needs the
-> FONLL-B/C two-loop massive coefficient), `DYE605` (copper nuclear DY) and all 16
-> collider DY sets (17). Every one is carried in `observable_contracts.yaml` as a
-> `reader_only` record with measured source rows and its own `drop_reason`.
+> **Out, for other reasons** (`DATASETS.md` section 2b): NuTeV nu/nb (no massive
+> charged-current charm coefficient); every W record, 98 rows (`DYLeptonEtaKernel` cannot
+> compose evolution yet); `ATLASLOMASSDY11EXT` (Born acceptance is zero in its first mass
+> bin); `CMSDY2D11` (mass-bin edges are not on disk); `ATLAS_WZ_TOT_13TEV` (inclusive
+> totals, no arm). Every one is carried in `observable_contracts.yaml` as a `reader_only`
+> record with measured source rows and its own `drop_reason`.
 >
 > **The HERA sets here are NNPDF's HERACOMB data.** Verified 2026-09-09 against
 > `nnpdf/nnpdf_data/nnpdf_data/commondata`: source and post-cut row counts agree exactly,
@@ -25,8 +29,9 @@
 > correlated systematics. The legacy names carry the *proton beam* energy and the
 > commondata directories the *CM* energy, which is why 920<->318 is not a mismatch.
 >
-> Against `jam_data` this suite differs by exactly one record: it **has** CHORUS and
-> **lacks** HERMES sigma_r.
+> Against `jam_data` this suite **lacks** HERMES sigma_r and **has** 17 records that
+> `jam_data` does not: CHORUS nu + nubar, the HERACOMB bottom set, E605 copper and 13
+> collider Z records.
 
 The **full-scale** counterpart of `closure_NNPDF_truth_small/`: a realistic closure
 dataset rather than a handful of mocked points.  A closure test draws a known
@@ -42,7 +47,9 @@ Test modes (what each information source constrains):
    since 2026-08-22 includes the NNPDF-commondata `datasets` section: CHORUS neutrino
    and antineutrino charged-current reduced cross sections on lead, 520 retained rows
    per beam (of 607 published; the rest fall below `Q0² = mc²` or `W² > 10`);
-3. `dy` — fixed-target Drell-Yan (E866 pp/pd) only;
+3. `dy` — every Drell-Yan record in the selection, i.e. the manifest's `dy` section:
+   fixed-target E866 pp (and E605 copper) plus the collider Z records
+   (`DATASETS.md` section 1b lists them per selection);
 4. `exp` — **all experiment** (DIS + DY);
 5. `both` — everything (lattice + DIS + DY).
 
@@ -63,7 +70,7 @@ See the repo-root `closure_extension_plan.md` for the full-scale design and
 | lattice systematics | none | injected **and** recovered (`ht, chiral, cont_invz, cont_aL`) |
 | DIS coverage | 9 tables, 16 pts each | analysis-used tables, **all** retained rows (~2.5k pts) |
 | DIS error | replica spread | **real** per-point `rel_stat` |
-| Drell-Yan | E866 pp/pd, 6 rows/table | all accepted E866 pp/pd rows (179 + 183 = 362) |
+| Drell-Yan | E866 pp/pd, 6 rows/table | the selection's `dy` section: E866 pp (184 rows), plus E605 copper and collider Z where selected |
 
 ## Low-x completion
 

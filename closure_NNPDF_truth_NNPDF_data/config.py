@@ -98,83 +98,6 @@ NNPDF_ANALYSIS = tuple(
 )
 NNPDF_DY_MAX_ROWS = 40
 
-# -- NNPDF commondata datasets (the ``datasets`` manifest section) --------------
-#
-# One entry per *selected* NNPDF-commondata contract that this generator can
-# materialize.  ``generate.nnpdf_layout`` walks the contract selection, not this
-# table, and ``generate_member`` refuses to run when the selection names an id that
-# is missing here -- so promoting a contract without adding its build spec is an
-# error, never a silent omission.
-#
-# The nuclear composition is restated here because the operator needs numbers and the
-# contract states prose; ``tests/test_closure_nnpdf_datasets.py`` pins the two against
-# each other so they cannot drift.  A and Z are *natural* lead: NNPDF's CHORUS target
-# is the emulsion's natural isotopic mix, not Pb-208, and ``NuclearTarget`` refuses to
-# default either number precisely because the two differ.
-NNPDF_LEAD_TARGET = {"name": "lead", "mass_number": 207.2, "atomic_number": 82.0}
-
-NNPDF_DATASET_SPECS = {
-    "dis.chorus_nu": {
-        "label": "chorus_nu", "kind": "sigma_r_cc", "beam": "nu",
-        "commondata_name": "CHORUS_CC_NOTFIXED_PB_NU-SIGMARED",
-        "target": NNPDF_LEAD_TARGET,
-    },
-    "dis.chorus_nb": {
-        "label": "chorus_nb", "kind": "sigma_r_cc", "beam": "nubar",
-        "commondata_name": "CHORUS_CC_NOTFIXED_PB_NB-SIGMARED",
-        "target": NNPDF_LEAD_TARGET,
-    },
-}
-
-
-#: Bin-integrated fiducial collider Z rapidity, added 2026-09-09.
-#:
-#: Only the five sets whose ``nnpdf40_fiducial_cuts.yaml`` record is ``resolved: true``
-#: with **zero open questions** and no stage-B (W-type) requirement.  The gate is that
-#: record, not convenience: an unresolved fiducial region is a silent normalization
-#: error.  Held back deliberately, each with its reason in ``observable_contracts.yaml``:
-#:
-#:   ATLASZHIGHMASS49FB / ATLASLOMASSDY11EXT  rapidity-*integrated* mass spectra, a
-#:       different observable from a rapidity scan; HIMASS carries no ``sqrts`` in its
-#:       commondata kinematics at all
-#:   ATLASDY2D8TEV (1 open question), ATLASWZRAP11CF (2), CMSDY2D11 (2, and
-#:       ``full_phase_space`` -- applying an acceptance there would double-correct)
-#:   every W-type set (CMSWMU8TEV, CMSWEASY840PB, CMSWMASY47FB, LHCBWZMU7TEV,
-#:       LHCBWZMU8TEV, D0WMASY): ``fiducial_lepton`` needs a charge-carrying
-#:       ``LeptonLevelCuts`` plus a neutrino/transverse-mass treatment, which
-#:       ``build_drell_yan_binned`` does not implement
-#:   ATLASWZRAP36PB, ATLASWZRAP11CC, D0WMASY  ``resolved: false``
-COLLIDER_DY_SPECS = {
-    "z.lhcb7_dielectron": {
-        "label": "dy_lhcb7_z_ee", "kind": "drell_yan_binned", "reaction": "pp",
-        "commondata_name": "LHCB_Z0_7TEV_DIELECTRON_Y",
-        "nnpdf_legacy_name": "LHCBZ940PB", "mass_binned": False,
-    },
-    "z.lhcb8_dielectron": {
-        "label": "dy_lhcb8_z_ee", "kind": "drell_yan_binned", "reaction": "pp",
-        "commondata_name": "LHCB_Z0_8TEV_DIELECTRON_Y",
-        "nnpdf_legacy_name": "LHCBZEE2FB_40", "mass_binned": False,
-    },
-    "z.lhcb13_dimuon": {
-        "label": "dy_lhcb13_z_mumu", "kind": "drell_yan_binned", "reaction": "pp",
-        "commondata_name": "LHCB_Z0_13TEV_DIMUON-Y",
-        "nnpdf_legacy_name": "LHCB_Z_13TEV_DIMUON", "mass_binned": False,
-    },
-    "z.lhcb13_dielectron": {
-        "label": "dy_lhcb13_z_ee", "kind": "drell_yan_binned", "reaction": "pp",
-        "commondata_name": "LHCB_Z0_13TEV_DIELECTRON-Y",
-        "nnpdf_legacy_name": "LHCB_Z_13TEV_DIELECTRON", "mass_binned": False,
-    },
-    "z.atlas8_lomass_2d": {
-        "label": "dy_atlas8_z_lowmass_2d", "kind": "drell_yan_binned", "reaction": "pp",
-        "commondata_name": "ATLAS_Z0_8TEV_LOWMASS_M-Y",
-        "nnpdf_legacy_name": "ATLAS_DY_2D_8TEV_LOWMASS", "mass_binned": True,
-    },
-}
-
-#: One registry for everything ``nnpdf_layout`` materializes from NNPDF commondata.
-NNPDF_DATASET_SPECS = {**NNPDF_DATASET_SPECS, **COLLIDER_DY_SPECS}
-
 
 # -- LHAPDF / NNPDF truth ------------------------------------------------------
 
@@ -303,37 +226,6 @@ ORDER = "NLO"
 MODE = "truncated"
 ALPHAS_MZ = 0.118
 
-#: Heavy-flavour-tagged NC reduced cross section.  ``HERACOMB_SIGMARED_B`` is the only
-#: such set on the NNPDF4.0 roster (the commondata also carries CHARM-SIGMARED, which
-#: the frozen roster does not select).  Promoted 2026-09-09: the contract's old
-#: drop_reason named the FONLL-B/C two-loop massive coefficient, which is a *theory-200
-#: parity* requirement -- this closure runs NLO, where FONLL-A is the matching variant
-#: and assembles.  See ``datasets.build_sigma_r_heavy``.
-HEAVY_DIS_SPECS = {
-    "dis.heracomb_bottom": {
-        "label": "heracomb_bottom_sigmar", "kind": "sigma_r_heavy",
-        "commondata_name": "HERA_NC_318GEV_EAVG_BOTTOM-SIGMARED",
-        "beam": "ep", "target": "proton",
-        "heavy_flavour": "bottom", "heavy_mass": MB, "charge_sq": 1.0 / 9.0,
-    },
-}
-NNPDF_DATASET_SPECS = {**NNPDF_DATASET_SPECS, **HEAVY_DIS_SPECS}
-
-#: Fixed-target nuclear Drell-Yan.  ``DYE605_dw_ite`` is p+Cu at sqrt(s) = 38.8 GeV, the
-#: same pointwise observable as E866 (``_FAMILY_ROUTE`` sends both to
-#: ``pixel.data.DrellYan``), so it reuses ``build_drell_yan`` unchanged and needs only a
-#: copper parton map.  Promoted 2026-09-09: the old drop_reason said "no approved copper
-#: nuclear law", but the isospin content of a nucleus is one number (``Z/A``) and the
-#: nuclear *uncertainty* is carried by the ``_dw_`` variant's covariance, exactly as
-#: CHORUS already does for lead.  See ``nuclear_parton_basis``.
-FIXED_TARGET_DY_SPECS = {
-    "dy.e605_copper": {
-        "label": "dy_e605_copper", "kind": "drell_yan", "reaction": "pCu",
-        "commondata_name": "DYE605_Z0_38P8GEV_DW_PXSEC",
-        "beam": "p", "target": "copper",
-    },
-}
-NNPDF_DATASET_SPECS = {**NNPDF_DATASET_SPECS, **FIXED_TARGET_DY_SPECS}
 
 #: Original NNPDF scales used to build distinct truth members.  Each is read from
 #: NNPDF at this Q, then assigned as the truth at ``Q0 = mc``.  ``Q = 1`` and
@@ -917,8 +809,10 @@ DY_Q2_MIN = Q0_2
 #: Drell-Yan is *bilinear*: the model materializes a dense (n_rows, n, n) tensor
 #: per contribution, and the full-basis x full-channel luminosity expands to
 #: ~460 contributions, so memory scales with the DY row count.  The full closure
-#: deliberately keeps every row surviving the physics cuts (currently 179 pp +
-#: 183 pd E866 rows).  Set an integer only for an explicitly thinned run.
+#: deliberately keeps every row surviving the physics cuts -- every row of each E866
+#: table since ``Rtau`` is read as ``sqrt(tau)`` (``dy_audit.tau_from_rtau``,
+#: 2026-09-11); the contract's ``selected_rows`` records the count.  Set an integer only
+#: for an explicitly thinned run.
 DY_MAX_ROWS = None
 
 #: DY hard-kernel scheme.  **NLO as of 2026-08-14** (was ``"LO"``).  The reason
@@ -953,8 +847,11 @@ DY_MAX_ROWS = None
 #:   fitpack parity and the E866 goldens are pinned to ``legacy_linear``; at LO it
 #:   changed nothing, at NLO it is the dominant quadrature choice.
 DY_ORDER = "NLO"
+#: Fixed couplings for the photon-only fixed-target arm (E866, E605).  Collider records
+#: are gamma*/Z and take running couplings instead -- ``datasets.collider_exchange``
+#: (owner decision D8, 2026-09-11) -- so these two do not reach them.
 DY_ALPHA_EM = 1.0 / 137.035999
-DY_ALPHA_S = 0.20                                 # fixed alpha_s at the DY scale
+DY_ALPHA_S = 0.20                                 # fixed alpha_s; fixed-target DY only -- collider rows run alpha_s(Q^2), see collider_exchange
 
 #: Compose the flavour-resolved PDF evolution operator into every DY hard tensor,
 #: on **both** the generation and the fit side.  The fitted fields live at
@@ -1521,3 +1418,249 @@ def itd_systematics_for(field: str) -> tuple:
 def moment_systematics_for(field: str) -> tuple:
     """Active Mellin-moment systematic keys for a physical field."""
     return MOMENT_SYSTEMATICS
+
+
+# >>> canonical NNPDF specs -- identical in all six full suites; edit all six together
+# -- NNPDF-commondata dataset specs ------------------------------------------------
+#
+# ``generate.nnpdf_layout`` walks the CONTRACT selection (``CONTRACT_MODE``) and looks each
+# selected id up here, so a spec a suite's mode does not select costs nothing, and one
+# table in every suite is what keeps the six from drifting.  Promoting a contract without
+# a spec stops generation ("refusing silent omission"); a spec never selects anything.
+# ``tests/test_closure_nnpdf_datasets.py`` pins the six copies identical.
+#
+# The nuclear composition is restated because the operator needs numbers and the contract
+# states prose.  A and Z are *natural* lead: NNPDF's CHORUS target is the emulsion's
+# natural isotopic mix, not Pb-208, and ``NuclearTarget`` refuses to default either.
+NNPDF_LEAD_TARGET = {"name": "lead", "mass_number": 207.2, "atomic_number": 82.0}
+
+_CHORUS_SPECS = {
+    "dis.chorus_nu": {
+        "label": "chorus_nu", "kind": "sigma_r_cc", "beam": "nu",
+        "commondata_name": "CHORUS_CC_NOTFIXED_PB_NU-SIGMARED",
+        "target": NNPDF_LEAD_TARGET,
+    },
+    "dis.chorus_nb": {
+        "label": "chorus_nb", "kind": "sigma_r_cc", "beam": "nubar",
+        "commondata_name": "CHORUS_CC_NOTFIXED_PB_NB-SIGMARED",
+        "target": NNPDF_LEAD_TARGET,
+    },
+}
+
+#: Heavy-flavour-tagged NC reduced cross section (HERACOMB_SIGMARED_B), FONLL-A at this
+#: closure's NLO; see ``datasets.build_sigma_r_heavy``.
+HEAVY_DIS_SPECS = {
+    "dis.heracomb_bottom": {
+        "label": "heracomb_bottom_sigmar", "kind": "sigma_r_heavy",
+        "commondata_name": "HERA_NC_318GEV_EAVG_BOTTOM-SIGMARED",
+        "beam": "ep", "target": "proton",
+        "heavy_flavour": "bottom", "heavy_mass": MB, "charge_sq": 1.0 / 9.0,
+    },
+}
+
+#: Fixed-target nuclear Drell-Yan (DYE605_dw_ite, p+Cu): the pointwise E866 observable
+#: with a copper parton map (``nuclear_parton_basis``).
+FIXED_TARGET_DY_SPECS = {
+    "dy.e605_copper": {
+        "label": "dy_e605_copper", "kind": "drell_yan", "reaction": "pCu",
+        "commondata_name": "DYE605_Z0_38P8GEV_DW_PXSEC",
+        "beam": "p", "target": "copper",
+    },
+}
+
+#: Collider Drell-Yan, read by ``generate._collider_dy_record``.  Fields beyond
+#: label/kind/reaction/commondata_name/nnpdf_legacy_name:
+#:
+#:   rows              (first, stop) slice of the commondata table.  A mixed W/Z table is
+#:                     one record per boson (and per Z mass slice), each fixed by the set's
+#:                     own filter.py and pinned in its contract -- never by metadata labels
+#:                     (LHCB_DY_8TEV_MUON's are wrong).
+#:   lepton_charge     +1 / -1 for a W record; required by the fiducial_lepton builder.
+#:   fiducial_channel  "w" / "z" for the two ATLAS concatenations, whose cut records are
+#:                     read per channel (fiducial_cuts_for(..., channel=)).
+#:   y_edges           "commondata" (default) | ("hepdata", ((directory, table), ...)) |
+#:                     "fiducial" (the whole cut window, for a mass spectrum).
+#:   mass_edges        "commondata" | ("csv", directory, file, low_column, high_column) |
+#:                     ("windows", ((first, stop, low_gev, high_gev), ...)) | "pole".
+#:                     Every Z/gamma* record names its published mass window (owner
+#:                     decision D7, 2026-09-11): a measurement integrated over 60-120 or
+#:                     66-116 GeV is not the cross section at m_Z^2 with zero width, and
+#:                     generate._collider_dy_record refuses a Z record left at the default
+#:                     "pole".  Only the gated W records still take it.  Each window is
+#:                     commented with the HEPData qualifier it is read from.
+#:   sqrts_gev         only where the commondata omits sqrts.
+#:
+#: Not here, each blocked in its contract: ATLASLOMASSDY11EXT (physics: Born acceptance
+#: zero below 18 GeV), CMSDY2D11 (data: mass-bin edges), ATLAS_WZ_TOT_13TEV
+#: (closure_builder: drell_yan_total).
+#:
+#: The ten W specs below ARE here and their contracts are reader_only: PIXEL's
+#: DYLeptonEtaKernel composes no evolution, so the drell_yan_fiducial_lepton datatype is
+#: gated (measured 2026-09-10) and dy_builder answers with the gate.  Rows, edges, charges
+#: and cuts are kept built so that promoting them is a contract edit.
+_Z = "drell_yan_binned"
+_W = "drell_yan_fiducial_lepton"
+COLLIDER_DY_SPECS = {
+    # -- Z-peak rapidity scans and the 8 TeV low-mass 2D set, 2026-09-09 ----------------
+    "z.lhcb7_dielectron": {
+        "label": "dy_lhcb7_z_ee", "kind": _Z, "reaction": "pp",
+        "commondata_name": "LHCB_Z0_7TEV_DIELECTRON_Y", "nnpdf_legacy_name": "LHCBZ940PB",
+        # HEPData Table2 (LHCB_Z0_7TEV_DIELECTRON/rawdata): LEPTONS MASS 60.0-120.0.
+        "mass_edges": ("windows", ((0, 9, 60.0, 120.0),)),
+    },
+    "z.lhcb8_dielectron": {
+        "label": "dy_lhcb8_z_ee", "kind": _Z, "reaction": "pp",
+        "commondata_name": "LHCB_Z0_8TEV_DIELECTRON_Y", "nnpdf_legacy_name": "LHCBZEE2FB_40",
+        # HEPData Table2 (LHCB_Z0_8TEV_DIELECTRON/rawdata): M(E+ E-) 60.0-120.0.
+        "mass_edges": ("windows", ((0, 17, 60.0, 120.0),)),
+    },
+    "z.lhcb13_dimuon": {
+        "label": "dy_lhcb13_z_mumu", "kind": _Z, "reaction": "pp",
+        "commondata_name": "LHCB_Z0_13TEV_DIMUON-Y",
+        "nnpdf_legacy_name": "LHCB_Z_13TEV_DIMUON",
+        # HEPData Table_5a (LHCB_Z0_13TEV/rawdata): M(LEPTON+ LEPTON-) 60.0-120.0.
+        "mass_edges": ("windows", ((0, 18, 60.0, 120.0),)),
+    },
+    "z.lhcb13_dielectron": {
+        "label": "dy_lhcb13_z_ee", "kind": _Z, "reaction": "pp",
+        "commondata_name": "LHCB_Z0_13TEV_DIELECTRON-Y",
+        "nnpdf_legacy_name": "LHCB_Z_13TEV_DIELECTRON",
+        # HEPData Table_5b (LHCB_Z0_13TEV/rawdata): M(LEPTON+ LEPTON-) 60.0-120.0.
+        "mass_edges": ("windows", ((0, 17, 60.0, 120.0),)),
+    },
+    "z.atlas8_lomass_2d": {
+        "label": "dy_atlas8_z_lowmass_2d", "kind": _Z, "reaction": "pp",
+        "commondata_name": "ATLAS_Z0_8TEV_LOWMASS_M-Y",
+        "nnpdf_legacy_name": "ATLAS_DY_2D_8TEV_LOWMASS", "mass_edges": "commondata",
+    },
+    # -- 2026-09-10 --------------------------------------------------------------------
+    "z.atlas8_himass_2d": {
+        "label": "dy_atlas8_z_himass_2d", "kind": _Z, "reaction": "pp",
+        "commondata_name": "ATLAS_Z0_8TEV_HIMASS_M-Y", "nnpdf_legacy_name": "ATLASDY2D8TEV",
+        "mass_edges": "commondata",
+    },
+    "z.atlas7_himass": {
+        "label": "dy_atlas7_z_himass", "kind": "drell_yan_mass_spectrum", "reaction": "pp",
+        "commondata_name": "ATLAS_Z0_7TEV_49FB_HIMASS",
+        "nnpdf_legacy_name": "ATLASZHIGHMASS49FB", "sqrts_gev": 7000.0,
+        "y_edges": "fiducial",
+        "mass_edges": ("csv", "ATLAS_Z0_7TEV_49FB", "ATLAS-49fb-Zhighmass.csv",
+                       "mee_xmin", "mee_xmax"),
+    },
+    "z.atlas7_46fb_cf": {
+        "label": "dy_atlas7_46fb_z_cf", "kind": _Z, "reaction": "pp",
+        "commondata_name": "ATLAS_Z0_7TEV_46FB_CF-Y", "nnpdf_legacy_name": "ATLASWZRAP11CF",
+        "y_edges": ("hepdata", (("ATLAS_Z0_7TEV_46FB", 14), ("ATLAS_Z0_7TEV_46FB", 15))),
+        "mass_edges": ("windows", ((0, 9, 66.0, 116.0), (9, 15, 116.0, 150.0))),
+    },
+    "z.cdf_zrap": {
+        "label": "dy_cdf_z_rap", "kind": "drell_yan_bin_integrated", "reaction": "ppbar",
+        "commondata_name": "CDF_Z0_1P96TEV_ZRAP", "nnpdf_legacy_name": "CDFZRAP_NEW",
+        # HEPData ins856131 Table_2 (CDF_Z0_1P96TEV/rawdata): M(P=3_4) 66.0-116.0 GeV.
+        "mass_edges": ("windows", ((0, 28, 66.0, 116.0),)),
+    },
+    "w.cms8_wplus": {
+        "label": "dy_cms8_wp_mu", "kind": _W, "reaction": "pp",
+        "commondata_name": "CMS_WPWM_8TEV_MUON_Y", "nnpdf_legacy_name": "CMSWMU8TEV",
+        "rows": (0, 11), "lepton_charge": 1,
+    },
+    "w.cms8_wminus": {
+        "label": "dy_cms8_wm_mu", "kind": _W, "reaction": "pp",
+        "commondata_name": "CMS_WPWM_8TEV_MUON_Y", "nnpdf_legacy_name": "CMSWMU8TEV",
+        "rows": (11, 22), "lepton_charge": -1,
+    },
+    "z.lhcb7_muon": {
+        "label": "dy_lhcb7_z_mumu", "kind": _Z, "reaction": "pp",
+        "commondata_name": "LHCB_DY_7TEV_MUON_Y", "nnpdf_legacy_name": "LHCBWZMU7TEV",
+        "rows": (0, 17),
+        # HEPData ins1373300 Table_1 (LHCB_DY_7TEV_MUON/rawdata): M(MU+ MU-) 60.0-120.0.
+        "mass_edges": ("windows", ((0, 17, 60.0, 120.0),)),
+    },
+    "w.lhcb7_wplus": {
+        "label": "dy_lhcb7_wp_mu", "kind": _W, "reaction": "pp",
+        "commondata_name": "LHCB_DY_7TEV_MUON_Y", "nnpdf_legacy_name": "LHCBWZMU7TEV",
+        "rows": (17, 25), "lepton_charge": 1,
+    },
+    "w.lhcb7_wminus": {
+        "label": "dy_lhcb7_wm_mu", "kind": _W, "reaction": "pp",
+        "commondata_name": "LHCB_DY_7TEV_MUON_Y", "nnpdf_legacy_name": "LHCBWZMU7TEV",
+        "rows": (25, 33), "lepton_charge": -1,
+    },
+    "z.lhcb8_muon": {
+        "label": "dy_lhcb8_z_mumu", "kind": _Z, "reaction": "pp",
+        "commondata_name": "LHCB_DY_8TEV_MUON_Y", "nnpdf_legacy_name": "LHCBWZMU8TEV",
+        "rows": (0, 18),
+        # HEPData ins1406555 Table_2 (LHCB_DY_8TEV_MUON/rawdata): M(MU+ MU-) 60.0-120.0.
+        "mass_edges": ("windows", ((0, 18, 60.0, 120.0),)),
+    },
+    "w.lhcb8_wplus": {
+        "label": "dy_lhcb8_wp_mu", "kind": _W, "reaction": "pp",
+        "commondata_name": "LHCB_DY_8TEV_MUON_Y", "nnpdf_legacy_name": "LHCBWZMU8TEV",
+        "rows": (18, 26), "lepton_charge": 1,
+    },
+    "w.lhcb8_wminus": {
+        "label": "dy_lhcb8_wm_mu", "kind": _W, "reaction": "pp",
+        "commondata_name": "LHCB_DY_8TEV_MUON_Y", "nnpdf_legacy_name": "LHCBWZMU8TEV",
+        "rows": (26, 34), "lepton_charge": -1,
+    },
+    "w.atlas7_46fb_wplus": {
+        "label": "dy_atlas7_46fb_wp", "kind": _W, "reaction": "pp",
+        "commondata_name": "ATLAS_DY_7TEV_46FB_CC", "nnpdf_legacy_name": "ATLASWZRAP11CC",
+        "rows": (0, 11), "lepton_charge": 1, "fiducial_channel": "w",
+        "y_edges": ("hepdata", (("ATLAS_WPWM_7TEV_46FB", 9),)),
+    },
+    "w.atlas7_46fb_wminus": {
+        "label": "dy_atlas7_46fb_wm", "kind": _W, "reaction": "pp",
+        "commondata_name": "ATLAS_DY_7TEV_46FB_CC", "nnpdf_legacy_name": "ATLASWZRAP11CC",
+        "rows": (11, 22), "lepton_charge": -1, "fiducial_channel": "w",
+        "y_edges": ("hepdata", (("ATLAS_WPWM_7TEV_46FB", 10),)),
+    },
+    "z.atlas7_46fb_cc_low": {
+        "label": "dy_atlas7_46fb_z_cc_low", "kind": _Z, "reaction": "pp",
+        "commondata_name": "ATLAS_DY_7TEV_46FB_CC", "nnpdf_legacy_name": "ATLASWZRAP11CC",
+        "rows": (22, 28), "fiducial_channel": "z",
+        "y_edges": ("hepdata", (("ATLAS_Z0_7TEV_46FB", 11),)),
+        "mass_edges": ("windows", ((0, 6, 46.0, 66.0),)),
+    },
+    "z.atlas7_46fb_cc_peak": {
+        "label": "dy_atlas7_46fb_z_cc_peak", "kind": _Z, "reaction": "pp",
+        "commondata_name": "ATLAS_DY_7TEV_46FB_CC", "nnpdf_legacy_name": "ATLASWZRAP11CC",
+        "rows": (28, 40), "fiducial_channel": "z",
+        "y_edges": ("hepdata", (("ATLAS_Z0_7TEV_46FB", 12),)),
+        # HEPData ins1502620 Table_12 (ATLAS_Z0_7TEV_46FB/rawdata): MLL 66-116.
+        "mass_edges": ("windows", ((0, 12, 66.0, 116.0),)),
+    },
+    "z.atlas7_46fb_cc_high": {
+        "label": "dy_atlas7_46fb_z_cc_high", "kind": _Z, "reaction": "pp",
+        "commondata_name": "ATLAS_DY_7TEV_46FB_CC", "nnpdf_legacy_name": "ATLASWZRAP11CC",
+        "rows": (40, 46), "fiducial_channel": "z",
+        "y_edges": ("hepdata", (("ATLAS_Z0_7TEV_46FB", 13),)),
+        "mass_edges": ("windows", ((0, 6, 116.0, 150.0),)),
+    },
+    "w.atlas7_36pb_wplus": {
+        "label": "dy_atlas7_36pb_wp", "kind": _W, "reaction": "pp",
+        "commondata_name": "ATLAS_DY_7TEV_36PB_ETA", "nnpdf_legacy_name": "ATLASWZRAP36PB",
+        "rows": (0, 11), "lepton_charge": 1, "fiducial_channel": "w",
+        "y_edges": ("hepdata", (("ATLAS_WPWM_7TEV_36PB", 5),)),
+    },
+    "w.atlas7_36pb_wminus": {
+        "label": "dy_atlas7_36pb_wm", "kind": _W, "reaction": "pp",
+        "commondata_name": "ATLAS_DY_7TEV_36PB_ETA", "nnpdf_legacy_name": "ATLASWZRAP36PB",
+        "rows": (11, 22), "lepton_charge": -1, "fiducial_channel": "w",
+        "y_edges": ("hepdata", (("ATLAS_WPWM_7TEV_36PB", 3),)),
+    },
+    "z.atlas7_36pb": {
+        "label": "dy_atlas7_36pb_z", "kind": _Z, "reaction": "pp",
+        "commondata_name": "ATLAS_DY_7TEV_36PB_ETA", "nnpdf_legacy_name": "ATLASWZRAP36PB",
+        "rows": (22, 30), "fiducial_channel": "z",
+        "y_edges": ("hepdata", (("ATLAS_Z0_7TEV_36PB", 1),)),
+        # HEPData ins928289 Table_1 (ATLAS_Z0_7TEV_36PB/rawdata): M(C=LEPTON+LEPTON-) 66.0-116.0.
+        "mass_edges": ("windows", ((0, 8, 66.0, 116.0),)),
+    },
+}
+
+#: One registry for everything ``nnpdf_layout`` materializes from NNPDF commondata.
+NNPDF_DATASET_SPECS = {
+    **_CHORUS_SPECS, **HEAVY_DIS_SPECS, **FIXED_TARGET_DY_SPECS, **COLLIDER_DY_SPECS,
+}
+# <<< canonical NNPDF specs

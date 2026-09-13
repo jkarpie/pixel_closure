@@ -18,6 +18,7 @@ import warnings
 import numpy as np
 
 import pixel
+from pixel.data.unit_scale import unit_scale_of
 from pixel.data import families
 import numpy as np
 from pixel import priors, kernels
@@ -285,6 +286,16 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     include_lattice = "lattice" in selected
     include_exp = "dis" in selected
     include_dy = "dy" in selected                  # Drell-Yan
+    # The generic ``datasets`` section is *derived*, not aliased.  It used to read
+    # ``include_nnpdf = include_exp`` -- right only because every record in it happens to
+    # be DIS (CHORUS neutrino CC on lead) today.  ``generic_section_family`` reads each
+    # record's ``contract_id`` and routes it through the same registry, so a DY or
+    # lattice record landing in that section follows *its* gate instead of the DIS one,
+    # and a section spanning two families raises rather than picking a side.
+    # ``build_datasets`` still defaults the flag to False on purpose: a flag defaulting
+    # to True would enter these rows into a ``lattice``-only fit.
+    generic_family = dsets.generic_section_family(q_key)
+    include_nnpdf = generic_family is not None and generic_family in selected
     analysis = pixel.Analysis(f"closure_{cfg.truth_label(q_key)}_{mode}")
     fields = {}
     for name in cfg.ALL_FIELDS:
@@ -316,6 +327,7 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         include_lattice=include_lattice,
         include_exp=include_exp,
         include_dy=include_dy,
+        include_nnpdf=include_nnpdf,
         use_kernel_cache=use_kernel_cache,
         with_systematics=include_lattice,
         t0=t0,
@@ -1127,6 +1139,7 @@ def dy_normalization_report(q_key, model, vec, fitted_stats=None) -> dict:
             if std > 0.0 else None,
             "shift_rms": None,
         }
+    by_name = {dataset.name: dataset for dataset in model.datasets}
     for row in model.nuisance_pulls(vec):
         if row["name"] != "normalization" or row["dataset"] not in truth_beta:
             continue
@@ -1148,7 +1161,9 @@ def dy_normalization_report(q_key, model, vec, fitted_stats=None) -> dict:
             "expected_pull": float(expected),
             "pull_minus_expected": float(row["pull"] - expected),
             "pull_z": _finite_or_none(z) if z is not None else None,
-            "shift_rms": row["shift_rms"],
+            # nuisance_pulls reports the shift in the fitted, unit-scaled rows;
+            # quote it in the dataset's published unit.
+            "shift_rms": row["shift_rms"] * unit_scale_of(by_name[row["dataset"]]),
         }
     return report
 

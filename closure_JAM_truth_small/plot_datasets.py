@@ -14,6 +14,8 @@ from pathlib import Path
 
 import numpy as np
 
+from pixel.data.unit_scale import unit_scale_of
+
 from . import config as cfg
 from . import fit as fitmod
 from .run_closure import _prepare_matplotlib, save_figure_both
@@ -280,6 +282,13 @@ def _truth_predictions(model, truth, blocks):
     return linear, bilinear
 
 
+def _declared_units(dataset):
+    """The dataset's declared unit for a y-axis label, or ``None`` for a pure number."""
+    meta = getattr(getattr(dataset, "metadata", None), "meta", None) or {}
+    units = meta.get("units")
+    return None if units in (None, "", "dimensionless") else str(units)
+
+
 def _record_chi2(dataset, prediction, rcond):
     """Chi2 for one plotted dataset using the same pseudo-inverse tolerance."""
     residual = np.asarray(dataset.mean, dtype=float) - np.asarray(prediction, dtype=float)
@@ -327,6 +336,10 @@ def build_records_from_result(q_key: str, mode: str, result: dict,
             order = np.argsort(x) if x.size == dataset.n_data else np.arange(dataset.n_data)
             reproduction = np.asarray(prediction[sl], dtype=float)
             dataset_chi2 = _record_chi2(dataset, reproduction, model.rcond)
+            # chi2 is scale-free.  Every drawn number is multiplied back into the
+            # dataset's published unit: pixel.Analysis.add divides a dimensionful
+            # dataset by one power of two (pixel.data.unit_scale, 2026-09-11).
+            scale = unit_scale_of(dataset)
             records.append({
                 "name": dataset.name,
                 "source": dataset.source,
@@ -335,11 +348,12 @@ def build_records_from_result(q_key: str, mode: str, result: dict,
                 "x": x[order],
                 "xlabel": xlabel,
                 "use_log": use_log,
-                "data": np.asarray(dataset.mean, dtype=float)[order],
-                "sigma": _diag_sigma(dataset)[order],
-                "truth": np.asarray(truth_prediction[sl], dtype=float)[order],
-                "reproduction": reproduction[order],
-                "fit_std": np.asarray(prediction_std[sl], dtype=float)[order],
+                "data": scale * np.asarray(dataset.mean, dtype=float)[order],
+                "sigma": scale * _diag_sigma(dataset)[order],
+                "truth": scale * np.asarray(truth_prediction[sl], dtype=float)[order],
+                "reproduction": scale * reproduction[order],
+                "fit_std": scale * np.asarray(prediction_std[sl], dtype=float)[order],
+                "units": _declared_units(dataset),
                 "chi2": dataset_chi2,
                 "chi2_per_data": (
                     dataset_chi2 / dataset.n_data if dataset.n_data else np.nan
@@ -399,6 +413,8 @@ def plot_records(records, path: Path, *, q_key: str, mode: str):
                  f"  n={rec['n_data']}")
         ax.set_title(title, fontsize=8)
         ax.set_xlabel(rec["xlabel"], fontsize=8)
+        if rec.get("units"):
+            ax.set_ylabel(rec["units"], fontsize=8)
         ax.tick_params(labelsize=7)
     for ax in axes.ravel()[n:]:
         ax.axis("off")

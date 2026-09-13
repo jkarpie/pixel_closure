@@ -32,6 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
+from pixel.core.model import iter_bilinear_group_tensors
 from pixel.util.progress import Stopwatch, format_duration
 
 from . import config as cfg
@@ -189,9 +190,14 @@ def lattice_layout():
 
 def dy_layout():
     """Drell-Yan records from the audited E866 tables (used only)."""
+    from . import dy_audit
+
     manifest = json.loads(cfg.DIS_MANIFEST_PATH.read_text())
-    if not manifest.get("dy", {}).get("has_norm_audit"):
-        from . import dy_audit
+    dy_manifest = manifest.get("dy", {})
+    # A manifest audited before E866's Rtau was read as sqrt(tau) carries the wrong
+    # (S, Q2, Y) and the wrong retained rows; missing the marker is enough to redo it.
+    if (not dy_manifest.get("has_norm_audit")
+            or dy_manifest.get("tau_convention") != dy_audit.TAU_CONVENTION):
         dy_audit.augment_manifest()
         manifest = json.loads(cfg.DIS_MANIFEST_PATH.read_text())
     out = []
@@ -330,11 +336,19 @@ def dy_central(dataset, truth, fields, reaction) -> np.ndarray:
             groups[key] = [replace(c, weight=1.0), outer]
 
     central = np.zeros(int(dataset.n_data), dtype=float)
-    for contribution, outer in groups.values():
-        tensor = np.asarray(
-            contribution.assemble(dataset.nu, a_basis, a_basis), dtype=float
+    # The iterator the fit's Model uses, so the two sides stay one object: every group
+    # sharing a hard kernel is assembled in one pass, which builds that hard tensor once
+    # instead of once per (kernel, evolution) group -- 30 instead of 680 on a collider
+    # Z table at NLO (measured 2026-09-10).
+    assembled = iter_bilinear_group_tensors(
+        [contribution for contribution, _ in groups.values()],
+        dataset.nu,
+        lambda contribution: (a_basis, a_basis),
+    )
+    for (contribution, outer), tensor in zip(groups.values(), assembled):
+        central += np.einsum(
+            "rij,ij->r", np.asarray(tensor, dtype=float), outer, optimize=True
         )
-        central += np.einsum("rij,ij->r", tensor, outer, optimize=True)
     return central
 
 
@@ -410,6 +424,21 @@ def exp_layout(norm_betas=None):
 
 
 # -- one member --------------------------------------------------------------
+
+
+def _dy_floor(central) -> float:
+    """Drell-Yan uncertainty floor: a fraction of the record's own largest |prediction|.
+
+    ``cfg.EXP_ABS_FLOOR`` is absolute and sized for order-one DIS observables.  PIXEL's
+    Drell-Yan predictions are in natural units (E866 about 1e-7), where an absolute
+    1e-6 swamps the published relative errors: measured 2026-09-10 on this suite's
+    committed E866 data, median sigma/|mean| was 2.2 against rel_stat 0.15.  The full
+    suites carry the same rule as ``generate.DY_RELATIVE_FLOOR``.
+    """
+    scale = np.abs(np.asarray(central, dtype=float))
+    if scale.size and scale.max() > 0.0:
+        return 1.0e-6 * float(scale.max())
+    return cfg.EXP_ABS_FLOOR
 
 
 def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
@@ -560,7 +589,7 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
             if rec.get("rel_norm") is not None:
                 central = (1.0 + rec["norm_beta"] * rec["rel_norm"]) * central
             rel = np.asarray(rec["rel_stat"], dtype=float)
-            sigma = np.abs(rel) * np.abs(central) + cfg.EXP_ABS_FLOOR
+            sigma = np.abs(rel) * np.abs(central) + _dy_floor(central)
             cov = np.diag(sigma * sigma)
             measured = draw(central, sigma, rng) if noise else central
             write_dat(truth_dir / rec["file"],
@@ -583,7 +612,7 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
         ds = dsets.build_drell_yan(rec, None, fields, None)
         central = dy_central(ds, mean_curves, fields, rec["reaction"])
         sigma = np.asarray(rec["rel_stat"], dtype=float) * np.abs(central)
-        sigma = sigma + cfg.EXP_ABS_FLOOR
+        sigma = sigma + _dy_floor(central)
         cov = np.diag(sigma * sigma)
         measured = draw(central, sigma, rng) if noise else central
         write_dat(

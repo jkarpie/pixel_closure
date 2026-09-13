@@ -1142,3 +1142,78 @@ def test_dy_records_render_png_and_pdf(tmp_path):
 
     assert output.is_file()
     assert output.with_suffix(".pdf").is_file()
+
+
+def test_records_are_drawn_in_the_published_unit_of_a_scaled_dataset(monkeypatch):
+    """A dataset PIXEL divided by a power of two is drawn multiplied back.
+
+    Since 2026-09-11 ``pixel.Analysis.add`` divides every dimensionful dataset by one
+    exact power of two (``pixel.data.unit_scale``). So a closure fit's model holds
+    scaled rows and predicts scaled numbers.  ``build_records_from_result`` multiplies
+    the data, the uncertainty, the truth fold, the reproduction and the band back by the
+    recorded scale, and carries the declared unit for the y-axis.  chi2 is scale-free,
+    so it is unchanged.  A dimensionless dataset in the same fit is left alone.
+
+    The control is the same mixed fixture as
+    ``test_mixed_records_include_linear_and_dy_without_rebuilding_short_samples``,
+    built by the same call, with the scale record absent.  The scale is a power of two,
+    so the comparison is exact.  Not asserted here: the y-label ``plot_records`` draws
+    from ``units``.
+    """
+
+    scale = 2.0 ** -10
+
+    def records_for(dy_meta):
+        linear = _dataset(
+            "dis_table", [0.8, 1.1], np.diag([0.04, 0.09]),
+            {"x": np.array([0.1, 0.3])}, component="F2",
+        )
+        linear.metadata = SimpleNamespace(
+            independent=linear.metadata.independent, meta={"units": "dimensionless"}
+        )
+        dy = _dataset(
+            "dy_table", [1.4, 1.0], np.diag([0.01, 0.04]),
+            {"Q2": np.array([25.0, 25.0]), "S": np.array([100.0, 100.0]),
+             "Y": np.array([0.4, -0.2])},
+            component="pp",
+        )
+        dy.metadata = SimpleNamespace(independent=dy.metadata.independent, meta=dict(dy_meta))
+        blocks = _blocks(
+            np.array([np.diag([0.5, 0.2, 0.1, 0.3]), np.diag([0.2, 0.4, 0.3, 0.1])]),
+            linear_rows=2,
+        )
+        blocks.B[:] = np.array([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]])
+        model = SimpleNamespace(
+            datasets=[linear, dy],
+            fields=[SimpleNamespace(name="f", nodes=np.linspace(0.1, 0.9, 4))],
+            gp_indices=[0], has_bilinear=True, n_free=3, rcond=1e-12,
+            _layout=SimpleNamespace(
+                datasets=(SimpleNamespace(dataset_index=0, data_slice=slice(0, 2)),),
+                bilinear_datasets=(SimpleNamespace(dataset_index=1, data_slice=slice(0, 2)),),
+            ),
+        )
+        model._rebuild = lambda vec: vec
+        model._blocks = lambda _theta: blocks
+        samples = SimpleNamespace(
+            samples=np.zeros((5, 1)),
+            mean=np.array([0.7, 0.9, 0.4, 0.2]),
+            covariance=np.diag([0.04, 0.03, 0.02, 0.01]),
+        )
+        truth = {"x_nodes": np.linspace(0.1, 0.9, 4), "curves": {"f": [0.6, 0.8, 0.5, 0.3]}}
+        records = jam_small.build_records_from_result(
+            "2", "both", {"model": model, "samples": samples}, truth
+        )
+        return {record["kind"]: record for record in records}
+
+    monkeypatch.setattr(
+        jam_small.fitmod, "_weighted_mean_vec",
+        lambda samples, model=None: np.zeros(1 if model is None else 3),
+    )
+    plain = records_for({"units": "GeV^-4"})
+    scaled = records_for({"units": "GeV^-4", "unit_scale": {"scale": scale}})
+    for key in ("data", "sigma", "truth", "reproduction", "fit_std"):
+        np.testing.assert_array_equal(scaled["dy"][key], scale * plain["dy"][key])
+        np.testing.assert_array_equal(scaled["linear"][key], plain["linear"][key])
+    assert scaled["dy"]["chi2"] == plain["dy"]["chi2"]
+    assert scaled["dy"]["units"] == plain["dy"]["units"] == "GeV^-4"
+    assert scaled["linear"]["units"] is None

@@ -329,6 +329,13 @@ def _stub_evolution(monkeypatch, size):
         return SimpleNamespace(matrix=factors[(target, source)] * eye)
 
     monkeypatch.setattr(transition, "non_singlet_evolution_matrix", nonsinglet)
+    # Since 2026-09-10 the projection builds its non-singlet blocks through the
+    # batched builder; answer it with the same stand-in, one call per request.
+    monkeypatch.setattr(
+        transition,
+        "non_singlet_evolution_matrices",
+        lambda basis, requests, **_kwargs: [nonsinglet(basis, **request) for request in requests],
+    )
     monkeypatch.setattr(transition, "singlet_evolution_matrix", singlet)
 
 
@@ -381,6 +388,13 @@ def _stub_evolution_flavour_mixing(monkeypatch, size):
         return SimpleNamespace(matrix=factors[key] * mix(mixings[key]))
 
     monkeypatch.setattr(transition, "non_singlet_evolution_matrix", nonsinglet)
+    # Since 2026-09-10 the projection builds its non-singlet blocks through the
+    # batched builder; answer it with the same stand-in, one call per request.
+    monkeypatch.setattr(
+        transition,
+        "non_singlet_evolution_matrices",
+        lambda basis, requests, **_kwargs: [nonsinglet(basis, **request) for request in requests],
+    )
     monkeypatch.setattr(transition, "singlet_evolution_matrix", singlet)
 
 
@@ -961,3 +975,52 @@ def test_dy_projection_disagreeing_with_the_configured_nf_is_rejected(
     monkeypatch.setattr(config, "DY_NF", 4)
     with pytest.raises(ValueError, match="projects to nf=5"):
         datasets.build_drell_yan(_record(), None, _fields(config, basis), None)
+
+
+@pytest.mark.parametrize("suite", SUITES)
+def test_scale_evolution_prefetch_builds_every_missing_scale_in_one_batch(suite):
+    """``prefetch`` builds the unbuilt scales in one batch, and ``__call__`` then reuses them.
+
+    PIXEL's binned Drell-Yan kernels hand every mass node to an operator's ``prefetch``
+    before evaluating any (2026-09-10).  That must reach ``project_many`` once, with each
+    missing scale once and in first-seen order, and leave nothing for ``project`` to build.
+    A batch is held to the same flavour-structure check as a single scale.
+    """
+    _, datasets, _ = _suite(suite)
+
+    def projection(Q2, nf=4):
+        return SimpleNamespace(
+            nf=nf,
+            fields={"u": {"t3": 1.0}},
+            evolution={"u": {"t3": ((0.5, np.full((2, 2), float(Q2))),)}},
+        )
+
+    singles, batches = [], []
+
+    def project(Q2):
+        singles.append(Q2)
+        return projection(Q2)
+
+    def project_many(Q2s):
+        batches.append(list(Q2s))
+        return [projection(Q2) for Q2 in Q2s]
+
+    _, evolution, nf = datasets._scale_evolution(project, 4.0, project_many=project_many)
+    ((_, operator),) = evolution["u"]["t3"]
+    assert nf == 4 and singles == [4.0]
+
+    operator.prefetch([4.0, 9.0, 16.0, 9.0])
+    assert batches == [[9.0, 16.0]]
+    np.testing.assert_array_equal(operator(16.0), np.full((2, 2), 16.0))
+    assert singles == [4.0]
+    operator.prefetch([9.0, 25.0])
+    assert batches == [[9.0, 16.0], [25.0]]
+
+    def five_flavour(Q2s):
+        return [projection(Q2, nf=5) for Q2 in Q2s]
+
+    _, evolution, _ = datasets._scale_evolution(project, 4.0, project_many=five_flavour)
+    ((_, operator),) = evolution["u"]["t3"]
+    with pytest.raises(ValueError, match="different flavour number"):
+        operator.prefetch([100.0])
+

@@ -35,8 +35,11 @@ import json
 from pathlib import Path
 from typing import NamedTuple
 
+from collections.abc import Mapping
+
 import numpy as np
 
+from pixel.core.model import iter_bilinear_group_tensors
 from pixel.util.progress import Stopwatch, format_duration
 
 from pixel import kernels
@@ -45,6 +48,8 @@ from pixel.data.contracts import (
     closure_extension_roster,
     contract_artifact_provenance,
 )
+from pixel.data.closure_audit import read_nnpdf_source
+from pixel.data.experimental._dis_common import PROTON_MASS_GEV, dis_w2
 from pixel.kernels import LATTICE_SYSTEMATICS
 
 from . import config as cfg
@@ -53,7 +58,23 @@ from . import pdf_guidance
 
 #: DIS observable kinds (real rel_stat diagonal error + jitter); everything else
 #: is lattice (full replica covariance + 1% diagonal inflation + systematics).
-EXP_KINDS = ("f2", "sigma_r", "sigma_r_cc")
+#: ``sigma_r_heavy`` joined 2026-09-10: the HERA bottom set is linear DIS and its fold is
+#: the DIS fold, and leaving it out of this tuple is what let the old positional operator
+#: slice pair records with operators built for other datasets.
+EXP_KINDS = ("f2", "sigma_r", "sigma_r_cc", "sigma_r_heavy")
+LATTICE_KINDS = ("pseudoitd", "mellin")
+#: The Drell-Yan uncertainty floor, as a fraction of each record's largest |prediction|.
+#:
+#: ``cfg.EXP_ABS_FLOOR`` is an ABSOLUTE floor sized for DIS observables of order one.
+#: PIXEL's Drell-Yan predictions are in natural units -- about 1e-7 for E866 and 1e-16
+#: for a collider Z row at the pole -- where an absolute 1e-6 swamps the published
+#: relative errors.  Measured 2026-09-10 on the committed small-suite E866 data: median
+#: sigma/|mean| 2.2 against rel_stat 0.15, so every E866 row was drawn with about fifteen
+#: times its stated error.  A floor relative to the record's own scale keeps its one job
+#: -- no zero variance where rel_stat is zero or a prediction vanishes -- at any units.
+DY_RELATIVE_FLOOR = 1.0e-6
+#: Drell-Yan kinds, folded by their own arm into the ``dy`` manifest section.
+DY_KINDS = dsets.DY_KINDS
 
 #: fitpack target label -> PIXEL target name.
 #:
@@ -461,13 +482,17 @@ def dy_layout():
     Ensures the DIS manifest carries the ``dy`` audit, then returns one record per
     modelable table with its (S, Q2, Y) kinematics and real ``rel_stat``.
     """
+    from . import dy_audit
+
     manifest = json.loads(cfg.DIS_MANIFEST_PATH.read_text())
     dy_manifest = manifest.get("dy", {})
     if (
         not dy_manifest.get("has_norm_audit")
         or dy_manifest.get("max_rows", object()) != cfg.DY_MAX_ROWS
+        # A manifest audited before E866's Rtau was read as sqrt(tau) carries the wrong
+        # (S, Q2, Y) and the wrong retained rows; missing the marker is enough to redo it.
+        or dy_manifest.get("tau_convention") != dy_audit.TAU_CONVENTION
     ):
-        from . import dy_audit
         dy_audit.augment_manifest()
         manifest = json.loads(cfg.DIS_MANIFEST_PATH.read_text())
     out = []
@@ -574,11 +599,19 @@ def dy_central(dataset, truth, fields, reaction) -> np.ndarray:
             groups[key] = [replace(c, weight=1.0), outer]
 
     central = np.zeros(int(dataset.n_data), dtype=float)
-    for contribution, outer in groups.values():
-        tensor = np.asarray(
-            contribution.assemble(dataset.nu, a_basis, a_basis), dtype=float
+    # The iterator the fit's Model uses, so the two sides stay one object: every group
+    # sharing a hard kernel is assembled in one pass, which builds that hard tensor once
+    # instead of once per (kernel, evolution) group -- 30 instead of 680 on a collider
+    # Z table at NLO (measured 2026-09-10).
+    assembled = iter_bilinear_group_tensors(
+        [contribution for contribution, _ in groups.values()],
+        dataset.nu,
+        lambda contribution: (a_basis, a_basis),
+    )
+    for (contribution, outer), tensor in zip(groups.values(), assembled):
+        central += np.einsum(
+            "rij,ij->r", np.asarray(tensor, dtype=float), outer, optimize=True
         )
-        central += np.einsum("rij,ij->r", tensor, outer, optimize=True)
     return central
 
 
@@ -635,6 +668,574 @@ def exp_layout():
     return out
 
 
+def nnpdf_layout():
+    """Records for the ``datasets`` and ``dy`` manifest sections, from NNPDF commondata.
+
+    **Two sections, one walk.**  A linear DIS record lands in ``datasets``; a Drell-Yan
+    record -- fixed-target or collider -- lands in ``dy``, the section the family registry
+    routes every ``dy.``/``z.``/``w.`` contract to, and is folded by its own arm in
+    :func:`generate_member`.  Walking the selection once keeps the coverage guard seeing
+    every selected id in one place.
+
+    Walks the *contract selection* rather than a local list, so a dataset enters
+    generation exactly when its contract says it should.  ``cfg.NNPDF_DATASET_SPECS``
+    supplies only what the contract states as prose and the operator needs as numbers
+    (the beam label and the target's A/Z); an id selected with no spec is left out
+    here and caught by the coverage check in :func:`generate_member`.
+
+    **Rows are cut, and the cut is the generator's own.**  CHORUS reaches down to
+    ``Q2 = 0.263 GeV^2``, far below ``Q0_2 = 1.6384``, so evolving to it would mean
+    running backwards out of the perturbative region.  The mask is the same one
+    ``dis_audit.retained_rows`` applies to every other DIS table -- ``Q2 >= DIS_Q2_MIN``
+    and ``W2 > DIS_W2_MIN`` -- and the retained count is what the contract's
+    ``selected_rows`` records (**520 of 607 per beam**, 1,040 total).
+
+    **Do not restore the 470 this docstring claimed until 2026-08-22.**  That count came
+    from cutting at NNPDF's own ``Q0^2 = 1.65^2 = 2.7225`` instead of *this closure's*
+    ``DIS_Q2_MIN = Q0_2 = mc^2 = 1.6384`` (``config.MC = 1.28``).  The generator's own
+    coverage check rejected it and ``data/nnpdf_audit.json`` records 520; the prose
+    outlived the fix.  Re-derive from the audit rather than quoting either number.
+
+    **The uncertainty split is not the fitpack one and must not be forced into it.**
+    A fitpack table's correlated sources are ``%``-type, i.e. multiplicative, which is
+    why ``_exp_nuisance_kwargs`` passes them as ``multiplicative_systematics`` for t0
+    referencing.  NNPDF's are typed individually, and CHORUS carries **1013 (nu) /
+    113 (nb) additive** correlated sources plus exactly **one** multiplicative one.
+    Additive sources are absolute numbers that no t0 iteration rescales, so they belong
+    in the ``.dat`` covariance; only the genuine MULT source is handed to the nuisance
+    machinery.  Routing the additive ones through ``multiplicative_systematics`` would
+    silently rescale 75% of the nu variance by the theory prediction.
+
+    One approximation is taken knowingly and is recorded per record as
+    ``shared_multiplicative_sources``: ``global:CHORUSQEDRADCOR1`` is the *same* NNPDF
+    nuisance in both beam records (correlated at r = 0.998 across them), but the DIS
+    nuisance layer marginalizes each dataset's copy separately, so the cross-record
+    block is dropped.  It carries a median 3-4% of each row's variance.
+    """
+    roster = closure_extension_roster(cfg.CONTRACT_MODE)
+    out = []
+    for entry in roster["selected"]:
+        spec = cfg.NNPDF_DATASET_SPECS.get(entry["id"])
+        if spec is None:
+            continue
+        common = read_nnpdf_source(cfg.NNPDF_COMMONDATA, spec["commondata_name"])
+        # Drell-Yan is a different observable on the same commondata plumbing: bins in
+        # rapidity or mass, not (x, Q2, y) DIS points, so it neither has nor wants the
+        # W2 cut below.  Pointwise fixed-target first; every other DY kind is collider.
+        if spec["kind"] == "drell_yan":
+            out.append(_fixed_target_dy_record(entry, spec, common))
+            continue
+        if spec["kind"] in DY_KINDS:
+            out.append(_collider_dy_record(entry, spec, common))
+            continue
+        x = np.asarray(common.kinematics["x"], dtype=float)
+        q2 = np.asarray(common.kinematics["Q2"], dtype=float)
+        y = np.asarray(common.kinematics["y"], dtype=float)
+        value = np.asarray(common.value, dtype=float)
+        w2 = dis_w2(x, q2, m_h=PROTON_MASS_GEV)
+        keep = np.flatnonzero(
+            np.isfinite(x) & np.isfinite(q2) & np.isfinite(y) & np.isfinite(value)
+            & (x > 0.0) & (x < 1.0)
+            & (q2 >= cfg.DIS_Q2_MIN) & (w2 > cfg.DIS_W2_MIN)
+            & (value != 0.0)
+        )
+        if keep.size != int(entry["selected_rows"]):
+            raise RuntimeError(
+                f"{entry['id']}: the closure cut retains {keep.size} rows but the "
+                f"contract records selected_rows={entry['selected_rows']}; one of the "
+                "two has changed and generation must not paper over which"
+            )
+
+        # Additive sources: statistical (uncorrelated) plus correlated.  Both are
+        # absolute in the commondata and both are stored here **relative to the
+        # published central value**, because the closure's convention throughout is
+        # "published relative error, applied to the folded truth" -- the folded truth
+        # is not the published measurement and an absolute error bar carried over
+        # unchanged would sit at the wrong scale.  ``rel_stat`` already works this way
+        # for every fitpack table, so this keeps one convention rather than two.
+        published = np.abs(value[keep])
+        stat = np.sqrt(
+            sum(np.asarray(v, dtype=float)[keep] ** 2 for v in common.uncorrelated.values())
+        )
+        correlated = [
+            np.asarray(v, dtype=float)[keep] / published
+            for v in common.correlated.values()
+        ]
+        additive = (
+            np.stack(correlated, axis=1) if correlated
+            else np.zeros((keep.size, 0), dtype=float)
+        )
+        rec = {
+            "kind": spec["kind"],
+            "section": "datasets",
+            "label": spec["label"],
+            "name": spec["label"],
+            "contract_id": entry["id"],
+            "commondata_name": spec["commondata_name"],
+            # A nuclear target is a mapping (A/Z stay visible in the manifest); a
+            # proton target is the plain string the builders already accept.
+            "target": (dict(spec["target"]) if isinstance(spec["target"], Mapping)
+                       else spec["target"]),
+            "beam": spec["beam"],
+            "file": f"datasets/{spec['label']}.dat",
+            "y": y[keep].tolist(),
+            "source_rows": int(x.size),
+            "retained_rows": int(keep.size),
+            "rel_stat": (stat / published).tolist(),
+            "_leading": (x[keep], q2[keep]),
+            "_additive_rel": additive,
+        }
+        # Heavy-flavour-tagged sets carry the quark they tag and its charge weight; the
+        # inclusive arm has neither and the keys are simply absent there.
+        for extra in ("heavy_flavour", "heavy_mass", "charge_sq"):
+            if extra in spec:
+                rec[extra] = spec[extra]
+        multiplicative = {
+            name: np.asarray(v, dtype=float)[keep]
+            for name, v in common.multiplicative.items()
+        }
+        if multiplicative:
+            rec["correlated_file"] = f"{spec['label']}.npz"
+            rec["correlated_names"] = sorted(multiplicative)
+            rec["_correlated_rel"] = np.stack(
+                [multiplicative[name] for name in rec["correlated_names"]], axis=0
+            )
+            rec["shared_multiplicative_sources"] = [
+                name for name in rec["correlated_names"] if name.startswith("global:")
+            ]
+        out.append(rec)
+    return out
+
+
+def _dy_uncertainties(common, rows, published):
+    """Relative statistical, additive and multiplicative sources for ``rows``.
+
+    The closure's one convention: stored **relative to the published central value**, so
+    the fold applies them to the folded truth.  A source that vanishes on every selected
+    row is dropped -- a per-point source belonging to another boson's rows of the same
+    table would otherwise ride along as a zero column.
+
+    Returns:
+        tuple: ``(rel_stat, additive, names, multiplicative)`` with ``additive`` shaped
+        ``(rows, sources)`` and ``multiplicative`` shaped ``(sources, rows)``.
+    """
+    stat = np.sqrt(sum(np.asarray(v, dtype=float)[rows] ** 2
+                       for v in common.uncorrelated.values()))
+    additive = [np.asarray(v, dtype=float)[rows] / published
+                for v in common.correlated.values()]
+    additive = [column for column in additive if np.any(column)]
+    additive = (np.stack(additive, axis=1) if additive
+                else np.zeros((rows.size, 0), dtype=float))
+    multiplicative = {name: np.asarray(v, dtype=float)[rows]
+                      for name, v in common.multiplicative.items()}
+    names = sorted(name for name, v in multiplicative.items() if np.any(v))
+    matrix = (np.stack([multiplicative[name] for name in names], axis=0) if names
+              else np.zeros((0, rows.size), dtype=float))
+    return np.asarray(stat / published, dtype=float), additive, names, matrix
+
+
+def _attach_multiplicative(rec, names, matrix):
+    """Record the multiplicative sources :func:`fold_dy_record` folds in."""
+    if names:
+        rec["multiplicative_names"] = list(names)
+        rec["_multiplicative_rel"] = matrix
+        rec["shared_multiplicative_sources"] = [
+            name for name in names if name.startswith("global:")
+        ]
+    return rec
+
+
+def _fixed_target_dy_record(entry, spec, common):
+    """One pointwise fixed-target Drell-Yan record (E605 p+Cu) from NNPDF commondata.
+
+    The same observable as the fitpack E866 tables the suite already carries -- one
+    ``(S, Q2, Y)`` per row -- so it feeds ``build_drell_yan`` unchanged and the only new
+    thing is the copper parton map (``config.nuclear_parton_basis``).  It lives in the
+    ``dy`` section beside E866.
+
+    The commondata gives ``rapidity``/``M2``/``sqrts``; the closure's DY cuts are
+    ``Q2 >= DY_Q2_MIN`` and physical ``x1, x2 < DY_X_MAX``.  Measured 2026-09-09: all
+    119 rows pass (``Q2`` spans 50.5-286.0, ``x1 <= 0.650``, ``x2 <= 0.482``), which is
+    why the contract's ``selected_rows`` equals its ``source_rows``.  The equality is
+    asserted rather than assumed, so a future cut change surfaces here.
+    """
+    value = np.asarray(common.value, dtype=float)
+    kin = common.kinematics
+    y  = np.asarray(kin["rapidity"], dtype=float)
+    q2 = np.asarray(kin["M2"], dtype=float)
+    s  = np.asarray(kin["sqrts"], dtype=float) ** 2
+    tau = q2 / s
+    x1, x2 = np.sqrt(tau) * np.exp(y), np.sqrt(tau) * np.exp(-y)
+    keep = np.flatnonzero(
+        np.isfinite(value) & (q2 >= cfg.DY_Q2_MIN)
+        & (x1 < cfg.DY_X_MAX) & (x2 < cfg.DY_X_MAX)
+    )
+    if keep.size != int(entry["selected_rows"]):
+        raise RuntimeError(
+            f"{entry['id']}: the closure DY cut retains {keep.size} rows but the "
+            f"contract records selected_rows={entry['selected_rows']}"
+        )
+    rel_stat, additive, names, matrix = _dy_uncertainties(
+        common, keep, np.abs(value[keep])
+    )
+    rec = {
+        "kind": spec["kind"],
+        "section": "dy",
+        "label": spec["label"],
+        "name": spec["label"],
+        "contract_id": entry["id"],
+        "commondata_name": spec["commondata_name"],
+        "reaction": spec["reaction"],
+        "file": f"dy/{spec['label']}.dat",
+        "Q2": q2[keep].tolist(), "S": s[keep].tolist(), "Y": y[keep].tolist(),
+        "source_rows": int(value.size),
+        "retained_rows": int(keep.size),
+        "rel_stat": rel_stat.tolist(),
+        "_additive_rel": additive,
+    }
+    return _attach_multiplicative(rec, names, matrix)
+
+
+#: Rapidity-like kinematic columns, in the order they are looked for.  The legacy W/Z
+#: concatenations label every row ``pseudorapidity`` even where a row is boson rapidity.
+_Y_KEYS = ("rapidity", "pseudorapidity")
+
+
+def _kinematic(kin, keys, what, label):
+    for key in keys:
+        if key in kin:
+            return key
+    raise RuntimeError(f"{label}: commondata carries no {what} column (have {sorted(kin)})")
+
+
+def _mass_key(kin, label):
+    """The mass column and whether it already holds a *squared* mass.
+
+    Commondata spells it ``m_Z2``, ``m_W2``, ``m_V2``, ``m_ll2`` or, for two ATLAS mass
+    spectra, a plain ``m_ll`` in GeV.
+    """
+    for key in sorted(kin):
+        if key.startswith("m_") and not key.endswith(("_min", "_max")):
+            return key, key.endswith("2")
+    raise RuntimeError(f"{label}: commondata carries no mass column (have {sorted(kin)})")
+
+
+def _hepdata_edges(table):
+    """``(low, high)`` of the first independent variable of one HEPData table.
+
+    ``table`` is ``(directory, number)`` under ``cfg.NNPDF_COMMONDATA``, read from that
+    directory's ``rawdata/``.  Processed kinematics store bin centres, and the legacy W/Z
+    concatenations have no rawdata of their own, so a record names the table its split
+    sibling's own ``filter.py`` reads.  :func:`_check_centres` then refuses a table whose
+    bins do not contain the commondata centres, which is what catches a wrong table.
+    """
+    import yaml
+
+    directory, number = table
+    paths = sorted(
+        (cfg.NNPDF_COMMONDATA / directory / "rawdata").glob(f"HEPData-ins*-Table_{number}.yaml")
+    )
+    if len(paths) != 1:
+        raise RuntimeError(
+            f"expected one HEPData Table_{number} under {directory}/rawdata, found {len(paths)}"
+        )
+    values = yaml.safe_load(paths[0].read_text())["independent_variables"][0]["values"]
+    return (np.array([float(v["low"]) for v in values]),
+            np.array([float(v["high"]) for v in values]))
+
+
+def _csv_edges(how):
+    """``(low, high)`` in GeV from a rawdata csv: ``("csv", directory, file, lo, hi)``."""
+    import csv
+
+    _, directory, filename, low_column, high_column = how
+    path = cfg.NNPDF_COMMONDATA / directory / "rawdata" / filename
+    with path.open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    return (np.array([float(row[low_column]) for row in rows]),
+            np.array([float(row[high_column]) for row in rows]))
+
+
+def _rapidity_edges(spec, kin, rows, label):
+    """Rapidity (or lepton-eta) bin edges for one record, per ``spec["y_edges"]``.
+
+    ``"commondata"`` (default) reads ``<key>_min``/``<key>_max``; ``("hepdata", tables)``
+    concatenates the named HEPData tables in order; ``"fiducial"`` is the whole fiducial
+    window ``[-eta_max, +eta_max]`` of a rapidity-integrated mass spectrum, taken from the
+    dataset's cut record rather than restated here.
+    """
+    how = spec.get("y_edges", "commondata")
+    if how == "commondata":
+        key = _kinematic(kin, _Y_KEYS, "rapidity", label)
+        if f"{key}_min" not in kin or f"{key}_max" not in kin:
+            raise RuntimeError(
+                f"{label}: commondata carries {key} centres only; name the HEPData "
+                "tables that hold the edges in the spec's y_edges"
+            )
+        return (np.asarray(kin[f"{key}_min"], dtype=float)[rows],
+                np.asarray(kin[f"{key}_max"], dtype=float)[rows])
+    if how == "fiducial":
+        from pixel.data.fiducial_cuts import fiducial_cuts_for
+
+        cuts = fiducial_cuts_for(
+            spec["nnpdf_legacy_name"], channel=spec.get("fiducial_channel")
+        )
+        eta = float(cuts.lepton_eta_max)
+        return np.full(rows.size, -eta), np.full(rows.size, eta)
+    kind, tables = how
+    if kind != "hepdata":
+        raise RuntimeError(f"{label}: unknown y_edges source {kind!r}")
+    lows, highs = zip(*(_hepdata_edges(table) for table in tables))
+    return np.concatenate(lows), np.concatenate(highs)
+
+
+def _mass_edges(spec, kin, rows, label):
+    """Squared-mass bin edges per ``spec["mass_edges"]``, or ``(None, None)``.
+
+    ``"commondata"`` reads ``<mass>_min``/``<mass>_max``; ``("csv", ...)`` a rawdata csv
+    in GeV; ``("windows", ((first, stop, low_gev, high_gev), ...))`` a published mass
+    interval per block of the record's rows.  ``"pole"`` (the default) evaluates each row
+    at its commondata mass with zero ``Q^2`` width, which is not what any Z/gamma*
+    measurement publishes -- each integrates a mass window -- so
+    :func:`_collider_dy_record` refuses it for every kind but the gated W arm (owner
+    decision D7, 2026-09-11).
+    """
+    how = spec.get("mass_edges", "pole")
+    if how == "pole":
+        return None, None
+    if how == "commondata":
+        key, squared = _mass_key(kin, label)
+        low = np.asarray(kin[f"{key}_min"], dtype=float)[rows]
+        high = np.asarray(kin[f"{key}_max"], dtype=float)[rows]
+        return (low, high) if squared else (low ** 2, high ** 2)
+    if how[0] == "csv":
+        low, high = _csv_edges(how)
+        return low ** 2, high ** 2
+    if how[0] == "windows":
+        low = np.full(rows.size, np.nan)
+        high = np.full(rows.size, np.nan)
+        for first, stop, low_gev, high_gev in how[1]:
+            low[first:stop] = float(low_gev) ** 2
+            high[first:stop] = float(high_gev) ** 2
+        if np.any(np.isnan(low)):
+            raise RuntimeError(f"{label}: mass windows leave rows {np.flatnonzero(np.isnan(low)).tolist()} uncovered")
+        return low, high
+    raise RuntimeError(f"{label}: unknown mass_edges source {how[0]!r}")
+
+
+def _check_centres(label, what, centre, low, high):
+    """Refuse edges that do not bracket their own row's centre.
+
+    The one guard against the failure an edge table invites: the right numbers in the
+    wrong order, or the W+ table read for the W- rows.  Nothing downstream could notice.
+    """
+    if low is None:
+        return
+    if low.shape != centre.shape or high.shape != centre.shape:
+        raise RuntimeError(
+            f"{label}: {low.size} {what} edges for {centre.size} rows"
+        )
+    tol = 1e-9 * (1.0 + np.abs(centre))
+    bad = np.flatnonzero((low > centre + tol) | (high < centre - tol) | (high < low))
+    if bad.size:
+        raise RuntimeError(
+            f"{label}: {what} centre outside its own bin on rows {bad.tolist()}; the edge "
+            "source does not belong to these rows"
+        )
+
+
+def _collider_dy_record(entry, spec, common):
+    """One bin-integrated collider Drell-Yan record for the ``dy`` manifest section.
+
+    Handles every collider arm: a fiducial dilepton rapidity scan, a single-lepton W
+    cross section, an unfolded full-phase-space distribution and a rapidity-integrated
+    mass spectrum.  The spec in ``config.COLLIDER_DY_SPECS`` states what varies:
+
+    * ``rows`` -- a ``(first, stop)`` slice of the commondata table.  The mixed W/Z tables
+      carry one record per boson (and per Z mass slice), because each needs a different
+      operator; the slice is fixed by the set's own ``filter.py`` and pinned in the
+      contract's gate evidence, never read from metadata labels, one of which is wrong;
+    * ``y_edges`` / ``mass_edges`` -- where the bin edges come from (see
+      :func:`_rapidity_edges` and :func:`_mass_edges`);
+    * ``lepton_charge`` and ``fiducial_channel`` -- carried through to the builder;
+    * ``sqrts_gev`` -- only where the commondata omits ``sqrts``.
+
+    **No kinematic cut is applied, and that is deliberate.**  Every row sits at
+    ``Q >= 46 GeV``, far above the input scale, so the contract's ``selected_rows``
+    equals its ``source_rows`` and both equal the slice; asserting that is the check.
+
+    Uncertainties follow the closure's one convention, relative to the published
+    central value (:func:`_dy_uncertainties`).  A split record keeps the sources its rows
+    carry and drops their correlation with the other bosons' rows -- recorded in the
+    contract's ``covariance_scope``.
+    """
+    label = entry["id"]
+    value_all = np.asarray(common.value, dtype=float)
+    kin = common.kinematics
+    first, stop = (int(v) for v in spec.get("rows", (0, value_all.size)))
+    if stop > value_all.size:
+        raise RuntimeError(
+            f"{label}: rows {first}-{stop} exceed the commondata's {value_all.size}"
+        )
+    rows = np.arange(first, stop)
+    if not rows.size == int(entry["selected_rows"]) == int(entry["source_rows"]):
+        raise RuntimeError(
+            f"{label}: collider Drell-Yan applies no kinematic cut, so its slice "
+            f"(commondata rows {first}-{stop}, {rows.size} rows) must equal the contract's "
+            f"selected_rows={entry['selected_rows']} and source_rows={entry['source_rows']}"
+        )
+    value = value_all[rows]
+    if "sqrts" in kin:
+        sqrts = np.asarray(kin["sqrts"], dtype=float)[rows]
+    else:
+        sqrts = np.full(rows.size, float(spec["sqrts_gev"]))
+    mass_key, squared = _mass_key(kin, label)
+    mass = np.asarray(kin[mass_key], dtype=float)[rows]
+    q2 = mass if squared else mass ** 2
+    if spec.get("y_edges") == "fiducial":
+        y = np.zeros(rows.size)
+    else:
+        y = np.asarray(kin[_kinematic(kin, _Y_KEYS, "rapidity", label)], dtype=float)[rows]
+    y_low, y_high = _rapidity_edges(spec, kin, rows, label)
+    q2_low, q2_high = _mass_edges(spec, kin, rows, label)
+    if q2_low is None and spec["kind"] != "drell_yan_fiducial_lepton":
+        raise RuntimeError(
+            f"{label}: a Z/gamma* record must integrate its published mass window "
+            "(spec mass_edges).  At the pole it is d sigma/dQ^2 dY with zero Q^2 width -- "
+            "a different observable, in GeV^-4 rather than a bin integral's GeV^-2"
+        )
+    _check_centres(label, "rapidity", y, y_low, y_high)
+    _check_centres(label, "mass^2", q2, q2_low, q2_high)
+
+    rel_stat, additive, names, matrix = _dy_uncertainties(common, rows, np.abs(value))
+    rec = {
+        "kind": spec["kind"],
+        "section": "dy",
+        "label": spec["label"],
+        "name": spec["label"],
+        "contract_id": entry["id"],
+        "commondata_name": spec["commondata_name"],
+        "nnpdf_legacy_name": spec["nnpdf_legacy_name"],
+        "reaction": spec["reaction"],
+        "file": f"dy/{spec['label']}.dat",
+        "Q2": q2.tolist(), "S": (sqrts ** 2).tolist(), "Y": y.tolist(),
+        "Y_low": y_low.tolist(), "Y_high": y_high.tolist(),
+        "Q2_low": None if q2_low is None else q2_low.tolist(),
+        "Q2_high": None if q2_high is None else q2_high.tolist(),
+        "row_range": [first, stop],
+        "source_rows": int(rows.size),
+        "retained_rows": int(rows.size),
+        "rel_stat": rel_stat.tolist(),
+        "_additive_rel": additive,
+    }
+    for extra in ("lepton_charge", "fiducial_channel"):
+        if extra in spec:
+            rec[extra] = spec[extra]
+    return _attach_multiplicative(rec, names, matrix)
+
+
+def fold_dy_record(rec, dataset, truth, fields, rng, *, noise=True):
+    """Fold one Drell-Yan record: ``(central, measured, covariance)``.
+
+    The central value is the fixed truth folded through the record's own operator
+    (:func:`dy_central`), shifted by the configured normalization offset where the record
+    carries one (the fitpack E866 tables).  The covariance is the statistical diagonal
+    plus the outer products of every correlated source, each scaled by ``|central|``:
+
+    * **additive** sources exactly as the DIS arm treats NNPDF's (``nnpdf_layout``);
+    * **multiplicative** sources in the covariance too, referenced to the folded truth.
+      The DIS arm hands its multiplicative sources to the fit as nuisances with a t0
+      iteration; the Drell-Yan t0 iteration is not wired, so here they are fixed at the
+      truth reference -- the converged-t0 limit, which is also NNPDF's own choice for
+      closure tests.  The fit reads ``mean``/``cov`` back from the manifest, so it sees
+      exactly this covariance.
+
+    The statistical floor is :data:`DY_RELATIVE_FLOOR` of the record's largest
+    |prediction|, not the DIS arm's absolute ``EXP_ABS_FLOOR`` -- see the constant.
+
+    A record with no correlated source draws from the diagonal, as E866 always has.
+    """
+    central = dy_central(dataset, truth, fields, rec["reaction"])
+    if rec.get("rel_norm") is not None:
+        central = (1.0 + rec["norm_beta"] * rec["rel_norm"]) * central
+    scale = np.abs(central)
+    floor = DY_RELATIVE_FLOOR * float(scale.max()) if scale.size and scale.max() > 0.0 \
+        else cfg.EXP_ABS_FLOOR
+    sigma = np.abs(np.asarray(rec["rel_stat"], dtype=float)) * scale + floor
+    blocks = []
+    additive = rec.get("_additive_rel")
+    if additive is not None and np.asarray(additive).size:
+        blocks.append(np.asarray(additive, dtype=float) * scale[:, None])
+    multiplicative = rec.get("_multiplicative_rel")
+    if multiplicative is not None and np.asarray(multiplicative).size:
+        blocks.append(np.asarray(multiplicative, dtype=float).T * scale[:, None])
+    if blocks:
+        vectors = np.concatenate(blocks, axis=1)
+        cov = np.diag(sigma * sigma) + vectors @ vectors.T
+        measured = draw_mvn(central, cov, rng) if noise else central
+    else:
+        cov = np.diag(sigma * sigma)
+        measured = draw_diag(central, sigma, rng) if noise else central
+    return central, measured, cov
+
+
+def _split_sections(records):
+    """``(datasets_records, dy_records)`` from one contract walk, by each record's section."""
+    linear, bilinear = [], []
+    for rec in records:
+        section = rec.get("section")
+        if section == "datasets":
+            linear.append(rec)
+        elif section == "dy":
+            bilinear.append(rec)
+        else:
+            raise RuntimeError(
+                f"{rec.get('contract_id')}: unknown manifest section {section!r}"
+            )
+    return linear, bilinear
+
+
+def _operator_names(rec):
+    """Names a builder may give this record's dataset: its manifest name or file stem."""
+    return {name for name in (rec.get("name"), Path(rec["file"]).stem) if name}
+
+
+def _pair_operators(records, named_operators):
+    """The operators in record order, refusing anything but a one-to-one match by NAME.
+
+    ``named_operators`` is ``[(dataset name, operator), ...]`` as ``build_datasets``
+    emitted it.  The check used to be ``len(operators) == len(records)``, which a swap of
+    equal-length lists passes; that is how the 2026-09-09 layout paired CHORUS with
+    E605's operator.  Each pair is now checked by identity.
+    """
+    if len(named_operators) != len(records):
+        raise RuntimeError(
+            f"{len(named_operators)} operators for {len(records)} manifest records; a "
+            "mismatch would fold each record through another dataset's operator"
+        )
+    out = []
+    for index, (rec, (name, operator)) in enumerate(zip(records, named_operators)):
+        expected = _operator_names(rec)
+        if name not in expected:
+            raise RuntimeError(
+                f"operator {index} was built for {name!r} but record {index} is "
+                f"{sorted(expected)}; the operator list and the record list are out of "
+                "order, and folding would silently use the wrong operator"
+            )
+        out.append(operator)
+    return out
+
+
+def _leading_lattice_count(records):
+    """How many records are lattice; they must all come first."""
+    count = 0
+    while count < len(records) and records[count]["kind"] in LATTICE_KINDS:
+        count += 1
+    if any(rec["kind"] in LATTICE_KINDS for rec in records[count:]):
+        raise RuntimeError("lattice records must precede every experimental record")
+    return count
+
+
 # -- one member --------------------------------------------------------------
 
 
@@ -643,11 +1244,14 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
     """Generate and save all closure data for one original-scale truth member.
 
     Returns ``(truth_dir, fields, operators)`` so a driver can thread the shared
-    fields/operators through every member (they are Q-independent).
+    fields/operators through every member (they are Q-independent).  ``operators`` is a
+    list of ``(dataset name, operator)`` pairs; :func:`_pair_operators` checks each name
+    against its record before anything is folded.
     """
     truth_dir = cfg.truth_dir(q_key)
     (truth_dir / "lattice").mkdir(parents=True, exist_ok=True)
     (truth_dir / "exp").mkdir(parents=True, exist_ok=True)
+    (truth_dir / "datasets").mkdir(parents=True, exist_ok=True)
 
     if fields is None:
         fields = cfg.make_fields()
@@ -688,7 +1292,12 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
         "reference_fits": ref_fits,
     }
 
-    records = lattice_layout() + exp_layout()
+    # Order is load-bearing: ``datasets.build_datasets`` emits lattice, then exp, then
+    # the generic ``datasets`` section, and ``_pair_operators`` checks that list against
+    # ``records`` by name before anything is folded.  The Drell-Yan records from the same
+    # contract walk go to the ``dy`` section and their own fold arm below.
+    nnpdf_linear, nnpdf_dy = _split_sections(nnpdf_layout())
+    records = lattice_layout() + exp_layout() + nnpdf_linear
 
     # (2) placeholder files so the PIXEL builders can read kinematics.
     for rec in records:
@@ -701,13 +1310,31 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
         "provenance": contract_artifact_provenance(),
         "closure_extension": closure_extension_roster(cfg.CONTRACT_MODE),
         "ensembles": [e.id for e in cfg.active_ensembles()],
-        "lattice": [_public(r) for r in records if r["kind"] in ("pseudoitd", "mellin")],
-        "exp": [_public(r) for r in records if r["kind"] in EXP_KINDS],
+        "lattice": [_public(r) for r in records if r["kind"] in LATTICE_KINDS],
+        "exp": [
+            _public(r) for r in records
+            if r["kind"] in EXP_KINDS and r.get("section", "exp") == "exp"
+        ],
+        "datasets": [_public(r) for r in nnpdf_linear],
     }
-    if manifest["closure_extension"]["selected_source_count"]:
+    # The guard is a *coverage* check over BOTH sections the walk feeds.  It raises when a
+    # selected id has no record -- a contract promotion that generation quietly ignores --
+    # and when a record has no selection behind it.  Sets, not counts, so a swap (one id
+    # gained, another lost) cannot cancel out.
+    selected_ids = {row["id"] for row in manifest["closure_extension"]["selected"]}
+    materialized_ids = {r["contract_id"] for r in nnpdf_linear + nnpdf_dy}
+    missing = selected_ids - materialized_ids
+    if missing:
         raise RuntimeError(
-            "observable contracts select new EW/NNPDF records, but this generator "
-            "has not materialized matching manifest datasets; refusing silent omission"
+            "observable contracts select records this generator has not materialized: "
+            f"{sorted(missing)}; add a cfg.NNPDF_DATASET_SPECS entry (and a builder arm) "
+            "or demote the contract -- refusing silent omission"
+        )
+    stray = materialized_ids - selected_ids
+    if stray:
+        raise RuntimeError(
+            f"generated records {sorted(stray)} are not contract-selected; a dataset must "
+            "not enter a closure fit without a contract authorizing it"
         )
     manifest = annotate_manifest(manifest)
     (truth_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
@@ -716,17 +1343,24 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
     # then fold every replica.  Operators are Q-independent -> reused across Q.
     if operators is None:
         built = dsets.build_datasets(q_key, fields, use_kernel_cache=True,
+                                     include_nnpdf=True,
                                      with_systematics=False,
                                      with_exp_nuisances=False)
-        operators = [assemble_operator(ds, fields) for ds in built]
+        operators = [(ds.name, assemble_operator(ds, fields)) for ds in built]
+    paired = _pair_operators(records, operators)
     q_offset = list(cfg.TRUTH_Q_CHOICES).index(q_key)
     rng = np.random.default_rng(seed + q_offset)
 
     # -- lattice pass 1: physical central/cov + raw systematic shift per record.
-    lat_recs = [r for r in records if r["kind"] in ("pseudoitd", "mellin")]
-    exp_recs = [r for r in records if r["kind"] in EXP_KINDS]
-    lat_ops = operators[:len(lat_recs)]
-    exp_ops = operators[len(lat_recs):]
+    n_lattice = _leading_lattice_count(records)
+    lat_recs, exp_recs = records[:n_lattice], records[n_lattice:]
+    unexpected = sorted({rec["kind"] for rec in exp_recs} - set(EXP_KINDS))
+    if unexpected:
+        raise RuntimeError(
+            f"experimental records of kind {unexpected} have no DIS fold; a Drell-Yan "
+            "record belongs in the dy section"
+        )
+    lat_ops, exp_ops = paired[:n_lattice], paired[n_lattice:]
 
     folds = fold_lattice_systematics(
         lat_recs,
@@ -813,10 +1447,19 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
         central = central + shift
         rel = np.asarray(rec["rel_stat"], dtype=float)
         sigma = np.abs(rel) * np.abs(central) + cfg.EXP_ABS_FLOOR
-        # The .dat covariance is statistical only; the fit's builder re-adds the
-        # nuisance outer products from rel_norm + the saved sys vectors.
-        cov = np.diag(sigma * sigma)
-        measured = draw_diag(central, sigma, rng) if noise else central
+        # The .dat covariance is statistical only for a fitpack table; the fit's
+        # builder re-adds the nuisance outer products from rel_norm + the saved sys
+        # vectors.  An NNPDF record additionally carries *additive* correlated
+        # sources, which no t0 iteration rescales and which therefore belong here
+        # rather than in the multiplicative nuisance layer -- see ``nnpdf_layout``.
+        additive = rec.get("_additive_rel")
+        if additive is not None and np.asarray(additive).size:
+            vectors = np.asarray(additive, dtype=float) * np.abs(central)[:, None]
+            cov = np.diag(sigma * sigma) + vectors @ vectors.T
+            measured = draw_mvn(central, cov, rng) if noise else central
+        else:
+            cov = np.diag(sigma * sigma)
+            measured = draw_diag(central, sigma, rng) if noise else central
         write_dat(truth_dir / rec["file"], rec["_leading"], measured, cov)
     # truth.json was written above (before the lattice draw); rewrite it now that
     # the injected DIS nuisance realization is known, so the recovery report can
@@ -824,26 +1467,20 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
     truth["exp_nuisances"] = exp_nuisance_truth
     (truth_dir / "truth.json").write_text(json.dumps(truth, indent=2))
 
-    # -- Drell-Yan (bilinear): fold the same fixed truth through the DY tensors, real
-    # rel_stat diagonal error.  DY records carry their mean/cov in the manifest
-    # (no linear .dat), so the fit's builder reads them back directly.
-    dy_recs = dy_layout()
+    # -- Drell-Yan (bilinear): fold the same fixed truth through each record's own
+    # operator.  The fitpack E866 tables and every NNPDF Drell-Yan record share this arm
+    # and the ``dy`` section; their mean/cov travel in the manifest (no linear .dat), so
+    # the fit's builders read them back directly.
+    dy_recs = dy_layout() + nnpdf_dy
     if dy_recs:
         (truth_dir / "dy").mkdir(parents=True, exist_ok=True)
         dy_manifest = []
         for rec in dy_recs:
-            ds = dsets.build_drell_yan(rec, None, fields, None, with_systematics=False)
-            central = dy_central(ds, mean_curves, fields, rec["reaction"])
-            # Inject the known normalization offset: every row of a table is
-            # scaled by the same 1 + beta_true * rel_norm, exactly the shift the
-            # fit's normalization nuisance is allowed to absorb.
-            if rec.get("rel_norm") is not None:
-                central = (1.0 + rec["norm_beta"] * rec["rel_norm"]) * central
-            rel = np.asarray(rec["rel_stat"], dtype=float)
-            sigma = np.abs(rel) * np.abs(central) + cfg.EXP_ABS_FLOOR
-            cov = np.diag(sigma * sigma)
-            measured = draw_diag(central, sigma, rng) if noise else central
-            # record-keeping .dat: Q2, S, Y, mean, diag(cov)
+            ds = dsets.dy_builder(rec["kind"])(rec, None, fields, None,
+                                               with_systematics=False)
+            _, measured, cov = fold_dy_record(rec, ds, mean_curves, fields, rng,
+                                              noise=noise)
+            # record-keeping .dat: Q2, S, Y, mean, full cov
             write_dat(truth_dir / rec["file"],
                       (np.asarray(rec["Q2"]), np.asarray(rec["S"]), np.asarray(rec["Y"])),
                       measured, cov)

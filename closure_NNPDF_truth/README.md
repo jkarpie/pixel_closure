@@ -14,7 +14,9 @@ Test modes (what each information source constrains):
    since 2026-08-22 includes the NNPDF-commondata `datasets` section: CHORUS neutrino
    and antineutrino charged-current reduced cross sections on lead, 520 retained rows
    per beam (of 607 published; the rest fall below `Q0² = mc²` or `W² > 10`);
-3. `dy` — fixed-target Drell-Yan (E866 pp/pd) only;
+3. `dy` — every Drell-Yan record in the selection, i.e. the manifest's `dy` section:
+   fixed-target E866 pp (and E605 copper) plus the collider Z records
+   (`DATASETS.md` section 1b lists them per selection);
 4. `exp` — **all experiment** (DIS + DY);
 5. `both` — everything (lattice + DIS + DY).
 
@@ -35,7 +37,7 @@ See the repo-root `closure_extension_plan.md` for the full-scale design and
 | lattice systematics | none | injected **and** recovered (`ht, chiral, cont_invz, cont_aL`) |
 | DIS coverage | 9 tables, 16 pts each | analysis-used tables, **all** retained rows (~2.5k pts) |
 | DIS error | replica spread | **real** per-point `rel_stat` |
-| Drell-Yan | E866 pp/pd, 6 rows/table | all accepted E866 pp/pd rows (179 + 183 = 362) |
+| Drell-Yan | E866 pp/pd, 6 rows/table | the selection's `dy` section: E866 pp (184 rows), plus E605 copper and collider Z where selected |
 
 ## Low-x completion
 

@@ -146,3 +146,27 @@ also still imported, and driven directly by the three `plot_records` rendering t
   still never called; every test supplies its own `truth` dict and result.
 - `write_summary` and `main` have no coverage in this file.
 - The `bilinear_ratio`/nonlinear dataset kinds never appear in these layouts.
+
+**Addendum 2026-09-11: records are drawn in the published unit**
+
+PIXEL now divides every dimensionful dataset by one exact power of two in
+`pixel.Analysis.add` (`pixel.data.unit_scale`; PIXEL's `guides/units_and_normalization.md`).
+Every closure `fit.py` builds through `Analysis.add`, so a fitted model's rows and predictions
+are scaled. Every copy of `build_records_from_result` now does two things:
+
+- multiplies `data`, `sigma`, `truth`, `reproduction` and `fit_std` back by
+  `unit_scale_of(dataset)`;
+- carries `units`, the declared unit, or `None` for a pure number.
+
+`plot_records` labels the y-axis with it. The DY normalization report in every `fit.py`
+multiplies `shift_rms` back the same way.
+
+| # | Test | What is asserted | How / oracle | Bar | S |
+|---|---|---|---|---|---|
+| 15 | `test_records_are_drawn_in_the_published_unit_of_a_scaled_dataset` | On the mixed linear + DY fixture of row 7: with a `2**-10` scale record on the DY dataset, every drawn DY array equals the unscaled control's times the scale. The dimensionless linear record is unchanged. DY chi2 is unchanged. `units` is `"GeV^-4"` for DY and `None` for the pure number. | The same fixture built twice by the same call, with and without the record (`A3`). The scale is a power of two, so the comparison is exact. | `assert_array_equal` | `S1` |
+
+**Mutation:** with `unit_scale_of` forced to `1.0` in the plotting module (records ignore the
+scale), row 15 fails.
+
+**Not covered:** the y-label `plot_records` draws from `units`, and `fit.py`'s `shift_rms`
+multiply-back. The report function needs a real `Model.nuisance_pulls`.
