@@ -1,0 +1,2 @@
+[run-cell] infer_mcmc {'implementation': 'normalization_reference_saddle_contour', 'resolved_auxiliary': 'sample', 'n_ordinary': 0, 'n_normalization': 7, 'n_hubbard': 12, 'kwargs': {'sampler': 'gaussian', 'auxiliary': 'auto', 'n_samples': 1000, 'run_map': False, 'seed': 0, 'saddle_tol': 0.005, 'reference_cache_path': 'campaign/sampler_exact_width_2026-09-15/inference_cache/closure_NNPDF_truth_small__q2__both__c_config__gaussian_reference.npz'}}
+[run-cell] closure_NNPDF_truth_small q=2 both c_config gaussian: gate_fail (108.5 s)

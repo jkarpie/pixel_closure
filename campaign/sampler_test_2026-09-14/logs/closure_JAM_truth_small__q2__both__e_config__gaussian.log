@@ -1,0 +1,35 @@
+[run-cell] infer_mcmc {'implementation': 'normalization_reference_saddle_contour', 'resolved_auxiliary': 'sample', 'n_ordinary': 0, 'n_normalization': 7, 'n_hubbard': 12, 'kwargs': {'sampler': 'gaussian', 'auxiliary': 'auto', 'n_samples': 1000, 'run_map': False, 'seed': 0, 'saddle_tol': 0.005, 'reference_cache_path': 'campaign/sampler_test_2026-09-14/inference_cache/closure_JAM_truth_small__q2__both__e_config__gaussian_reference.npz'}}
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py", line 687, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py", line 682, in main
+    return {"expand": cmd_expand, "screen": cmd_screen, "select": cmd_select, "fit": cmd_fit,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py", line 472, in cmd_run_cell
+    summary = runner.run_one(args.q, args.mode, make_plots=not args.no_plots)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jkarpie-admin/work/building/pixel_closure/closure_JAM_truth_small/run_closure.py", line 284, in run_one
+    result = fitmod.run_fit(q_key, mode)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py", line 433, in capture_fit
+    captured["result"] = original_fit(*a, **kw)
+                         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jkarpie-admin/work/building/pixel_closure/closure_JAM_truth_small/fit.py", line 428, in run_fit
+    samples = infer_mcmc(
+              ^^^^^^^^^^^
+  File "/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py", line 457, in capture_infer
+    samples = original_infer(model, **new_kw)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jkarpie-admin/work/building/pixel/src/pixel/infer/__init__.py", line 1253, in run_mcmc
+    samples = _execute_mcmc_plan(
+              ^^^^^^^^^^^^^^^^^^^
+  File "/Users/jkarpie-admin/work/building/pixel/src/pixel/infer/__init__.py", line 1032, in _execute_mcmc_plan
+    return normalization_reference_saddle_contour_moments(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/jkarpie-admin/work/building/pixel/src/pixel/infer/contour.py", line 3806, in normalization_reference_saddle_contour_moments
+    evidence = complex(np.asarray(evidence))
+                       ^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

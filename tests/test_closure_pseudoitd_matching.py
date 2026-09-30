@@ -71,14 +71,14 @@ import pixel.kernels as kernels
 from pixel.geometry import Grid, ProductBasis
 from pixel.geometry.finite_elements import CubicSplineBasis
 from pixel.kernels.evolution import EvolvedPseudoITD
-from pixel.kernels.matching import (
+from pixel.kernels.dis.matching import (
     MatchingMatrix,
     VariableQ2MatchingMatrix,
     _pseudoitd_nlo_moments,
 )
 from pixel.kernels.evolution.contour import adaptive_contour
-from pixel.kernels.pqcd import MellinContour
-from pixel.kernels.pseudoitd_matching import (
+from pixel.kernels.evolution.pqcd import MellinContour
+from pixel.kernels.lattice.pseudoitd_matching import (
     CA,
     CF,
     TF,

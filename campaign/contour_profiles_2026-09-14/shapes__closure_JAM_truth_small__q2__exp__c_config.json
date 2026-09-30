@@ -1,0 +1,259 @@
+{
+  "suite": "closure_JAM_truth_small",
+  "q": "2",
+  "mode": "exp",
+  "cell": "c_config",
+  "n_hubbard": 12,
+  "cache_status": "hit",
+  "E_star": [
+    -887.0500597142186,
+    3.141592653589793
+  ],
+  "q0": {
+    "kind": "student_t",
+    "nu": 2.0,
+    "scale": 2.0,
+    "n": 1500
+  },
+  "candidates": [
+    {
+      "kind": "gaussian",
+      "nu": null,
+      "scale": 0.4,
+      "signed": 0.0,
+      "magnitude": 0.0,
+      "signed_halves": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "kind": "gaussian",
+      "nu": null,
+      "scale": 1.0,
+      "signed": 0.0,
+      "magnitude": 0.0,
+      "signed_halves": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "kind": "gaussian",
+      "nu": null,
+      "scale": 1.5,
+      "signed": 0.0,
+      "magnitude": 0.0,
+      "signed_halves": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "kind": "gaussian",
+      "nu": null,
+      "scale": 2.0,
+      "signed": 0.0,
+      "magnitude": 0.0,
+      "signed_halves": [
+        3.855692795791216e-206,
+        0.0
+      ]
+    },
+    {
+      "kind": "gaussian",
+      "nu": null,
+      "scale": 3.0,
+      "signed": 1.5791013977237707e-45,
+      "magnitude": 1.5791013977237707e-45,
+      "signed_halves": [
+        2.237371289786618e-23,
+        3.158202795447368e-45
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 1.0,
+      "scale": 1.0,
+      "signed": 0.0009074339461887811,
+      "magnitude": 0.0009074339461887811,
+      "signed_halves": [
+        0.0013832849580354817,
+        0.0018148678923774625
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 1.0,
+      "scale": 1.5,
+      "signed": 0.0013562020713920814,
+      "magnitude": 0.0013562020713920814,
+      "signed_halves": [
+        0.0020615121532467167,
+        0.0027124041427840136
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 1.0,
+      "scale": 2.0,
+      "signed": 0.0017990780284741043,
+      "magnitude": 0.0017990780284741043,
+      "signed_halves": [
+        0.0027238647105749317,
+        0.003598156056948011
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 2.0,
+      "scale": 1.0,
+      "signed": 0.00016982964064206436,
+      "magnitude": 0.00016982964064206436,
+      "signed_halves": [
+        0.0003446683762146006,
+        0.00033965928128411
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 2.0,
+      "scale": 1.5,
+      "signed": 0.0003791328085380815,
+      "magnitude": 0.0003791328085380815,
+      "signed_halves": [
+        0.0007647586552885008,
+        0.0007582656170761213
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 2.0,
+      "scale": 2.0,
+      "signed": 0.0006666666666668401,
+      "magnitude": 0.0006666666666668401,
+      "signed_halves": [
+        0.001333333333756219,
+        0.001333333333333607
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 3.0,
+      "scale": 1.0,
+      "signed": 2.7302800765498713e-05,
+      "magnitude": 2.7302800765498713e-05,
+      "signed_halves": [
+        7.37455539243246e-05,
+        5.4605601530994425e-05
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 3.0,
+      "scale": 1.5,
+      "signed": 9.099409556438918e-05,
+      "magnitude": 9.099409556438918e-05,
+      "signed_halves": [
+        0.00024337930417620753,
+        0.00018198819112876836
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 3.0,
+      "scale": 2.0,
+      "signed": 0.00021192878072699882,
+      "magnitude": 0.00021192878072699882,
+      "signed_halves": [
+        0.0005591548513503246,
+        0.00042385756145397433
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 5.0,
+      "scale": 1.0,
+      "signed": 6.529976241727168e-07,
+      "magnitude": 6.529976241727168e-07,
+      "signed_halves": [
+        3.1208356318233753e-06,
+        1.3059952483453618e-06
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 5.0,
+      "scale": 1.5,
+      "signed": 4.842335726583106e-06,
+      "magnitude": 4.842335726583106e-06,
+      "signed_halves": [
+        2.2719737122059636e-05,
+        9.684671453165679e-06
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 5.0,
+      "scale": 2.0,
+      "signed": 1.9740521079284096e-05,
+      "magnitude": 1.9740521079284096e-05,
+      "signed_halves": [
+        9.028079871150288e-05,
+        3.948104215856602e-05
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 10.0,
+      "scale": 1.0,
+      "signed": 6.919455395015496e-11,
+      "magnitude": 6.919455395015496e-11,
+      "signed_halves": [
+        1.3689625885345428e-09,
+        1.3838910790030233e-10
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 10.0,
+      "scale": 1.5,
+      "signed": 3.7530865018877776e-09,
+      "magnitude": 3.7530865018877776e-09,
+      "signed_halves": [
+        7.082415904959744e-08,
+        7.506173003775142e-09
+      ]
+    },
+    {
+      "kind": "student_t",
+      "nu": 10.0,
+      "scale": 2.0,
+      "signed": 6.12052458654826e-08,
+      "magnitude": 6.12052458654826e-08,
+      "signed_halves": [
+        1.0823512495813575e-06,
+        1.2241049173095847e-07
+      ]
+    }
+  ],
+  "verify": {
+    "laplace_gaussian": {
+      "kind": "gaussian",
+      "nu": null,
+      "scale": 1.0,
+      "n": 600,
+      "signed": 0.001666666702010718,
+      "magnitude": 0.0016666667023631074
+    },
+    "best": {
+      "kind": "student_t",
+      "nu": 1.0,
+      "scale": 2.0,
+      "n": 600,
+      "signed": 0.0016666666666666661,
+      "magnitude": 0.0016666666666666668
+    }
+  },
+  "elapsed_s": 253.1
+}

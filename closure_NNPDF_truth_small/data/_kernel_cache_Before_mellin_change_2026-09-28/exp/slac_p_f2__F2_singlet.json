@@ -1,0 +1,217 @@
+{
+  "cache_version": 1,
+  "fingerprint": "c87e0408c9f829e4292b72e2bbe26bfd29ff3373bec93747a27ef99659b691dd",
+  "format": "pixel-kernel-cache",
+  "generation": {
+    "blas_evidence": "environment pins BLAS to one thread (MKL_NUM_THREADS=1, NUMEXPR_NUM_THREADS=1, OMP_NUM_THREADS=1, OPENBLAS_NUM_THREADS=1, VECLIB_MAXIMUM_THREADS=1)",
+    "blas_single_threaded": true,
+    "created_utc": "2026-09-25T03:10:21+00:00",
+    "git_commit": "9f29eaa4",
+    "hostname": "cctemps-MacBook-Pro.local",
+    "numpy": "2.5.2",
+    "pixel_version": "0.2.0",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.14",
+    "thread_env": {
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    }
+  },
+  "kernel_code": "865e772fede4f69200524d632e6d893b485556b8c847032d8447955039a3df10",
+  "metadata": {
+    "assembly_block_entries": 8000000,
+    "assembly_column_block": 16,
+    "assembly_row_block": 64,
+    "basis": {
+      "axis_bases": [
+        {
+          "grid": {
+            "dtype": "float64",
+            "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+            "shape": [
+              146
+            ]
+          },
+          "n_elements": 146,
+          "order": 5,
+          "type": "pixel.geometry.finite_elements.PiecewiseQuintic"
+        }
+      ],
+      "grid": {
+        "axes": [
+          {
+            "dtype": "float64",
+            "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+            "shape": [
+              146
+            ]
+          }
+        ]
+      },
+      "n_elements": 146,
+      "ndim": 1,
+      "order": 5,
+      "type": "pixel.geometry.finite_elements.ProductBasis"
+    },
+    "cache_version": 1,
+    "kind": "ComposedKernel",
+    "nu": {
+      "dtype": "float64",
+      "sha256": "c399fd5d66bf7ba97dccf771cb0896b902a35a886929bc510536956e99852fe5",
+      "shape": [
+        16
+      ]
+    },
+    "points_per_interval": 8,
+    "readable": {
+      "basis": {
+        "axis_bases": [
+          {
+            "continuity": "C0",
+            "family": "piecewise-lagrange",
+            "grid": {
+              "head": [
+                1e-06,
+                1.173395570493071e-06,
+                1.3768571648527597e-06,
+                1.6155980984398728e-06
+              ],
+              "max": 1.0,
+              "min": 1e-06,
+              "n": 146,
+              "spacing": "custom",
+              "tail": [
+                0.9876712328767123,
+                1.0
+              ]
+            },
+            "label": "piecewise-poly(order=5)",
+            "n_elements": 146,
+            "order": 5
+          }
+        ],
+        "container": "product",
+        "continuity": "C0",
+        "family": "piecewise-lagrange",
+        "grid_axes": [
+          {
+            "head": [
+              1e-06,
+              1.173395570493071e-06,
+              1.3768571648527597e-06,
+              1.6155980984398728e-06
+            ],
+            "max": 1.0,
+            "min": 1e-06,
+            "n": 146,
+            "spacing": "custom",
+            "tail": [
+              0.9876712328767123,
+              1.0
+            ]
+          }
+        ],
+        "label": "piecewise-poly(order=5)",
+        "n_elements": 146,
+        "order": 5
+      },
+      "nu": {
+        "head": [
+          0.075,
+          0.107,
+          0.131,
+          0.153
+        ],
+        "max": 0.727,
+        "min": 0.075,
+        "n": 16,
+        "spacing": "custom",
+        "tail": [
+          0.584,
+          0.727
+        ]
+      }
+    },
+    "settings": {
+      "factor_types": [
+        "VariableQ2SingletEvolutionMatrix"
+      ],
+      "factors": [
+        {
+          "Q2": [
+            1.66,
+            2.02,
+            3.36,
+            4.18,
+            4.02,
+            3.62,
+            3.25,
+            4.77,
+            5.06,
+            5.84,
+            11.39,
+            8.56,
+            11.56,
+            17.89,
+            20.23,
+            24.85
+          ],
+          "Q20": 1.6384,
+          "alpha": -1.0,
+          "contour": null,
+          "evolution": {
+            "alphas": {
+              "alphaS_MZ": 0.118,
+              "mZ": 91.1879,
+              "mb": 4.18,
+              "mb_matching_scale_ratio": 1.0,
+              "mc": 1.28,
+              "mc_matching_scale_ratio": 1.0,
+              "order": "NLO",
+              "threshold_mass_scheme": "msbar_running",
+              "type": "pixel.kernels.evolution.pqcd.alphas.AlphaS"
+            },
+            "fixed_nf": null,
+            "flavour_mode": "vfns",
+            "itermax": 16,
+            "kind": "spacelike",
+            "mode": "truncated",
+            "order": "NLO",
+            "sector": "unpolarized",
+            "type": "pixel.kernels.evolution.pqcd.evolution.SingletEvolution"
+          },
+          "low_x_extension": {
+            "alpha": 0.0,
+            "kind": "flat",
+            "npts": 32,
+            "r_power": 0.0
+          },
+          "min_c": 1.15,
+          "name": "VariableQ2SingletEvolutionMatrix[quark_singlet<-quark_singlet]",
+          "region_tilt": false,
+          "source": "quark_singlet",
+          "target": "quark_singlet",
+          "tol": null,
+          "unsafe_contour": false
+        }
+      ],
+      "low_x_extension": "LowXExtension(kind='flat', alpha=0.0, beta=0.0)",
+      "name": "F2[singlet]",
+      "points_per_interval": 8,
+      "type": "pixel.kernels.base.ComposedKernel"
+    }
+  },
+  "saved_arrays": {
+    "matrix": {
+      "dtype": "float64",
+      "sha256": "2b686f2f0825e90697d08a8663a363e51252ddc679da9b41a507f0333c5e8f44",
+      "shape": [
+        16,
+        146
+      ]
+    }
+  }
+}

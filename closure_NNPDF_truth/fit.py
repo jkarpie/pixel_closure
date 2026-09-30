@@ -440,6 +440,8 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
             "n_leapfrog": cfg.HMC_N_LEAPFROG,
             "integrator": cfg.HMC_INTEGRATOR,
             "use_hessian_mass": True,
+            "flow_time": cfg.CONTOUR_FLOW_TIME,
+            "n_flow_steps": cfg.CONTOUR_N_FLOW_STEPS,
             "saddle_tol": cfg.CONTOUR_SADDLE_TOL,
         }
         warmup = cfg.HMC_WARMUP
@@ -454,11 +456,19 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         }
         warmup = cfg.NUTS_WARMUP
         if model.has_bilinear:
+            sampler_options["flow_time"] = cfg.CONTOUR_FLOW_TIME
+            sampler_options["n_flow_steps"] = cfg.CONTOUR_N_FLOW_STEPS
             sampler_options["saddle_tol"] = cfg.CONTOUR_SADDLE_TOL
+            partition = model.contour_partition()
+            if partition.n_normalization and not partition.n_ordinary:
+                sampler_options["flow_from_affine_reference"] = bool(
+                    cfg.CONTOUR_FLOW_FROM_AFFINE_REFERENCE
+                )
             cache_stem = f"{cfg.truth_label(q_key)}_{mode}"
-            sampler_options["reference_cache_path"] = (
-                cfg.INFERENCE_CACHE_ROOT / f"{cache_stem}_reference.npz"
-            )
+            if partition.n_normalization and not partition.n_ordinary:
+                sampler_options["reference_cache_path"] = (
+                    cfg.INFERENCE_CACHE_ROOT / f"{cache_stem}_reference.npz"
+                )
             sampler_options["hessian_cache_path"] = (
                 cfg.INFERENCE_CACHE_ROOT / f"{cache_stem}_hessian_mass.npz"
             )

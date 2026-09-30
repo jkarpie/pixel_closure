@@ -1,0 +1,102 @@
+{
+  "suite": "closure_NNPDF_truth_small",
+  "q": "2",
+  "mode": "dis",
+  "cell": "c2_s1_g1_ns1_val0p5_t151__L1p5_j1em10",
+  "cell_hash": "d0d137390f21",
+  "prior_form": "const_logrbf",
+  "resolved_prior": {
+    "GP_AMPLITUDES": {
+      "t3": 0.25,
+      "t8": 0.5,
+      "sigma": 1.0,
+      "t15": 1.0,
+      "g": 1.0,
+      "v3": 0.125,
+      "v8": 0.25,
+      "v": 0.25,
+      "v15": 0.25
+    },
+    "GP_ENVELOPE": {
+      "t3": {
+        "alpha": 0.25,
+        "beta": 2.1,
+        "sigma": 3.0
+      },
+      "t8": {
+        "alpha": 0.0,
+        "beta": 1.35,
+        "sigma": 139.0
+      },
+      "sigma": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 53.0
+      },
+      "t15": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 49.0
+      },
+      "g": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 8.0
+      },
+      "v3": {
+        "alpha": 0.5,
+        "beta": 2.05,
+        "sigma": 3.0
+      },
+      "v8": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7.0
+      },
+      "v": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7.0
+      },
+      "v15": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7.0
+      }
+    },
+    "GP_ENVELOPE_JITTER": 0.01,
+    "GP_JITTER": 1e-10,
+    "GP_LENGTH_LOG": 0.4054651081081644,
+    "prior_form": "const_logrbf"
+  },
+  "provenance": {
+    "pixel": {
+      "sha": "08b8482278a1968720042426b155e9ec8f67c9bd",
+      "dirty": true
+    },
+    "pixel_closure": {
+      "sha": "3c1dce605dcd36d90927e3d6d8937f77530e636e",
+      "dirty": true
+    },
+    "env": {
+      "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false",
+      "OMP_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "PIXEL_KERNEL_WORKERS": "7",
+      "PIXEL_ASSEMBLY_WORKERS": "7",
+      "PIXEL_POSTERIOR_WORKERS": "7"
+    }
+  },
+  "status": "gate_fail",
+  "exception": "RuntimeError",
+  "message": "small-closure VEGAS ESS fraction 0.0429 is below 0.1; refusing an unreliable fit",
+  "gate": {
+    "effective_sample_size": 42.942547662455794,
+    "n_samples": 1000.0,
+    "effective_sample_size_fraction": 0.042942547662455796,
+    "vegas_ess_fraction": 0.0429
+  },
+  "traceback": "Traceback (most recent call last):\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py\", line 256, in cmd_run_cell\n    summary = runner.run_one(args.q, args.mode, make_plots=not args.no_plots)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/run_closure.py\", line 284, in run_one\n    result = fitmod.run_fit(q_key, mode)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py\", line 229, in capture_fit\n    captured[\"result\"] = original_fit(*a, **kw)\n                         ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/fit.py\", line 436, in run_fit\n    raise RuntimeError(\nRuntimeError: small-closure VEGAS ESS fraction 0.0429 is below 0.1; refusing an unreliable fit\n",
+  "elapsed_s": 15.5
+}

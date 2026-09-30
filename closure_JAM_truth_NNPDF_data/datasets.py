@@ -529,6 +529,8 @@ def build_drell_yan(rec, path, fields, cache, *, with_systematics=True):
             kwargs["normalization"] = float(rec["rel_norm"])
             kwargs["fit_normalization"] = cfg.DY_FIT_NORMALIZATION
     return DrellYan(
+        # Closure fields are momentum densities x*f (PIXEL fits x*f, never f).
+        momentum_density=True,
         name=rec.get("name", rec["label"]),
         Q2=rec["Q2"], S=rec["S"], Y=rec["Y"],
         fields_A=fields_A, fields_B=fields_B,
@@ -553,7 +555,7 @@ def collider_exchange():
     fixed ``cfg.DY_ALPHA_EM`` cannot pair with it.  PIXEL's per-row provider is
     :class:`~pixel.kernels.drell_yan.couplings.RunningCouplings`.  It takes ``alpha_EM``
     from the electroweak provider's own neutral-current object, so the two agree exactly,
-    and ``alpha_s``/``nf`` from an :class:`~pixel.kernels.pqcd.alphas.AlphaS` configured as
+    and ``alpha_s``/``nf`` from an :class:`~pixel.kernels.evolution.pqcd.alphas.AlphaS` configured as
     the DY evolution operators' coupling is (``dy_evolution_maps``).  **So these rows run
     ``alpha_s(Q^2)``, not the fixed ``cfg.DY_ALPHA_S``**: PIXEL has no provider pairing a
     fixed ``alpha_s`` with a running ``alpha_EM``, and the builders' fixed ``alpha_s``,
@@ -563,7 +565,7 @@ def collider_exchange():
     Breit-Wigner panel (``DYBinIntegratedKernel._mass_resonance``).
     """
     from pixel.kernels.drell_yan import DrellYanElectroweak, RunningCouplings
-    from pixel.kernels.pqcd.alphas import AlphaS
+    from pixel.kernels.evolution.pqcd.alphas import AlphaS
 
     electroweak = DrellYanElectroweak("gamma_z")
     couplings = RunningCouplings(
@@ -629,6 +631,8 @@ def build_drell_yan_binned(rec, path, fields, cache, *, with_systematics=True):
             kwargs[edge] = rec[edge]
 
     return DrellYan(
+        # Closure fields are momentum densities x*f (PIXEL fits x*f, never f).
+        momentum_density=True,
         name=rec.get("name", rec["label"]),
         Q2=rec["Q2"], S=rec["S"], Y=rec["Y"],
         fields_A=fields_A, fields_B=fields_B,
@@ -751,6 +755,8 @@ def build_drell_yan_fiducial_lepton(rec, path, fields, cache, *, with_systematic
         if rec.get(edge) is not None:
             kwargs[edge] = rec[edge]
     return DrellYan(
+        # Closure fields are momentum densities x*f (PIXEL fits x*f, never f).
+        momentum_density=True,
         name=rec.get("name", rec["label"]),
         Q2=rec["Q2"], S=rec["S"], Y=rec["Y"],
         fields_A=fields_A, fields_B=fields_B,
@@ -808,6 +814,8 @@ def build_drell_yan_bin_integrated(rec, path, fields, cache, *, with_systematics
         if rec.get(edge) is not None:
             kwargs[edge] = rec[edge]
     return DrellYan(
+        # Closure fields are momentum densities x*f (PIXEL fits x*f, never f).
+        momentum_density=True,
         name=rec.get("name", rec["label"]),
         Q2=rec["Q2"], S=rec["S"], Y=rec["Y"],
         fields_A=fields_A, fields_B=fields_B,
@@ -856,6 +864,8 @@ def build_drell_yan_mass_spectrum(rec, path, fields, cache, *, with_systematics=
             kwargs["normalization"] = float(rec["rel_norm"])
             kwargs["fit_normalization"] = cfg.DY_FIT_NORMALIZATION
     return DrellYan(
+        # Closure fields are momentum densities x*f (PIXEL fits x*f, never f).
+        momentum_density=True,
         name=rec.get("name", rec["label"]),
         Q2=rec["Q2"], S=rec["S"], Y=rec["Y"],
         Q2_low=rec["Q2_low"], Q2_high=rec["Q2_high"],

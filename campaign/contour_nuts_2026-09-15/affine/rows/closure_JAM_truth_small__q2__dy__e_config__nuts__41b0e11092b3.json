@@ -1,0 +1,127 @@
+{
+  "suite": "closure_JAM_truth_small",
+  "q": "2",
+  "mode": "dy",
+  "cell": "e_config",
+  "cell_hash": "41b0e11092b3",
+  "prior_form": "beta_envelope",
+  "sampler": "nuts",
+  "saddle_strategy": "pixel_default",
+  "proposal_scales": null,
+  "sampler_options_override": {
+    "affine_reference_contour": true
+  },
+  "resolved_prior": {
+    "GP_AMPLITUDES": {
+      "t3": 0.25,
+      "t8": 0.5,
+      "sigma": 5.0,
+      "t15": 2.0,
+      "g": 5.0,
+      "v3": 0.25,
+      "v8": 0.2,
+      "v": 0.5,
+      "v15": 0.5
+    },
+    "GP_ENVELOPE": {
+      "t3": {
+        "alpha": 0.25,
+        "beta": 2.1,
+        "sigma": 3.0
+      },
+      "t8": {
+        "alpha": 0.0,
+        "beta": 1.35,
+        "sigma": 139.0
+      },
+      "sigma": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 53.0
+      },
+      "t15": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 49.0
+      },
+      "g": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 8.0
+      },
+      "v3": {
+        "alpha": 0.5,
+        "beta": 2.05,
+        "sigma": 3.0
+      },
+      "v8": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7.0
+      },
+      "v": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7.0
+      },
+      "v15": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7.0
+      }
+    },
+    "GP_ENVELOPE_JITTER": 0.01,
+    "GP_JITTER": 1e-10,
+    "GP_LENGTH_LOG": 0.6931471805599453,
+    "prior_form": "beta_envelope"
+  },
+  "provenance": {
+    "pixel": {
+      "sha": "684a7b0bfde285a1df35a2d690547cab7b3a3ed1",
+      "dirty": false
+    },
+    "pixel_closure": {
+      "sha": "3c1dce605dcd36d90927e3d6d8937f77530e636e",
+      "dirty": true
+    },
+    "env": {
+      "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false",
+      "OMP_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "PIXEL_KERNEL_WORKERS": "6",
+      "PIXEL_ASSEMBLY_WORKERS": "6",
+      "PIXEL_POSTERIOR_WORKERS": "6"
+    }
+  },
+  "status": "gate_fail",
+  "exception": "RuntimeError",
+  "message": "complex residual normalization vanished; normalization-reference contour NUTS failed",
+  "plan": {
+    "implementation": "normalization_reference_contour_nuts",
+    "resolved_auxiliary": "sample",
+    "n_ordinary": 0,
+    "n_normalization": 2,
+    "n_hubbard": 12,
+    "kwargs": {
+      "sampler": "nuts",
+      "auxiliary": "sample",
+      "n_samples": 1000,
+      "run_map": false,
+      "seed": 0,
+      "n_warmup": 100,
+      "step_size": 0.1,
+      "integrator": "leapfrog",
+      "max_tree_depth": 6,
+      "adapt_mass": false,
+      "use_hessian_mass": true,
+      "saddle_tol": 0.005,
+      "reference_cache_path": "campaign/contour_nuts_2026-09-15/affine/inference_cache/closure_JAM_truth_small__q2__dy__e_config__nuts_reference.npz",
+      "hessian_cache_path": "campaign/contour_nuts_2026-09-15/affine/inference_cache/closure_JAM_truth_small__q2__dy__e_config__nuts_hessian_mass.npz",
+      "affine_reference_contour": true
+    }
+  },
+  "gate": {},
+  "traceback": "Traceback (most recent call last):\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py\", line 503, in cmd_run_cell\n    summary = runner.run_one(args.q, args.mode, make_plots=not args.no_plots)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_JAM_truth_small/run_closure.py\", line 284, in run_one\n    result = fitmod.run_fit(q_key, mode)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py\", line 461, in capture_fit\n    captured[\"result\"] = original_fit(*a, **kw)\n                         ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_JAM_truth_small/fit.py\", line 428, in run_fit\n    # ``synthetic_z_plumbing`` carries a single bilinear row with no ordinary\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py\", line 485, in capture_infer\n    samples = original_infer(model, **new_kw)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel/src/pixel/infer/__init__.py\", line 1253, in run_mcmc\n    samples = _execute_mcmc_plan(\n              ^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel/src/pixel/infer/__init__.py\", line 1097, in _execute_mcmc_plan\n    return normalization_reference_contour_no_u_turn_sampler(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel/src/pixel/infer/contour.py\", line 5781, in normalization_reference_contour_no_u_turn_sampler\n    return normalization_reference_contour_hamiltonian_monte_carlo(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: complex residual normalization vanished; normalization-reference contour NUTS failed\n",
+  "elapsed_s": 8396.0
+}

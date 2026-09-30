@@ -15,7 +15,7 @@ def test_all_four_closure_configs_share_the_frozen_roster():
     Reaches much further than its explicit assertions below: all four
     ``closure_{JAM,NNPDF}_truth[_small]/config.py`` modules implement
     ``nnpdf40_datasets_for_mode`` as a thin wrapper around
-    ``pixel.data.nnpdf40_native.nnpdf40_native_contracts_for_mode`` (confirmed by
+    ``pixel.data.nnpdf.native.nnpdf40_native_contracts_for_mode`` (confirmed by
     reading all four; none call this module's ``nnpdf40_mode_datasets`` directly). That
     function requires, and raises ``NNPDF40NativeError``/``NNPDF40RosterError`` before
     any assertion here runs if violated: the alias file's identity set equals the

@@ -1,0 +1,5 @@
+[run-cell] infer_mcmc {'implementation': 'fixed_saddle_contour', 'resolved_auxiliary': 'sample', 'n_ordinary': 0, 'n_normalization': 0, 'n_hubbard': 1, 'kwargs': {'sampler': 'gaussian', 'auxiliary': 'auto', 'n_samples': 512, 'run_map': False, 'seed': 0, 'saddle_tol': 0.005}}
+   [time] build+kernels 0.95s  mcmc 1m 29s  marginal 0.00s  chi2 0.19s  fit total 1m 30s
+Matplotlib is building the font cache; this may take a moment.
+   [time] fit 1m 30s  summary 0.60s  pdf-plot 8.83s  data-plot 0.12s  run total 1m 40s
+[run-cell] closure_JAM_truth_small q=2 synthetic_z_plumbing c_config gaussian: ok (100.4 s)

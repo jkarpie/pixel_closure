@@ -1,0 +1,26 @@
+[
+  {
+    "q_key": "3",
+    "mode": "dy",
+    "exception": "RuntimeError",
+    "message": "small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.0101 < 0.1; signed outer ESS fraction 0.0101 < 0.05; median inner ESS fraction 0.00901 < 0.1",
+    "runtime_seconds": 263.6083949159947,
+    "traceback": "Traceback (most recent call last):\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/run_closure.py\", line 394, in main\n    s = run_one(\n        ^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/run_closure.py\", line 284, in run_one\n    result = fitmod.run_fit(q_key, mode)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/fit.py\", line 476, in run_fit\n    raise RuntimeError(\nRuntimeError: small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.0101 < 0.1; signed outer ESS fraction 0.0101 < 0.05; median inner ESS fraction 0.00901 < 0.1\n"
+  },
+  {
+    "q_key": "3",
+    "mode": "exp",
+    "exception": "RuntimeError",
+    "message": "small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.00686 < 0.1; signed outer ESS fraction 0.00686 < 0.05; median inner ESS fraction 0.00653 < 0.1",
+    "runtime_seconds": 339.81412554200506,
+    "traceback": "Traceback (most recent call last):\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/run_closure.py\", line 394, in main\n    s = run_one(\n        ^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/run_closure.py\", line 284, in run_one\n    result = fitmod.run_fit(q_key, mode)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/fit.py\", line 476, in run_fit\n    raise RuntimeError(\nRuntimeError: small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.00686 < 0.1; signed outer ESS fraction 0.00686 < 0.05; median inner ESS fraction 0.00653 < 0.1\n"
+  },
+  {
+    "q_key": "3",
+    "mode": "both",
+    "exception": "RuntimeError",
+    "message": "small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.00136 < 0.1; signed outer ESS fraction 0.00121 < 0.05; median inner ESS fraction 0.00119 < 0.1",
+    "runtime_seconds": 360.337425375008,
+    "traceback": "Traceback (most recent call last):\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/run_closure.py\", line 394, in main\n    s = run_one(\n        ^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/run_closure.py\", line 284, in run_one\n    result = fitmod.run_fit(q_key, mode)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/fit.py\", line 476, in run_fit\n    raise RuntimeError(\nRuntimeError: small-closure nested VEGAS diagnostics failed: absolute outer ESS fraction 0.00136 < 0.1; signed outer ESS fraction 0.00121 < 0.05; median inner ESS fraction 0.00119 < 0.1\n"
+  }
+]

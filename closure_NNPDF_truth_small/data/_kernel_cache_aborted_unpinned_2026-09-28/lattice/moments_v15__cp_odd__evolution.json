@@ -1,0 +1,130 @@
+{
+  "cache_version": 1,
+  "fingerprint": "7cd3c450f0e312d99b01722fb8382e7710d6dbc7d126c916373175859ce158b7",
+  "format": "pixel-kernel-cache",
+  "generation": {
+    "blas_evidence": "no BLAS thread limit is set and threadpoolctl recognized no BLAS backend (Accelerate is invisible to it) (expected one of OMP_NUM_THREADS, OPENBLAS_NUM_THREADS, MKL_NUM_THREADS, VECLIB_MAXIMUM_THREADS, NUMEXPR_NUM_THREADS=1)",
+    "blas_single_threaded": false,
+    "created_utc": "2026-09-28T16:15:47+00:00",
+    "git_commit": "ad6973c3",
+    "hostname": "cctemps-MacBook-Pro.local",
+    "numpy": "2.5.2",
+    "pixel_version": "0.2.0",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.14",
+    "thread_env": {}
+  },
+  "kernel_code": "b264d836fb3c00de47b73f10581188b36bd6ff30be08f193a22fb28cbce3d6b2",
+  "metadata": {
+    "assembly_block_entries": 8000000,
+    "assembly_column_block": 16,
+    "assembly_row_block": 64,
+    "cache_version": 1,
+    "kind": "non_singlet_evolution_factors",
+    "nu": {
+      "dtype": "float64",
+      "sha256": "3f710ac088db33363087de2b9a657541fe5447821debaa9fe5cbd538eb1a5f29",
+      "shape": [
+        1
+      ]
+    },
+    "readable": {
+      "nu": {
+        "head": [
+          2.0
+        ],
+        "max": 2.0,
+        "min": 2.0,
+        "n": 1,
+        "spacing": "custom"
+      },
+      "physics": {
+        "Q2": 4.0,
+        "Q20": 1.6384,
+        "alphaS_MZ": 0.118,
+        "alpha_s_at_Q2": 0.296575820625296,
+        "channel": "minus",
+        "coupling_anchor": "alpha_s(91.1879)=0.118, evolved backward",
+        "coupling_matching": {
+          "bottom": {
+            "alpha_s_nf4": 0.22348671907906995,
+            "alpha_s_nf5": 0.22348671907906995,
+            "log_mu2_over_muh2": 0.0
+          },
+          "charm": {
+            "alpha_s_nf3": 0.37383200329454935,
+            "alpha_s_nf4": 0.37383200329454935,
+            "log_mu2_over_muh2": 0.0
+          },
+          "matching_scale_ratios": {
+            "bottom": 1.0,
+            "charm": 1.0
+          },
+          "order": "NLO",
+          "reference": "Chetyrkin-Kniehl-Steinhauser hep-ph/9706430 Eqs. (6)-(7)"
+        },
+        "evolution_kind": "spacelike",
+        "lambda_qcd_lo_equiv_gev": {
+          "nf3": 0.1966748540644477,
+          "nf4": 0.16938119814649868,
+          "nf5": 0.10695529213031757
+        },
+        "mZ": 91.1879,
+        "matching_scales_gev": {
+          "bottom": 4.186,
+          "charm": 1.2729
+        },
+        "mode": "truncated",
+        "nf_at_Q2": 4,
+        "nf_at_Q20": 4,
+        "note": "nf and Lambda are derived from the VFNS thresholds and the alpha_s(MZ) anchor, not set directly; Lambda is the LO-equivalent.",
+        "order": "NLO",
+        "scales_gev2": {
+          "Q2": 4.0,
+          "Q20": 1.6384
+        },
+        "scheme": "VFNS",
+        "sector": "unpolarized",
+        "threshold_mass_scheme": "msbar_running",
+        "thresholds_gev": {
+          "mb": 4.186,
+          "mc": 1.2729
+        }
+      }
+    },
+    "settings": {
+      "Q2": 4.0,
+      "Q20": 1.6384,
+      "evolution": {
+        "alphas": {
+          "alphaS_MZ": 0.118,
+          "mZ": 91.1879,
+          "mb": 4.186,
+          "mb_matching_scale_ratio": 1.0,
+          "mc": 1.2729,
+          "mc_matching_scale_ratio": 1.0,
+          "order": "NLO",
+          "threshold_mass_scheme": "msbar_running",
+          "type": "pixel.kernels.evolution.pqcd.alphas.AlphaS"
+        },
+        "channel": "minus",
+        "fixed_nf": null,
+        "flavour_mode": "vfns",
+        "kind": "spacelike",
+        "mode": "truncated",
+        "order": "NLO",
+        "sector": "unpolarized",
+        "type": "pixel.kernels.evolution.pqcd.evolution.NonSingletEvolution"
+      }
+    }
+  },
+  "saved_arrays": {
+    "vector": {
+      "dtype": "float64",
+      "sha256": "1fa53f3342c86ac9a848fe81d747abf151cb3e366161881662558cf9451b98e5",
+      "shape": [
+        1
+      ]
+    }
+  }
+}

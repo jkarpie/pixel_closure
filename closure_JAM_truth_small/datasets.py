@@ -202,6 +202,8 @@ def build_drell_yan(rec, path, fields, cache):
             )
         alpha_em = float(electroweak.alpha_em(q2_values.pop()))
     return DrellYan(
+        # Closure fields are momentum densities x*f (PIXEL fits x*f, never f).
+        momentum_density=True,
         name=rec.get("name", rec["label"]),
         Q2=rec["Q2"], S=rec["S"], Y=rec["Y"],
         fields_A=fields_A, fields_B=fields_B,

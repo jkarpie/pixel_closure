@@ -318,9 +318,10 @@ def test_gp_prior_starts_at_a_plus_minus_a(suite):
     ``pixel.priors``/``pixel.core.params``, not committed): building the same
     mean/sigma pair with sigma moved and mean left alone gives mean != sd, but
     this test never re-reads the prior after a move to see that -- only
-    ``test_build_ties_mean_to_sigma`` does.  Bars rtol 1e-12 (mean) / 1e-9 (sd)
+    ``test_build_ties_mean_to_sigma`` does.  Bars rtol 1e-12 (mean) / 1e-6 (sd)
     are float round-trip and kernel-jitter margin, not physics; see the jitter
-    NOTE below for the measured margin.
+    NOTE below for the measured margin and for why the sd bar was widened two
+    decades when ``GP_JITTER`` was raised on 2026-09-22.
     """
     # NOTE: this checks the *starting values* only.  _gp_prior passes one
     # amplitude to both the mean and the kernel, so it would still pass with the
@@ -338,19 +339,39 @@ def test_gp_prior_starts_at_a_plus_minus_a(suite):
         # kernel or jitter term, so this bounds float64 round-trip only.
         np.testing.assert_allclose(mean, amplitude, rtol=1e-12, atol=0.0)
         # LogRBF has diag(K) = sigma**2 + jitter, so the relative excess of sd
-        # over the amplitude is sqrt(1 + jitter/a**2) - 1 ~= jitter/(2 a**2) for
-        # the default 1e-10 jitter.  It therefore grows as the amplitude *falls*,
-        # quadratically:
+        # over the amplitude is sqrt(1 + jitter/a**2) - 1 ~= jitter/(2 a**2).  It
+        # therefore grows as the amplitude *falls*, quadratically.  At the former
+        # 1e-10 jitter:
         #     a=5.0  -> 2.0e-12      a=1.0  -> 5.0e-11
         #     a=0.25 -> 8.0e-10      a=0.2  -> 1.25e-09
         # The old rtol=1e-9 was set when the smallest amplitude was 1.0.  The
         # _small suites' per-field table (2026-08-15) put v8 at 0.2, which lands
         # at 1.25e-9 and failed the bar -- measured, the observed sd was
-        # 0.20000000025 against 0.2.  1e-8 restores ~8x margin over the largest
-        # jitter term any current amplitude produces.  This is a jitter budget,
-        # not a physics tolerance: shrink the smallest amplitude by another 3x
-        # and it must be revisited again.
-        np.testing.assert_allclose(sd, mean, rtol=1e-8)
+        # 0.20000000025 against 0.2.  1e-8 restored ~8x margin.
+        #
+        # **Retyped 2026-09-22 for GP_JITTER 1e-10 -> 1e-8.**  Every entry above
+        # scales by the same 100x, because the term is linear in the jitter:
+        #     a=5.0  -> 2.0e-10      a=1.0  -> 5.0e-09
+        #     a=0.25 -> 8.0e-08      a=0.2  -> 1.25e-07
+        # The a=0.25 row is the one that failed at the old bar -- measured, sd
+        # came back 0.2500000199999992 against 0.25, i.e. exactly the predicted
+        # 8.0e-08.  1e-6 restores the same ~8x margin over the largest term any
+        # current amplitude produces (1.25e-07 at v8).
+        #
+        # This is a jitter budget, not a physics tolerance, and widening it is a
+        # real weakening of the ``a +- a`` invariant, not a formality: the
+        # crossover where the jitter starts to dominate the prior width moves two
+        # decades, from a ~ 1e-5 to a ~ 1e-3.  It was accepted deliberately.  The
+        # jitter was raised because at 1e-10 roughly 900 of the 1314 eigenvalues
+        # of the GP posterior covariance sit *at* the jitter rather than decaying,
+        # so ``Hinv`` carries ~900 uninformative directions of size 1e10 and the
+        # Hubbard-Stratonovich action ``E^2`` came back **wrong by 85** with 0.17
+        # of noise against a true variation of 0.0025.  One decade of jitter took
+        # that to 5.27e-5, a 3200x repair.  See ``GP_JITTER`` in config.py and
+        # ``EXT:pixel/plans/hs_saddle_contour_algorithms.md``.
+        #
+        # Shrink the smallest amplitude by another 3x and this must be revisited.
+        np.testing.assert_allclose(sd, mean, rtol=1e-6)
 
 
 # -- the tie itself, on the assembled analysis -------------------------------
@@ -577,7 +598,7 @@ def test_floor_sits_strictly_below_every_starting_amplitude(suite):
     tier amplitude, not just under the low tier by construction.  Catches
     ``GP_AMPLITUDE_FLOOR`` set at or above ``GP_AMPLITUDE_LOW`` (1.0), which
     would silently send ``eta`` to ``-inf`` for the low tier under the
-    sampler's transform (``pixel.infer.hmc.ParameterCoordinates``).  The ``0.9``
+    sampler's transform (``pixel.infer.samplers.hmc.ParameterCoordinates``).  The ``0.9``
     lower bound asserted on ``GP_AMPLITUDE_FLOOR`` itself, below, is an
     unmeasured sanity range rather than a derived bound -- it says "comfortably
     short of 1.0," nothing more.

@@ -25,6 +25,7 @@ from pixel import priors, kernels
 from pixel.core.model import Contribution, Dataset
 from pixel.core.params import Parameter
 from pixel.infer import PosteriorResult, NestedVegasSamples, VegasImportanceSamples
+from pixel.infer import ContourHMCSamples, JointContourHMCSamples
 from pixel.infer import AutocorrelationWarning, autocorrelation_summary
 from pixel.infer import run_mcmc as infer_mcmc
 from pixel.infer import bilinear_posterior_moments
@@ -309,29 +310,72 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True, t0=N
     return analysis, fields
 
 
-# -- run: VEGAS over fitted normalizations -----------------------------------
+# -- run: NUTS (default) or VEGAS over fitted normalizations ------------------
 
 
 def _closure_sampler(model, mode: str | None = None) -> str:
-    """Use VEGAS for every sampled small-closure parameter block.
+    """Use the configured sampler for every sampled small-closure block.
 
     The public dispatcher resolves linear models to ordinary VEGAS and
     DY-containing models to nested VEGAS.  A lattice-only model has no free
     coordinates and therefore resolves to the analytic fixed posterior without
     drawing artificial samples.
 
-    ``synthetic_z_plumbing`` is the exception.  It is a single unevolved
-    gamma/Z row carrying no ordinary theta and no fitted normalization, so once
-    the field is marginalized the only coordinate left is the
-    Hubbard-Stratonovich auxiliary -- which VEGAS refuses outright ("needs at
-    least one outer theta or normalization coordinate when f is marginalized"),
-    failing every member of the mode.  Its own message names the alternatives;
-    ``gaussian`` is the cheapest, and since this mode is plumbing rather than
-    physics validation the sampler choice carries no physics consequence.
+    The default ``"nuts"`` sends every bilinear mode, including
+    ``synthetic_z_plumbing``, through the positive-flow H-S contour configured
+    by :func:`_nuts_sampler_options`.  ``"vegas"`` remains available for
+    comparisons.  Its synthetic-Z model has no outer theta or normalization
+    coordinate, so marginalized VEGAS cannot represent it and that one fallback
+    remains Gaussian saddle importance.
     """
-    if mode == cfg.TEST_MODE_SYNTHETIC_Z:
+    if cfg.SMALL_CLOSURE_SAMPLER not in ("vegas", "nuts"):
+        raise ValueError(
+            "cfg.SMALL_CLOSURE_SAMPLER must be 'vegas' or 'nuts'; got "
+            f"{cfg.SMALL_CLOSURE_SAMPLER!r}"
+        )
+    if mode == cfg.TEST_MODE_SYNTHETIC_Z and cfg.SMALL_CLOSURE_SAMPLER == "vegas":
         return "gaussian"
-    return "vegas"
+    return cfg.SMALL_CLOSURE_SAMPLER
+
+
+def _nuts_sampler_options(q_key: str, mode: str, model) -> tuple[str, dict]:
+    """``(auxiliary, options)`` for ``SMALL_CLOSURE_SAMPLER = "nuts"``.
+
+    The full suites' NUTS block: ordinary NUTS with a Hessian metric for a
+    linear model; for a bilinear one, ``auxiliary="sample"`` with the saddle
+    tolerance and a per-(truth, mode) Hessian-metric cache.  The optimized
+    normalization-reference path also receives a reference-saddle cache.
+    PIXEL routes a bilinear model whose only real coordinates are fitted
+    normalizations to ``normalization_reference_contour_nuts``, the one path
+    that takes the affine-reference and memory-budget options, so those are
+    added only there.
+    """
+    options = {
+        "n_warmup": cfg.NUTS_WARMUP,
+        "step_size": cfg.NUTS_INITIAL_STEP_SIZE,
+        "integrator": cfg.NUTS_INTEGRATOR,
+        "max_tree_depth": cfg.NUTS_MAX_TREE_DEPTH,
+        "adapt_mass": cfg.NUTS_ADAPT_MASS,
+        "use_hessian_mass": True,
+    }
+    if not model.has_bilinear:
+        return "auto", options
+    stem = f"{cfg.truth_label(q_key)}_{mode}"
+    options["flow_time"] = cfg.CONTOUR_FLOW_TIME
+    options["n_flow_steps"] = cfg.CONTOUR_N_FLOW_STEPS
+    options["saddle_tol"] = cfg.CONTOUR_SADDLE_TOL
+    options["hessian_cache_path"] = cfg.INFERENCE_CACHE_ROOT / f"{stem}_hessian_mass.npz"
+    partition = model.contour_partition()
+    if partition.n_normalization and not partition.n_ordinary:
+        options["reference_cache_path"] = (
+            cfg.INFERENCE_CACHE_ROOT / f"{stem}_reference.npz"
+        )
+        options["affine_reference_contour"] = bool(cfg.CONTOUR_NUTS_AFFINE_REFERENCE)
+        options["flow_from_affine_reference"] = bool(
+            cfg.CONTOUR_NUTS_FLOW_FROM_AFFINE_REFERENCE
+        )
+        options["reference_budget_bytes"] = cfg.CONTOUR_NUTS_REFERENCE_BUDGET_BYTES
+    return "sample", options
 
 
 def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
@@ -345,9 +389,9 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     its stage number is the kernel-assembly cost.
     """
     watch = Stopwatch()
-    # ``synthetic_z_plumbing`` cannot run at the configured MCMC_SAMPLES: its
-    # sampler is quadratic in both time and memory and the 1000-sample fit is
-    # SIGKILLed at ~23 GB.  See cfg.SYNTHETIC_Z_MCMC_SAMPLES for the measurements.
+    # Keep synthetic-Z under its measured safety cap.  The old Gaussian fallback
+    # hit ~23 GB at 1000 draws; the flowed-NUTS default has not been measured at
+    # that count, so the existing cap remains until it has.
     if mode == cfg.TEST_MODE_SYNTHETIC_Z:
         n_samples = min(int(n_samples), int(cfg.SYNTHETIC_Z_MCMC_SAMPLES))
     reporter = ProgressReporter("closure")
@@ -382,7 +426,7 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         reporter.emit("t0 analysis rebuild ready", lap=True)
     t_build = watch.lap()
     sampler = _closure_sampler(model, mode)
-    if mode == cfg.TEST_MODE_SYNTHETIC_Z and model.has_bilinear:
+    if sampler == "gaussian" and model.has_bilinear:
         # ``synthetic_z_plumbing`` carries a single bilinear row with no ordinary
         # theta and no fitted normalization, so marginalizing f leaves the
         # sampler no outer coordinate at all and it refuses outright.  Sample the
@@ -395,6 +439,8 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         # 256, 32.5s at 384, so the configured 1000 is a handful of minutes.
         auxiliary = "sample"
         sampler_options = {"saddle_tol": cfg.CONTOUR_SADDLE_TOL}
+    elif sampler == "nuts":
+        auxiliary, sampler_options = _nuts_sampler_options(q_key, mode, model)
     else:
         sampler_options = {
             "n_bins": cfg.VEGAS_N_BINS,
@@ -476,6 +522,16 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
             raise RuntimeError(
                 "small-closure nested VEGAS diagnostics failed: "
                 + "; ".join(failures)
+            )
+    elif isinstance(samples, (JointContourHMCSamples, ContourHMCSamples)):
+        # Contour NUTS reweights its chain by the residual complex phase and
+        # Jacobian; a collapsed residual ESS means the moments are carried by a
+        # few draws even when the chain itself mixed.
+        if samples.ess_frac < cfg.CONTOUR_NUTS_MIN_RESIDUAL_ESS_FRAC:
+            raise RuntimeError(
+                "small-closure contour NUTS residual ESS fraction "
+                f"{samples.ess_frac:.3g} is below "
+                f"{cfg.CONTOUR_NUTS_MIN_RESIDUAL_ESS_FRAC}; refusing an unreliable fit"
             )
     reporter.emit(f"inference done sampler={sampler}", lap=True)
     t_mcmc = watch.lap()
@@ -820,8 +876,12 @@ def marginal_posterior(model, samples) -> dict:
         out[name] = (xref[name], mean, np.sqrt(var))
     if acc_pred is not None:
         pred_var = np.clip(acc_pred2 - acc_pred * acc_pred, 0.0, None)
-        samples._pixel_linear_predictive_moments = (
-            acc_pred, np.sqrt(pred_var)
+        # Importance-result dataclasses are frozen: this is a derived plotting
+        # cache, not sampler state, so bypass the generated frozen __setattr__.
+        object.__setattr__(
+            samples,
+            "_pixel_linear_predictive_moments",
+            (acc_pred, np.sqrt(pred_var)),
         )
     reporter.emit(f"marginal posterior done n_samples={len(S)}", lap=True)
     return out

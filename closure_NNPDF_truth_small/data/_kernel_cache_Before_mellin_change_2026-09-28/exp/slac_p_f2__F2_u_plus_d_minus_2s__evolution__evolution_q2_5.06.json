@@ -1,0 +1,290 @@
+{
+  "cache_version": 1,
+  "fingerprint": "95d25691a1c19e443bfe17e539c1a1a80c4c308dcb71ecf3bb22e2aac7657a1c",
+  "format": "pixel-kernel-cache",
+  "generation": {
+    "blas_evidence": "environment pins BLAS to one thread (MKL_NUM_THREADS=1, NUMEXPR_NUM_THREADS=1, OMP_NUM_THREADS=1, OPENBLAS_NUM_THREADS=1, VECLIB_MAXIMUM_THREADS=1)",
+    "blas_single_threaded": true,
+    "created_utc": "2026-09-25T03:06:41+00:00",
+    "git_commit": "9f29eaa4",
+    "hostname": "cctemps-MacBook-Pro.local",
+    "numpy": "2.5.2",
+    "pixel_version": "0.2.0",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.14",
+    "thread_env": {
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    }
+  },
+  "kernel_code": "865e772fede4f69200524d632e6d893b485556b8c847032d8447955039a3df10",
+  "metadata": {
+    "arrays": {
+      "contour_nodes": {
+        "dtype": "complex128",
+        "sha256": "99d8ae33af38a4fcf8c626c69d6b6382ce67b85d52e1eee38d91b63eae1c0b29",
+        "shape": [
+          2120000
+        ]
+      },
+      "tilt_contour_nodes": {
+        "dtype": "complex128",
+        "sha256": "d7d23e59c3c0badd00b045f6b25551fc9ccbe1fc71fcf51617e80f93024fbcf8",
+        "shape": [
+          768
+        ]
+      }
+    },
+    "assembly_block_entries": 8000000,
+    "assembly_column_block": 16,
+    "assembly_row_block": 64,
+    "basis": {
+      "axis_bases": [
+        {
+          "grid": {
+            "dtype": "float64",
+            "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+            "shape": [
+              146
+            ]
+          },
+          "n_elements": 146,
+          "order": 5,
+          "type": "pixel.geometry.finite_elements.PiecewiseQuintic"
+        }
+      ],
+      "grid": {
+        "axes": [
+          {
+            "dtype": "float64",
+            "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+            "shape": [
+              146
+            ]
+          }
+        ]
+      },
+      "n_elements": 146,
+      "ndim": 1,
+      "order": 5,
+      "type": "pixel.geometry.finite_elements.ProductBasis"
+    },
+    "cache_version": 1,
+    "kind": "non_singlet_evolution_matrix",
+    "nu": {
+      "dtype": "float64",
+      "sha256": "f22274a9db9c291f24bf78411a47f5ea6f611717403bdc1065f7deda5bd046e2",
+      "shape": [
+        1
+      ]
+    },
+    "numerics": {
+      "algorithm": "contour_contraction_v2",
+      "subtract_endpoint_tail": true,
+      "workspace_bytes": 536870912
+    },
+    "readable": {
+      "basis": {
+        "axis_bases": [
+          {
+            "continuity": "C0",
+            "family": "piecewise-lagrange",
+            "grid": {
+              "head": [
+                1e-06,
+                1.173395570493071e-06,
+                1.3768571648527597e-06,
+                1.6155980984398728e-06
+              ],
+              "max": 1.0,
+              "min": 1e-06,
+              "n": 146,
+              "spacing": "custom",
+              "tail": [
+                0.9876712328767123,
+                1.0
+              ]
+            },
+            "label": "piecewise-poly(order=5)",
+            "n_elements": 146,
+            "order": 5
+          }
+        ],
+        "container": "product",
+        "continuity": "C0",
+        "family": "piecewise-lagrange",
+        "grid_axes": [
+          {
+            "head": [
+              1e-06,
+              1.173395570493071e-06,
+              1.3768571648527597e-06,
+              1.6155980984398728e-06
+            ],
+            "max": 1.0,
+            "min": 1e-06,
+            "n": 146,
+            "spacing": "custom",
+            "tail": [
+              0.9876712328767123,
+              1.0
+            ]
+          }
+        ],
+        "label": "piecewise-poly(order=5)",
+        "n_elements": 146,
+        "order": 5
+      },
+      "nu": {
+        "head": [
+          0.321
+        ],
+        "max": 0.321,
+        "min": 0.321,
+        "n": 1,
+        "spacing": "custom"
+      },
+      "numerics": {
+        "algorithm": "contour_contraction_v2",
+        "subtract_endpoint_tail": true,
+        "workspace_bytes": 536870912
+      },
+      "physics": {
+        "Q2": 5.06,
+        "Q20": 1.6384,
+        "alphaS_MZ": 0.118,
+        "alpha_s_at_Q2": 0.2816901845212511,
+        "channel": "plus",
+        "coupling_anchor": "alpha_s(91.1879)=0.118, evolved backward",
+        "coupling_matching": {
+          "bottom": {
+            "alpha_s_nf4": 0.2235820187677835,
+            "alpha_s_nf5": 0.2235820187677835,
+            "log_mu2_over_muh2": 0.0
+          },
+          "charm": {
+            "alpha_s_nf3": 0.37258624391503603,
+            "alpha_s_nf4": 0.37258624391503603,
+            "log_mu2_over_muh2": 0.0
+          },
+          "matching_scale_ratios": {
+            "bottom": 1.0,
+            "charm": 1.0
+          },
+          "order": "NLO",
+          "reference": "Chetyrkin-Kniehl-Steinhauser hep-ph/9706430 Eqs. (6)-(7)"
+        },
+        "evolution_kind": "spacelike",
+        "lambda_qcd_lo_equiv_gev": {
+          "nf3": 0.19654081457942676,
+          "nf4": 0.1691812285045859,
+          "nf5": 0.10696905649448127
+        },
+        "mZ": 91.1879,
+        "matching_scales_gev": {
+          "bottom": 4.18,
+          "charm": 1.28
+        },
+        "mode": "truncated",
+        "nf_at_Q2": 4,
+        "nf_at_Q20": 4,
+        "note": "nf and Lambda are derived from the VFNS thresholds and the alpha_s(MZ) anchor, not set directly; Lambda is the LO-equivalent.",
+        "order": "NLO",
+        "scales_gev2": {
+          "Q2": 5.06,
+          "Q20": 1.6384
+        },
+        "scheme": "VFNS",
+        "sector": "unpolarized",
+        "threshold_mass_scheme": "msbar_running",
+        "thresholds_gev": {
+          "mb": 4.18,
+          "mc": 1.28
+        }
+      }
+    },
+    "settings": {
+      "Q2": 5.06,
+      "Q20": 1.6384,
+      "alpha": -1.0,
+      "contour": {
+        "c": 0.2533384477768969,
+        "integration": "two_half_holomorphic",
+        "npts": 16,
+        "panel": 0.13752658593602973,
+        "phi": 1.5707963267948966,
+        "size": 1060000,
+        "two_half_size": 2120000,
+        "type": "pixel.kernels.evolution.pqcd.contour.MellinContour",
+        "zmax": 9111.11111111111
+      },
+      "evolution": {
+        "alphas": {
+          "alphaS_MZ": 0.118,
+          "mZ": 91.1879,
+          "mb": 4.18,
+          "mb_matching_scale_ratio": 1.0,
+          "mc": 1.28,
+          "mc_matching_scale_ratio": 1.0,
+          "order": "NLO",
+          "threshold_mass_scheme": "msbar_running",
+          "type": "pixel.kernels.evolution.pqcd.alphas.AlphaS"
+        },
+        "channel": "plus",
+        "fixed_nf": null,
+        "flavour_mode": "vfns",
+        "kind": "spacelike",
+        "mode": "truncated",
+        "order": "NLO",
+        "sector": "unpolarized",
+        "type": "pixel.kernels.evolution.pqcd.evolution.NonSingletEvolution"
+      },
+      "low_x_extension": {
+        "alpha": 1.0,
+        "alpha_frozen": true,
+        "alpha_tags": [
+          "low_x_extension",
+          "low_x_alpha"
+        ],
+        "kind": "power",
+        "npts": 32,
+        "r_power": 0.0
+      },
+      "region_tilt": true,
+      "tilt_contour": {
+        "c": 0.2533384477768969,
+        "integration": "two_half_holomorphic",
+        "npts": 16,
+        "panel": 2.0,
+        "phi": 2.356194490192345,
+        "size": 384,
+        "two_half_size": 768,
+        "type": "pixel.kernels.evolution.pqcd.contour.MellinContour",
+        "zmax": 48.0
+      },
+      "tilt_rho_min": 0.3392028194823223,
+      "tol": null
+    }
+  },
+  "saved_arrays": {
+    "convergence": {
+      "dtype": "float64",
+      "sha256": "c325861f1dc4cf361d425b3da0d16ff335e96c2602bbb044bf8bbaadc0821b08",
+      "shape": [
+        1,
+        146
+      ]
+    },
+    "matrix": {
+      "dtype": "float64",
+      "sha256": "0e1f187095ac35894dd6d3276e91c33fd6b9ff37d84159d88f94f876fdd5849c",
+      "shape": [
+        1,
+        146
+      ]
+    }
+  }
+}

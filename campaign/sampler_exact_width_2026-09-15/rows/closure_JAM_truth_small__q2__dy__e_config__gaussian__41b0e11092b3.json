@@ -1,0 +1,131 @@
+{
+  "suite": "closure_JAM_truth_small",
+  "q": "2",
+  "mode": "dy",
+  "cell": "e_config",
+  "cell_hash": "41b0e11092b3",
+  "prior_form": "beta_envelope",
+  "sampler": "gaussian",
+  "saddle_strategy": "pixel_default",
+  "proposal_scales": [
+    1.0
+  ],
+  "sampler_options_override": {},
+  "resolved_prior": {
+    "GP_AMPLITUDES": {
+      "t3": 0.25,
+      "t8": 0.5,
+      "sigma": 5.0,
+      "t15": 2.0,
+      "g": 5.0,
+      "v3": 0.25,
+      "v8": 0.2,
+      "v": 0.5,
+      "v15": 0.5
+    },
+    "GP_ENVELOPE": {
+      "t3": {
+        "alpha": 0.25,
+        "beta": 2.1,
+        "sigma": 3.0
+      },
+      "t8": {
+        "alpha": 0.0,
+        "beta": 1.35,
+        "sigma": 139.0
+      },
+      "sigma": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 53.0
+      },
+      "t15": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 49.0
+      },
+      "g": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 8.0
+      },
+      "v3": {
+        "alpha": 0.5,
+        "beta": 2.05,
+        "sigma": 3.0
+      },
+      "v8": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7.0
+      },
+      "v": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7.0
+      },
+      "v15": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7.0
+      }
+    },
+    "GP_ENVELOPE_JITTER": 0.01,
+    "GP_JITTER": 1e-10,
+    "GP_LENGTH_LOG": 0.6931471805599453,
+    "prior_form": "beta_envelope"
+  },
+  "provenance": {
+    "pixel": {
+      "sha": "684a7b0bfde285a1df35a2d690547cab7b3a3ed1",
+      "dirty": false
+    },
+    "pixel_closure": {
+      "sha": "3c1dce605dcd36d90927e3d6d8937f77530e636e",
+      "dirty": true
+    },
+    "env": {
+      "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false",
+      "OMP_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "PIXEL_KERNEL_WORKERS": "4",
+      "PIXEL_ASSEMBLY_WORKERS": "4",
+      "PIXEL_POSTERIOR_WORKERS": "4"
+    }
+  },
+  "status": "gate_fail",
+  "exception": "SamplerGateError",
+  "message": "gaussian sampler gate (ESS/saddle/chain) failed: saddle-contour residual ESS fraction 0.00212 < 0.1",
+  "plan": {
+    "implementation": "normalization_reference_saddle_contour",
+    "resolved_auxiliary": "sample",
+    "n_ordinary": 0,
+    "n_normalization": 2,
+    "n_hubbard": 12,
+    "kwargs": {
+      "sampler": "gaussian",
+      "auxiliary": "auto",
+      "n_samples": 1000,
+      "run_map": false,
+      "seed": 0,
+      "saddle_tol": 0.005,
+      "reference_cache_path": "campaign/sampler_exact_width_2026-09-15/inference_cache/closure_JAM_truth_small__q2__dy__e_config__gaussian_reference.npz"
+    }
+  },
+  "gate": {
+    "implementation": "normalization_reference_saddle_contour",
+    "ess_frac": 0.00211507074974951,
+    "saddle_converged": true,
+    "saddle_n_iter": 12,
+    "saddle_residual": 1.9365318940301677,
+    "weight_magnitude_ess_fraction": 0.002272554900543759,
+    "phase_only_ess_fraction": 0.8799147499974344,
+    "proposal_fit_success": false,
+    "proposal_scale": 1.0,
+    "proposal_precision_eigenvalues_floored": 0
+  },
+  "traceback": "Traceback (most recent call last):\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py\", line 503, in cmd_run_cell\n    summary = runner.run_one(args.q, args.mode, make_plots=not args.no_plots)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_JAM_truth_small/run_closure.py\", line 284, in run_one\n    result = fitmod.run_fit(q_key, mode)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py\", line 461, in capture_fit\n    captured[\"result\"] = original_fit(*a, **kw)\n                         ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/closure_JAM_truth_small/fit.py\", line 428, in run_fit\n    samples = infer_mcmc(\n              ^^^^^^^^^^^\n  File \"/Users/jkarpie-admin/work/building/pixel_closure/campaign/prior_scan.py\", line 489, in capture_infer\n    raise SamplerGateError(f\"{sampler} sampler gate (ESS/saddle/chain) failed: \"\nSamplerGateError: gaussian sampler gate (ESS/saddle/chain) failed: saddle-contour residual ESS fraction 0.00212 < 0.1\n",
+  "proposal_scale_grid_intercepted": 1,
+  "elapsed_s": 141.0
+}

@@ -244,7 +244,7 @@ quoted in `benchmarks/kernel_stress.py`.
 
 ```
 RCOND               1e-16   (plateau is 1e-18 .. 1e-12)
-GP_JITTER           1e-10   constant prior
+GP_JITTER           1e-8    constant prior (raised from 1e-10, 2026-09-22)
 GP_ENVELOPE_JITTER  1e-2    envelope prior
 ```
 

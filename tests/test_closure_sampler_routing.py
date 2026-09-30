@@ -1,7 +1,7 @@
 """The closure's sampler choice, against the registry that says which sampler applies.
 
 Exercises: ``closure_*/fit._closure_sampler`` and ``pixel.core.model.Model.has_nonlinear``
-    against ``pixel.data.nnpdf40_native``'s ``requires_direct_sampler`` and
+    against ``pixel.data.nnpdf.native``'s ``requires_direct_sampler`` and
     ``pixel.data.dataset_prediction_class``/``dataset_nonlinear_kind``.
 Claim: the suite dispatches to the direct sampler for exactly the prediction classes the
     registry says cannot be marginalized -- no more, and no fewer.
@@ -34,7 +34,7 @@ import inspect
 import pytest
 
 from pixel.core.model import dataset_nonlinear_kind
-from pixel.data.nnpdf40_native import _SAMPLER_ROUTES, load_nnpdf40_native_contracts
+from pixel.data.nnpdf.native import _SAMPLER_ROUTES, load_nnpdf40_native_contracts
 
 #: Suites whose ``_closure_sampler`` chooses between the marginalized and direct routes.
 FULL_SUITES = ("closure_NNPDF_truth", "closure_JAM_truth")

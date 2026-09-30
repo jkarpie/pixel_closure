@@ -1,0 +1,72 @@
+{
+  "name": "e_sc1_flat1_da0_db0p5",
+  "prior_form": "beta_envelope",
+  "GP_AMPLITUDES": {
+    "t3": 0.25,
+    "t8": 0.5,
+    "sigma": 5.0,
+    "t15": 2.0,
+    "g": 5.0,
+    "v3": 0.25,
+    "v8": 0.2,
+    "v": 0.5,
+    "v15": 0.5
+  },
+  "GP_ENVELOPE": {
+    "t3": {
+      "alpha": 0.25,
+      "beta": 2.6,
+      "sigma": 3.0
+    },
+    "t8": {
+      "alpha": 0.0,
+      "beta": 1.85,
+      "sigma": 139.0
+    },
+    "sigma": {
+      "alpha": 0.0,
+      "beta": 2.45,
+      "sigma": 53.0
+    },
+    "t15": {
+      "alpha": 0.0,
+      "beta": 2.45,
+      "sigma": 49.0
+    },
+    "g": {
+      "alpha": 0.0,
+      "beta": 2.45,
+      "sigma": 8.0
+    },
+    "v3": {
+      "alpha": 0.5,
+      "beta": 2.55,
+      "sigma": 3.0
+    },
+    "v8": {
+      "alpha": 0.4,
+      "beta": 2.65,
+      "sigma": 7.0
+    },
+    "v": {
+      "alpha": 0.4,
+      "beta": 2.65,
+      "sigma": 7.0
+    },
+    "v15": {
+      "alpha": 0.4,
+      "beta": 2.65,
+      "sigma": 7.0
+    }
+  },
+  "GP_LENGTH_LOG": 0.6931471805599453,
+  "GP_JITTER": 1e-10,
+  "GP_ENVELOPE_JITTER": 0.01,
+  "provenance": {
+    "grid": "E1",
+    "sigma_scale": 1.0,
+    "flat_scale": 1.0,
+    "alpha_shift": 0.0,
+    "beta_shift": 0.5
+  }
+}

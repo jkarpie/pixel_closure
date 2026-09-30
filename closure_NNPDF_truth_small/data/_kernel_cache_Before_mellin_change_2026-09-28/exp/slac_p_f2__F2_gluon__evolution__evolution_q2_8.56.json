@@ -1,0 +1,273 @@
+{
+  "cache_version": 1,
+  "fingerprint": "89fb1b0a1f53853a5c7b0c8b1c240752ae30546f9e281e9afa0d629322f64b1e",
+  "format": "pixel-kernel-cache",
+  "generation": {
+    "blas_evidence": "environment pins BLAS to one thread (MKL_NUM_THREADS=1, NUMEXPR_NUM_THREADS=1, OMP_NUM_THREADS=1, OPENBLAS_NUM_THREADS=1, VECLIB_MAXIMUM_THREADS=1)",
+    "blas_single_threaded": true,
+    "created_utc": "2026-09-25T03:10:22+00:00",
+    "git_commit": "9f29eaa4",
+    "hostname": "cctemps-MacBook-Pro.local",
+    "numpy": "2.5.2",
+    "pixel_version": "0.2.0",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.14",
+    "thread_env": {
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    }
+  },
+  "kernel_code": "865e772fede4f69200524d632e6d893b485556b8c847032d8447955039a3df10",
+  "metadata": {
+    "arrays": {
+      "contour_nodes": {
+        "dtype": "complex128",
+        "sha256": "aee57c65147e7c0579dc3796d18ec75a6bcf4749a63352633b1035ba905946f7",
+        "shape": [
+          76640
+        ]
+      }
+    },
+    "assembly_block_entries": 8000000,
+    "assembly_column_block": 16,
+    "assembly_row_block": 64,
+    "basis": {
+      "axis_bases": [
+        {
+          "grid": {
+            "dtype": "float64",
+            "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+            "shape": [
+              146
+            ]
+          },
+          "n_elements": 146,
+          "order": 5,
+          "type": "pixel.geometry.finite_elements.PiecewiseQuintic"
+        }
+      ],
+      "grid": {
+        "axes": [
+          {
+            "dtype": "float64",
+            "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+            "shape": [
+              146
+            ]
+          }
+        ]
+      },
+      "n_elements": 146,
+      "ndim": 1,
+      "order": 5,
+      "type": "pixel.geometry.finite_elements.ProductBasis"
+    },
+    "cache_version": 1,
+    "kind": "singlet_evolution_matrix",
+    "nu": {
+      "dtype": "float64",
+      "sha256": "796cf71787695e6c059fb84e45fc78892276989610ae1d1f26578bbfa7ea0e87",
+      "shape": [
+        1
+      ]
+    },
+    "numerics": {
+      "algorithm": "contour_contraction_v2",
+      "singlet_operator": "singlet_blocked_v1",
+      "subtract_endpoint_tail": false,
+      "workspace_bytes": 536870912
+    },
+    "readable": {
+      "basis": {
+        "axis_bases": [
+          {
+            "continuity": "C0",
+            "family": "piecewise-lagrange",
+            "grid": {
+              "head": [
+                1e-06,
+                1.173395570493071e-06,
+                1.3768571648527597e-06,
+                1.6155980984398728e-06
+              ],
+              "max": 1.0,
+              "min": 1e-06,
+              "n": 146,
+              "spacing": "custom",
+              "tail": [
+                0.9876712328767123,
+                1.0
+              ]
+            },
+            "label": "piecewise-poly(order=5)",
+            "n_elements": 146,
+            "order": 5
+          }
+        ],
+        "container": "product",
+        "continuity": "C0",
+        "family": "piecewise-lagrange",
+        "grid_axes": [
+          {
+            "head": [
+              1e-06,
+              1.173395570493071e-06,
+              1.3768571648527597e-06,
+              1.6155980984398728e-06
+            ],
+            "max": 1.0,
+            "min": 1e-06,
+            "n": 146,
+            "spacing": "custom",
+            "tail": [
+              0.9876712328767123,
+              1.0
+            ]
+          }
+        ],
+        "label": "piecewise-poly(order=5)",
+        "n_elements": 146,
+        "order": 5
+      },
+      "nu": {
+        "head": [
+          0.434
+        ],
+        "max": 0.434,
+        "min": 0.434,
+        "n": 1,
+        "spacing": "custom"
+      },
+      "numerics": {
+        "algorithm": "contour_contraction_v2",
+        "singlet_operator": "singlet_blocked_v1",
+        "subtract_endpoint_tail": false,
+        "workspace_bytes": 536870912
+      },
+      "physics": {
+        "Q2": 8.56,
+        "Q20": 1.6384,
+        "alphaS_MZ": 0.118,
+        "alpha_s_at_Q2": 0.2535314928427236,
+        "channel": null,
+        "coupling_anchor": "alpha_s(91.1879)=0.118, evolved backward",
+        "coupling_matching": {
+          "bottom": {
+            "alpha_s_nf4": 0.2235820187677835,
+            "alpha_s_nf5": 0.2235820187677835,
+            "log_mu2_over_muh2": 0.0
+          },
+          "charm": {
+            "alpha_s_nf3": 0.37258624391503603,
+            "alpha_s_nf4": 0.37258624391503603,
+            "log_mu2_over_muh2": 0.0
+          },
+          "matching_scale_ratios": {
+            "bottom": 1.0,
+            "charm": 1.0
+          },
+          "order": "NLO",
+          "reference": "Chetyrkin-Kniehl-Steinhauser hep-ph/9706430 Eqs. (6)-(7)"
+        },
+        "evolution_kind": "spacelike",
+        "lambda_qcd_lo_equiv_gev": {
+          "nf3": 0.19654081457942676,
+          "nf4": 0.1691812285045859,
+          "nf5": 0.10696905649448127
+        },
+        "mZ": 91.1879,
+        "matching_scales_gev": {
+          "bottom": 4.18,
+          "charm": 1.28
+        },
+        "mode": "truncated",
+        "nf_at_Q2": 4,
+        "nf_at_Q20": 4,
+        "note": "nf and Lambda are derived from the VFNS thresholds and the alpha_s(MZ) anchor, not set directly; Lambda is the LO-equivalent.",
+        "order": "NLO",
+        "scales_gev2": {
+          "Q2": 8.56,
+          "Q20": 1.6384
+        },
+        "scheme": "VFNS",
+        "sector": "unpolarized",
+        "threshold_mass_scheme": "msbar_running",
+        "thresholds_gev": {
+          "mb": 4.18,
+          "mc": 1.28
+        }
+      }
+    },
+    "settings": {
+      "Q2": 8.56,
+      "Q20": 1.6384,
+      "alpha": 0.0,
+      "contour": {
+        "c": 1.15,
+        "integration": "two_half_holomorphic",
+        "npts": 16,
+        "panel": 0.5501063437441331,
+        "phi": 1.5707963267948966,
+        "size": 38320,
+        "two_half_size": 76640,
+        "type": "pixel.kernels.evolution.pqcd.contour.MellinContour",
+        "zmax": 1311.9999999999998
+      },
+      "evolution": {
+        "alphas": {
+          "alphaS_MZ": 0.118,
+          "mZ": 91.1879,
+          "mb": 4.18,
+          "mb_matching_scale_ratio": 1.0,
+          "mc": 1.28,
+          "mc_matching_scale_ratio": 1.0,
+          "order": "NLO",
+          "threshold_mass_scheme": "msbar_running",
+          "type": "pixel.kernels.evolution.pqcd.alphas.AlphaS"
+        },
+        "fixed_nf": null,
+        "flavour_mode": "vfns",
+        "itermax": 16,
+        "kind": "spacelike",
+        "mode": "truncated",
+        "order": "NLO",
+        "sector": "unpolarized",
+        "type": "pixel.kernels.evolution.pqcd.evolution.SingletEvolution"
+      },
+      "low_x_extension": {
+        "alpha": 0.0,
+        "kind": "flat",
+        "npts": 32,
+        "r_power": 0.0
+      },
+      "min_c": 1.15,
+      "region_tilt": false,
+      "source": "gluon",
+      "target": "quark_singlet",
+      "tilt_contour": null,
+      "tilt_rho_min": null,
+      "tol": null
+    }
+  },
+  "saved_arrays": {
+    "convergence": {
+      "dtype": "float64",
+      "sha256": "fb0b2a4b1e3580258ce3e9a6e164334b505f73872dfe8050ebd3cfccbc38f560",
+      "shape": [
+        1,
+        146
+      ]
+    },
+    "matrix": {
+      "dtype": "float64",
+      "sha256": "4f277b1f07d595cf8c982359f80a6d0fb65afc0b9412ca63b0a6e8ed12564030",
+      "shape": [
+        1,
+        146
+      ]
+    }
+  }
+}

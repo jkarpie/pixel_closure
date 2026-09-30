@@ -53,7 +53,7 @@ NNPDF_COMMONDATA = REPO_ROOT.parent / "nnpdf" / "nnpdf_data" / "nnpdf_data" / "c
 
 # Small keeps every published NNPDF4.0 DIS/DY dataset identity but limits each
 # table to a deterministic kinematic-extrema-preserving smoke subset.
-from pixel.data.nnpdf40_native import (
+from pixel.data.nnpdf.native import (
     assert_native_campaign_ready as _assert_native_campaign_ready,
     nnpdf40_native_contracts_for_mode as _nnpdf40_native_contracts_for_mode,
 )
@@ -729,22 +729,23 @@ TEST_MODE_DY = "dy"                               # DY-only test mode
 
 #: One amplitude per field sets **both** the constant prior mean and the log-RBF
 #: sigma, so every physical field's prior is ``a +- a``: a 100% relative prior
-#: uncertainty about its own mean.  The C-even singlet (sigma), gluon (g) and
-#: charm (t15) fields use GP_AMPLITUDE_HIGH; every other field -- the C-even
-#: non-singlets (t3, t8) and all C-odd valence fields (v3, v8, v, v15) -- uses
-#: GP_AMPLITUDE_LOW.  The mean is a constant function of x (priors.Const).
+#: uncertainty about its own mean.  The value is per field, from the table below.
+#: The mean is a constant function of x (priors.Const).
 #:
 #: ``fit.py`` enforces the relation with ``analysis.tie(mean.N, to=cov.sigma)``
 #: rather than trusting two constants to stay equal.  Both stay **frozen**: a
 #: fitted tied amplitude collapses onto its lower bound when the data cannot
 #: distinguish the field from zero (see guides/tying_parameters.md).
-#: Per-field tied amplitude.  The two-tier `GP_AMPLITUDE_HIGH/LOW` constants were
-#: replaced by this table on 2026-08-15 so individual fields can be tuned, but the
-#: **values here are the original tiers** (5.0 for singlet/gluon/charm, 1.0 for the
-#: rest): a retune to the observed field scales -- `t3` 0.25, `t8` 0.5, `t15` 2.0,
-#: valence 0.2-0.5 -- was measured and **reverted**.
+#: Per-field tied amplitude.  The two-tier `GP_AMPLITUDE_HIGH/LOW` constants (5.0 for
+#: singlet/gluon/charm, 1.0 for the rest) were replaced by this table on 2026-08-15,
+#: and on 2026-08-16 the owner set the values below: the tiers are kept for `sigma`
+#: and `g` (5.0), and the other fields are tuned towards their observed scales --
+#: `t3` 0.25, `t8` 0.5, `t15` 2.0, valence 0.2-0.5.  These are owner-specified
+#: (HANDOFF.md); change them only with the full 9-field signed + RMS pull table.
+#: The full suites still use the 5.0/1.0 tiers.
 #:
-#: Why it was reverted, so it is not retried blind:
+#: Known costs of these values against the 5.0/1.0 tiers, measured when they were
+#: first tried, so a retune is not attempted blind:
 #:
 #: * It could not work for `t3` in `exp`.  The prior is `a +- a` with the mean tied
 #:   to the width, and `t3` is prior-dominated there (it is a 1-6% perturbation on
@@ -792,7 +793,7 @@ GP_AMPLITUDE_FREE = False
 #: while ``GP_AMPLITUDE_FREE`` is off -- a bound at or above the starting value
 #: makes ``inv_softplus(a - floor)`` non-finite and sends ``eta`` to ``-inf``
 #: under the sampler's lower-softplus transform
-#: (pixel.infer.hmc.ParameterCoordinates).
+#: (pixel.infer.samplers.hmc.ParameterCoordinates).
 #:
 #: It stays a single **absolute** floor, which is what the 0.99 literal always
 #: was: 99% of the low tier but only 20% of the high tier, i.e. permissive for
@@ -942,7 +943,30 @@ GP_ENVELOPE = {
 #:
 #: Required jitter scales with system size: `dy` (n=14) runs at 1e-10, while
 #: `exp`/`both` (n=158/230) need 1e-4 for the envelope prior.
-GP_JITTER = 1.0e-10
+#:
+#: **1e-8, not 1e-10 — raised 2026-09-22, and the reason is downstream of the
+#: prior entirely.**  At 1e-10 roughly 900 of `H`'s 1314 eigenvalues sit *at the
+#: jitter* rather than decaying: the log-RBF kernel has already damped those modes
+#: below the jitter, so from there the prior IS the jitter.  `Hinv = inv(H)` then
+#: carries ~900 directions of size 1e10 that hold no information, and
+#: `cond(H) = 6.96e12` is inherited whole by the Hubbard-Stratonovich matrix
+#: `A = Hinv + T(f)`; the H-S part is innocent, with `T` at `sigma_max` 109 against
+#: `Hinv`'s 1.004e10.
+#:
+#: The consequence is a wrong number, not slow convergence: `force^T A^-1 force`
+#: has a forward error of ~1.8e6 and must cancel against `constant` (both 2.9e9)
+#: to leave ~66.  Measured on the frozen JAM `dy`/`c_config` block at Q=2, `E^2`
+#: carries 0.17 peak-to-peak of noise against a true variation of 0.0025, and its
+#: value is wrong by **85**.  One decade of jitter takes the jaggedness to 5.27e-5
+#: (**3200x**) with the frame-pinned quadratic coefficient still right to 1.6%.
+#:
+#: **Measured on the JAM cell, applied here by symmetry — not yet confirmed on an
+#: NNPDF block.**  The mechanism is a property of the shared GP prior and the
+#: shared evidence algebra, so it should carry over, but the ladder has not been
+#: run on `exp`/`e_config` or `both`/`c_config`.  Confirm before relying on it.
+#:
+#: Full derivation and the ladder: `EXT:pixel/plans/hs_saddle_contour_algorithms.md`.
+GP_JITTER = 1.0e-8
 
 
 #: Jitter for the ENVELOPE prior, which needs far more than the constant one.
@@ -988,23 +1012,21 @@ MAP_OPTIONS = {"maxiter": 200}
 MCMC_SAMPLES = 1000
 MCMC_SEED = 0
 
-#: Sample cap for ``synthetic_z_plumbing`` only.  That mode samples its single
-#: Hubbard-Stratonovich auxiliary through ``saddle_contour_importance_sample``,
-#: whose cost and footprint both grow quadratically in the sample count -- for a
-#: one-row dataset.  Measured on this box, solo, nothing else running:
+#: Conservative sample cap for ``synthetic_z_plumbing`` only.  These measurements
+#: are from its retained Gaussian fallback, whose cost and footprint grow
+#: quadratically in the sample count -- for a one-row dataset:
 #:
 #:     n=384 -> 32.5s    n=512 -> 58.9s    n=640 -> 114.3s    n=1000 -> SIGKILL
 #:
-#: The 1000-sample run was killed twice at a peak RSS of ~23 GB, so the
-#: configured ``MCMC_SAMPLES`` cannot run this mode at all.  512 is the largest
-#: count measured to complete with headroom left for a shared machine.  This is
-#: a workaround, not a fix: ~23 MB per sample for a single data point is a
-#: memory defect in that sampler and is worth chasing separately.  It is
-#: tolerable here only because this mode is plumbing, never physics validation.
+#: The 1000-sample fallback was killed twice at a peak RSS of ~23 GB.  512 is
+#: the largest fallback count measured to complete with headroom left for
+#: a shared machine.  Keep the same cap on the new flowed-NUTS default until its
+#: full-count footprint is measured; the cap is a safety bound, not a claim that
+#: the new sampler has the fallback's defect.
 SYNTHETIC_Z_MCMC_SAMPLES = 512
 
-# Small-closure inference uses VEGAS for every nontrivial sampled fit.  In a
-# linear DIS fit this is ordinary adaptive-grid importance sampling over the
+# The optional VEGAS comparison route uses ordinary adaptive-grid importance
+# sampling for a linear DIS fit over the
 # explicit table normalizations.  In DY-containing fits one joint VEGAS grid
 # covers those normalizations and the coordinates on a fixed-reference affine
 # H-S contour.  The normalization parameters are never marginalized.
@@ -1032,8 +1054,14 @@ VEGAS_MIN_OUTER_ESS_FRAC = 0.10
 VEGAS_MIN_SIGNED_ESS_FRAC = 0.05
 VEGAS_MIN_MEDIAN_INNER_ESS_FRAC = 0.10
 
-# Retained for the public HMC/NUTS examples and regression comparisons; the
-# small closure dispatch itself no longer selects either Markov-chain sampler.
+#: Sampler family for every sampled small-closure mode.  ``"nuts"`` is the
+#: production default: ordinary NUTS for linear models and contour NUTS with
+#: explicit H-S auxiliaries for bilinear ones.  ``"vegas"`` remains an opt-in
+#: comparison route; its zero-outer-coordinate synthetic-Z case falls back to
+#: Gaussian saddle importance because marginalized VEGAS cannot represent it.
+SMALL_CLOSURE_SAMPLER = "nuts"
+
+# NUTS settings, shared with the full suites' NUTS block.
 NUTS_WARMUP = 100
 NUTS_INITIAL_STEP_SIZE = 0.1
 NUTS_INTEGRATOR = "leapfrog"
@@ -1041,26 +1069,38 @@ NUTS_MAX_TREE_DEPTH = 6
 # The Hessian metric is already tailored to the local target. Avoid rebuilding
 # NUTS steppers and repeating costly step-size searches at mass-window updates.
 NUTS_ADAPT_MASS = False
+#: Deform every sampled H-S sector with the positive-flow generalized-thimble
+#: map.  The affine-whitened scan recorded in
+#: ``pixel/plans/hs_saddle_contour_algorithms.md`` found ``T=0.2`` to be the
+#: deepest consistently stable/improving point; the 8-step RK4 result converged
+#: against its 2/32-step checks.  Normalization-only contours start from the
+#: affine saddle reference so the flow acts in its well-conditioned frame.
+CONTOUR_FLOW_TIME = 0.2
+CONTOUR_N_FLOW_STEPS = 8
+CONTOUR_NUTS_AFFINE_REFERENCE = False
+CONTOUR_NUTS_FLOW_FROM_AFFINE_REFERENCE = True
+#: Ceiling passed to PIXEL's normalization-reference memory refusal, in bytes;
+#: ``None`` keeps PIXEL's default (or ``PIXEL_NORMALIZATION_REFERENCE_BUDGET_BYTES``).
+#: That projection is calibrated on small GP grids and models the flowed map, so
+#: on this suite's grid it refuses runs whose measured footprint fits; set this
+#: (or the environment variable) to run contour NUTS here.
+CONTOUR_NUTS_REFERENCE_BUDGET_BYTES = None
+#: Refuse a contour-NUTS fit whose residual complex-weight ESS fraction falls
+#: below this, matching the small suites' VEGAS outer-ESS gate.
+CONTOUR_NUTS_MIN_RESIDUAL_ESS_FRAC = 0.10
 
-#: Mixed DIS+DY fits keep every normalization explicit.  A short zero-flow HMC
-#: trajectory is both exact and stable after the retained-subspace derivative
-#: fix; avoiding a dense Hessian setup saves several minutes per small fit.
+#: Retained for fixed-trajectory HMC comparisons; production small closures use
+#: the contour-NUTS settings above.
 HMC_WARMUP = 100
 HMC_STEP_SIZE = 0.25
 HMC_N_LEAPFROG = 3
 HMC_INTEGRATOR = "leapfrog"
 HMC_USE_HESSIAN_MASS = False
-HMC_FLOW_TIME = 0.0
-HMC_N_FLOW_STEPS = 1
-HMC_AFFINE_REFERENCE_CONTOUR = True
 # Some closure likelihoods stall just below a 3e-3 Newton decrement at
 # floating-point precision.  Keep a small margin so a numerically stationary
 # H-S saddle is accepted instead of aborting contour-NUTS initialization.
 CONTOUR_SADDLE_TOL = 5.0e-3
-# The DY-only small closure uses independent importance draws on the fixed A=0
-# saddle contour.  Below this residual complex-weight ESS fraction the proposal
-# is not resolving the integral reliably, so the fit fails instead of publishing
-# misleading closure bands.
+# ESS floor retained for the Gaussian saddle-importance fallback.
 SADDLE_MIN_ESS_FRAC = 0.10
 
 N_HYPERPARAMS = len(ALL_FIELDS) if GP_AMPLITUDE_FREE else 0  # 0 = fully-fixed prior

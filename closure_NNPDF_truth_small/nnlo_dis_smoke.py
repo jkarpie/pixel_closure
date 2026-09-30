@@ -19,7 +19,7 @@ import json
 import numpy as np
 
 from pixel import data
-from pixel.kernels.pqcd.contour import MellinContour
+from pixel.kernels.evolution.pqcd.contour import MellinContour
 
 from . import config as cfg
 from .generate import assemble_operator, fold_ensemble

@@ -128,7 +128,7 @@ def test_all_four_suites_ship_the_same_envelope():
 
 
 def test_all_four_suites_share_the_numerical_settings():
-    """Constraint sigmas, rcond, jitters and GP length must not drift either.
+    """Constraint, GP and H-S flow numerics must not drift between suites.
 
     These carry measurements in their config comments (the constraint cliff at
     1e-6, the rcond plateau, the two jitter boundaries).  A per-suite drift makes
@@ -137,6 +137,7 @@ def test_all_four_suites_share_the_numerical_settings():
     keys = ("CONSTRAINT_ENDPOINT_SIGMA", "CONSTRAINT_NORM_SIGMA",
             "CONSTRAINT_ORIGIN_SIGMA", "CONSTRAINT_MOMENTUM_SIGMA",
             "RCOND", "GP_JITTER", "GP_ENVELOPE_JITTER", "GP_LENGTH_LOG",
+            "CONTOUR_FLOW_TIME", "CONTOUR_N_FLOW_STEPS",
             "PRIOR_FORM")
     ref = {k: getattr(_cfg(SUITES[0]), k) for k in keys}
     for suite in SUITES[1:]:

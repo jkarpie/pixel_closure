@@ -1,0 +1,157 @@
+{
+  "cache_version": 1,
+  "fingerprint": "a90afe01b669864a4439f99c3344897eabc1cbd35c1c31c671d829602fb1f750",
+  "format": "pixel-kernel-cache",
+  "generation": {
+    "blas_evidence": "environment pins BLAS to one thread (MKL_NUM_THREADS=1, NUMEXPR_NUM_THREADS=1, OMP_NUM_THREADS=1, OPENBLAS_NUM_THREADS=1, VECLIB_MAXIMUM_THREADS=1)",
+    "blas_single_threaded": true,
+    "created_utc": "2026-09-25T03:02:16+00:00",
+    "git_commit": "9f29eaa4",
+    "hostname": "cctemps-MacBook-Pro.local",
+    "numpy": "2.5.2",
+    "pixel_version": "0.2.0",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.14",
+    "thread_env": {
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    }
+  },
+  "kernel_code": "865e772fede4f69200524d632e6d893b485556b8c847032d8447955039a3df10",
+  "metadata": {
+    "assembly_block_entries": 8000000,
+    "assembly_column_block": 16,
+    "assembly_row_block": 64,
+    "cache_version": 1,
+    "kind": "drell_yan_bilinear_tensor",
+    "nu": {
+      "dtype": "float64",
+      "sha256": "5d2dad11aea61114f638ef0dd81be0bf5be5da5c3f29122b2c2581f467775b1f",
+      "shape": [
+        6,
+        3
+      ]
+    },
+    "readable": {
+      "nu": {
+        "head": [
+          24.665128959999997,
+          1505.4399999999998,
+          0.17103982835781859,
+          63.26611599999998
+        ],
+        "max": 1505.4399999999998,
+        "min": 0.17103982835781859,
+        "n": 18,
+        "spacing": "custom",
+        "tail": [
+          1505.4399999999998,
+          0.9511132911417439
+        ]
+      }
+    },
+    "settings": {
+      "basis_A": {
+        "axis_bases": [
+          {
+            "grid": {
+              "dtype": "float64",
+              "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+              "shape": [
+                146
+              ]
+            },
+            "n_elements": 146,
+            "order": 5,
+            "type": "pixel.geometry.finite_elements.PiecewiseQuintic"
+          }
+        ],
+        "grid": {
+          "axes": [
+            {
+              "dtype": "float64",
+              "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+              "shape": [
+                146
+              ]
+            }
+          ]
+        },
+        "n_elements": 146,
+        "ndim": 1,
+        "order": 5,
+        "type": "pixel.geometry.finite_elements.ProductBasis"
+      },
+      "basis_B": {
+        "axis_bases": [
+          {
+            "grid": {
+              "dtype": "float64",
+              "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+              "shape": [
+                146
+              ]
+            },
+            "n_elements": 146,
+            "order": 5,
+            "type": "pixel.geometry.finite_elements.PiecewiseQuintic"
+          }
+        ],
+        "grid": {
+          "axes": [
+            {
+              "dtype": "float64",
+              "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+              "shape": [
+                146
+              ]
+            }
+          ]
+        },
+        "n_elements": 146,
+        "ndim": 1,
+        "order": 5,
+        "type": "pixel.geometry.finite_elements.ProductBasis"
+      },
+      "kernel": {
+        "alpha_em": 0.007297352573756914,
+        "alpha_s": 0.2,
+        "channel": "qA,qbB",
+        "couplings": null,
+        "electroweak": null,
+        "momentum_density": true,
+        "muF2": null,
+        "muR2": null,
+        "nf": 4,
+        "nnlo_source": null,
+        "nnlo_y_panels": 10,
+        "nnlo_z_panels": 16,
+        "order": "LO",
+        "parton_A": "d",
+        "parton_B": "db",
+        "quad_n": 20,
+        "quad_n_y": 20,
+        "quad_n_z": 20,
+        "type": "pixel.kernels.drell_yan.kernel.DYKernel",
+        "y_integration": "legacy_linear",
+        "y_panels": 1,
+        "z_integration": "element_aligned",
+        "z_panels": 1
+      }
+    }
+  },
+  "saved_arrays": {
+    "tensor": {
+      "dtype": "float64",
+      "sha256": "82a019cddbc8f3bf4e1de537782a11655cf4f646cbdf13ddcda2ccdd40feacac",
+      "shape": [
+        6,
+        146,
+        146
+      ]
+    }
+  }
+}

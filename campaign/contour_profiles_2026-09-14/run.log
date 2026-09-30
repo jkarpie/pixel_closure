@@ -1,0 +1,31 @@
++ cd /Users/jkarpie-admin/work/building/pixel_closure
++ export XLA_FLAGS=--xla_cpu_multi_thread_eigen=false OMP_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 OPENBLAS_NUM_THREADS=1 PIXEL_KERNEL_WORKERS=2 PIXEL_ASSEMBLY_WORKERS=2 PIXEL_POSTERIOR_WORKERS=2
++ XLA_FLAGS=--xla_cpu_multi_thread_eigen=false
++ OMP_NUM_THREADS=1
++ VECLIB_MAXIMUM_THREADS=1
++ OPENBLAS_NUM_THREADS=1
++ PIXEL_KERNEL_WORKERS=2
++ PIXEL_ASSEMBLY_WORKERS=2
++ PIXEL_POSTERIOR_WORKERS=2
++ P=../pixel/venv/bin/python
++ run JAM synthetic_z_plumbing c_config
++ ../pixel/venv/bin/python -m campaign.contour_profiles run --suite closure_JAM_truth_small --mode synthetic_z_plumbing --cell-json campaign/sampler_test_2026-09-14/cell_json/c_config__c82a403ad1a9.json --out campaign/contour_profiles_2026-09-14
+{"suite": "closure_JAM_truth_small", "q": "2", "mode": "synthetic_z_plumbing", "cell": "c_config", "n_hubbard": 1, "n_normalization": 0, "cache_status": "no_cache_given", "saddle_iterations": 14, "E_star": [1106.6476262985755, 0.0], "std_re_log_w": 0.015939022824966936, "magnitude_ess_fraction": 0.9997456437990282, "signed_ess_fraction": 0.9997456405731193, "phase_only_ess_fraction": 0.9999999967836544, "elapsed_s": 38.7}
++ run NNPDF synthetic_z_plumbing e_config
++ ../pixel/venv/bin/python -m campaign.contour_profiles run --suite closure_NNPDF_truth_small --mode synthetic_z_plumbing --cell-json campaign/sampler_test_2026-09-14/cell_json/e_config__41b0e11092b3.json --out campaign/contour_profiles_2026-09-14
+{"suite": "closure_NNPDF_truth_small", "q": "2", "mode": "synthetic_z_plumbing", "cell": "e_config", "n_hubbard": 1, "n_normalization": 0, "cache_status": "no_cache_given", "saddle_iterations": 15, "E_star": [-90.35352243323587, 0.0], "std_re_log_w": 0.2367663469238143, "magnitude_ess_fraction": 0.8866211597858482, "signed_ess_fraction": 0.8425368707734346, "phase_only_ess_fraction": 0.9731222912543475, "elapsed_s": 40.4}
++ run JAM dy e_config '--cache campaign/sampler_test_2026-09-14/inference_cache/closure_JAM_truth_small__q2__dy__e_config__gaussian_reference.npz'
++ ../pixel/venv/bin/python -m campaign.contour_profiles run --suite closure_JAM_truth_small --mode dy --cell-json campaign/sampler_test_2026-09-14/cell_json/e_config__41b0e11092b3.json --out campaign/contour_profiles_2026-09-14 --cache campaign/sampler_test_2026-09-14/inference_cache/closure_JAM_truth_small__q2__dy__e_config__gaussian_reference.npz
+{"suite": "closure_JAM_truth_small", "q": "2", "mode": "dy", "cell": "e_config", "n_hubbard": 12, "n_normalization": 2, "cache_status": "hit", "saddle_iterations": 12, "E_star": [-29.669011533624598, 0.0], "std_re_log_w": 1.578580921084329, "magnitude_ess_fraction": 0.033416566834457734, "signed_ess_fraction": 0.031250471119572625, "phase_only_ess_fraction": 0.9368777884654386, "elapsed_s": 52.8}
++ run NNPDF dy e_config '--cache campaign/sampler_test_2026-09-14/inference_cache/closure_NNPDF_truth_small__q2__dy__e_config__gaussian_reference.npz'
++ ../pixel/venv/bin/python -m campaign.contour_profiles run --suite closure_NNPDF_truth_small --mode dy --cell-json campaign/sampler_test_2026-09-14/cell_json/e_config__41b0e11092b3.json --out campaign/contour_profiles_2026-09-14 --cache campaign/sampler_test_2026-09-14/inference_cache/closure_NNPDF_truth_small__q2__dy__e_config__gaussian_reference.npz
+{"suite": "closure_NNPDF_truth_small", "q": "2", "mode": "dy", "cell": "e_config", "n_hubbard": 12, "n_normalization": 2, "cache_status": "hit", "saddle_iterations": 12, "E_star": [-46.75020688802715, 0.0], "std_re_log_w": 1.627679419730927, "magnitude_ess_fraction": 0.034952608374581244, "signed_ess_fraction": 0.032711001692926074, "phase_only_ess_fraction": 0.9377494451450896, "elapsed_s": 53.6}
++ run JAM exp c_config '--cache campaign/sampler_test_2026-09-14/inference_cache/closure_JAM_truth_small__q2__exp__c_config__gaussian_reference.npz'
++ ../pixel/venv/bin/python -m campaign.contour_profiles run --suite closure_JAM_truth_small --mode exp --cell-json campaign/sampler_test_2026-09-14/cell_json/c_config__c82a403ad1a9.json --out campaign/contour_profiles_2026-09-14 --cache campaign/sampler_test_2026-09-14/inference_cache/closure_JAM_truth_small__q2__exp__c_config__gaussian_reference.npz
+{"suite": "closure_JAM_truth_small", "q": "2", "mode": "exp", "cell": "c_config", "n_hubbard": 12, "n_normalization": 7, "cache_status": "hit", "saddle_iterations": 56, "E_star": [-887.0500597142186, 3.141592653589793], "std_re_log_w": 12.983863133224666, "magnitude_ess_fraction": 0.005000000000019037, "signed_ess_fraction": 0.0050000000000063076, "phase_only_ess_fraction": 0.0027700098002753147, "elapsed_s": 63.8}
++ run NNPDF both e_config '--cache campaign/sampler_test_2026-09-14/inference_cache/closure_NNPDF_truth_small__q2__both__e_config__gaussian_reference.npz'
++ ../pixel/venv/bin/python -m campaign.contour_profiles run --suite closure_NNPDF_truth_small --mode both --cell-json campaign/sampler_test_2026-09-14/cell_json/e_config__41b0e11092b3.json --out campaign/contour_profiles_2026-09-14 --cache campaign/sampler_test_2026-09-14/inference_cache/closure_NNPDF_truth_small__q2__both__e_config__gaussian_reference.npz
+{"suite": "closure_NNPDF_truth_small", "q": "2", "mode": "both", "cell": "e_config", "n_hubbard": 12, "n_normalization": 7, "cache_status": "hit", "saddle_iterations": 8, "E_star": [-1188.5646646029415, 0.0], "std_re_log_w": 1.7223472971299798, "magnitude_ess_fraction": 0.020762538727371965, "signed_ess_fraction": 0.017063119701120896, "phase_only_ess_fraction": 0.7734666480203921, "elapsed_s": 66.3}
++ ../pixel/venv/bin/python -m campaign.contour_profiles plot --out campaign/contour_profiles_2026-09-14
+campaign/contour_profiles_2026-09-14/contour_profiles.png
+campaign/contour_profiles_2026-09-14/contour_profiles.pdf

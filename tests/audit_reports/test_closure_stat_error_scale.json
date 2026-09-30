@@ -1,0 +1,45 @@
+{
+  "file": "tests/test_closure_stat_error_scale.py",
+  "area": "closure-suite",
+  "ast_check": "NEW_FILE",
+  "directive_check": "PRESERVED",
+  "sources_exercised": [
+    "closure_NNPDF_truth_small/generate.py",
+    "closure_JAM_truth_small/generate.py"
+  ],
+  "drives_non_pixel": null,
+  "n_tests": 1,
+  "n_parametrized_cases": 2,
+  "tests": [
+    {
+      "name": "test_scaled_member_preserves_nuisances_and_default_bytes",
+      "line": 13,
+      "claim": "Statistical errors scale about a nuisance-injected center with fixed draws while defaults and nuisance sidecars stay unchanged.",
+      "actual": "Runs mocked generators at default, explicit k1, k3, and statistically noise-free center; compares four data files, two truth files, one correlated-systematic sidecar and invalid scale.",
+      "how": "Monkeypatches expensive truth/operators but executes generate_member write and RNG code for both small suites.",
+      "oracle": "A3",
+      "bar": "exact SHA equality, rtol=1e-11 and atol=1e-11 on scaled arrays; zero scale raises ValueError",
+      "strength": "S2",
+      "catches": "Scaling errors without the same noise draw, scaling nuisance shifts, changing default bytes, or altering systematic sidecars.",
+      "strength_checked": "LIVE 2026-09-15, 2 parametrized cases passed.",
+      "strength_checked_src": "a010fdf24be4"
+    }
+  ],
+  "weaknesses": [],
+  "missing": [],
+  "unjustified_tolerances": [],
+  "measurements": [
+    {
+      "date": "2026-09-15",
+      "command": "PYTHONPATH=../pixel/src:. ../pixel/venv/bin/python -m pytest tests/test_closure_stat_error_scale.py -q -p no:cacheprovider",
+      "result": "2 passed in 0.80s"
+    },
+    {
+      "date": "2026-09-15",
+      "claim": "A draw function that ignores scaled sigma is rejected",
+      "command": "temporary pytest plugin mut_ignore_scaled_sigma, no repository source edits",
+      "result": "before 2 passed; after 2 failed in 0.07s, both small suites"
+    }
+  ],
+  "notes_for_readme": null
+}

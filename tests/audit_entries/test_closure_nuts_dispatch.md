@@ -13,8 +13,9 @@ straight into `src/pixel/infer/gamma_method.py`'s `autocorrelation_summary`/`_re
 
 **Claim** Full-suite closures (`full_nnpdf`) dispatch bilinear/nonlinear models to
 the right one of NUTS/HMC/direct-NUTS by inspecting the model; small-suite closures
-(`small_nnpdf`) always use a VEGAS family, configured differently for linear vs.
-bilinear/DY models; the reported autocorrelation ESS comes from the real Markov chain, never a
+(`small_nnpdf`) default to NUTS in every mode while retaining VEGAS as an explicit comparison
+switch; every sampled H-S route receives the `T=0.2`, 8-step thimble-flow options; the reported
+autocorrelation ESS comes from the real Markov chain, never a
 contour's complex `f`; DY-only layouts never enter bilinear MAP; and the JSON summary keeps two
 distinct ESS figures under distinct keys.
 
@@ -32,8 +33,8 @@ small-suite claims falsifiable at all. The one test with a genuine analytic bar
 AR(1) autocorrelation time; the Wolff estimator itself is independently pinned in
 `tests/test_gamma_method.py`, not duplicated here.
 
-**Cost** 23 test functions, **39 cases**; measured `39 passed in 0.72 s` (2026-08-14,
-serial), against `78 passed in 0.76 s` immediately before.
+**Cost** 27 test functions, **44 cases**; measured `44 passed in 0.95 s` (2026-09-29,
+serial). Historical pre-switch measurement: `39 passed in 0.72 s` (2026-08-14).
 
 The JAM legs came out on the owner's instruction 2026-08-14, removing exactly half the
 cases -- 39 of 78, the largest case count of any file in that change and, at ~0.04 s,
@@ -56,13 +57,13 @@ inference entry points stubbed; none compiles a model, builds a kernel, or runs 
 | 1 | `test_bilinear_closures_use_public_nuts_family` | pure-H-S (`n_ordinary=0`) full-suite model dispatches to plain NUTS | branch dispatch on a `SimpleNamespace` model (`F1`) | exact string | `S3` |
 | 2 | `test_exact_ratio_closures_use_explicit_direct_nuts` | `has_nonlinear` dispatches to `direct_nuts`; `DIRECT_PRIOR_RCOND` pinned exactly; `run_direct_mcmc` named in the source | dispatch + cfg read + source substring (`F2`) | exact string; `approx(1e-10, rel=1e-12)`; substring | `S3` |
 | 3 | `test_full_mixed_linear_normalization_and_hs_closures_use_joint_hmc` | bilinear + `n_ordinary=5` dispatches to `hmc` | branch dispatch, paired with #1 (`F1`) | exact string | `S3` |
-| 4 | `test_small_dy_mode_uses_joint_affine_vegas` | the small dispatcher is constant *by design* (asserted against deliberately invalid input); 4 VEGAS constants | explicit constant-contract + direct `cfg` reads (`D1`) | `128`/`1`/`True`/`approx(0.05, rel=1e-12)` | `S3` |
+| 4 | `test_small_dy_mode_uses_joint_affine_vegas` | under the explicit `SMALL_CLOSURE_SAMPLER="vegas"` comparison switch, the dispatcher selects VEGAS; 4 VEGAS constants | monkeypatched comparison switch + direct `cfg` reads (`D1`) | `128`/`1`/`True`/`approx(0.05, rel=1e-12)` | `S3` |
 | 5 | *(removed 2026-08-13)* `test_small_mixed_mode_samples_explicit_normalizations_with_joint_vegas` -- both `_closure_sampler` lines were tautologies and both source substrings were already asserted verbatim by #10 on the same source object; the modes it named are now driven for real by #19 | -- | -- | -- |
 | 6 | `test_full_linear_closures_use_nuts_without_a_contour` | bilinear-free full-suite model dispatches to `nuts`, with tuning pins | dispatch + 6 `cfg` reads (`F2`) | `100(loose)`/`0.1`/leapfrog/`6`/`False`/`1000` | `S3` |
-| 7 | `test_small_linear_closures_use_ordinary_vegas` | bilinear-free small-suite model uses ordinary VEGAS, with tuning pins | tautological dispatch + 4 real `cfg` reads (`D1`) | `16`/`5`/`128`/`1000` | `W1` |
-| 8 | `test_contour_saddle_tolerance_covers_observed_float_stall` | `CONTOUR_SADDLE_TOL` clears the documented 3e-3 float-stall floor | direct `cfg` read vs. a hardcoded range whose floor matches a `config.py` comment (`D1`) | `3.0e-3 <= x <= 1.0e-2` | `S3` |
+| 7 | `test_small_linear_closures_use_ordinary_vegas` | the optional VEGAS switch retains ordinary-grid tuning for a linear model | monkeypatched comparison switch + 4 real `cfg` reads (`D1`) | `16`/`5`/`128`/`1000` | `W1` |
+| 8 | `test_contour_saddle_tolerance_covers_observed_float_stall` | saddle tolerance clears the documented float-stall floor; both suite sizes pin `T=0.2`, 8 RK4 steps | direct `cfg` reads (`D1`) | `3e-3 <= tol <= 1e-2`; exact `0.2`/`8` | `S3` |
 | 9 | `test_full_bilinear_closures_enable_only_the_two_setup_caches` | contour NUTS caches only saddle reference + Hessian mass | 6 source substrings, 2 of them negative (`F2`) | substring presence/absence | `S3` |
-| 10 | `test_small_bilinear_closures_configure_joint_affine_vegas` | `run_fit`'s bilinear branch builds nested-VEGAS options, not MCMC ones | 8 source substrings + 1 direct `cfg` read (`F2`) | substring presence/absence; `approx(1.0)` | `S3` |
+| 10 | `test_small_bilinear_closures_configure_joint_affine_vegas` | the retained VEGAS branch still builds nested-VEGAS options, not MCMC ones | 8 source substrings + 1 direct `cfg` read (`F2`) | substring presence/absence; `approx(1.0)` | `S3` |
 | 11 | `test_no_dis_t0_datasets_skip_map` | empty `correlated_systematics` layouts skip `pixel.map` entirely | monkeypatch trap raises if `pixel.map` is called (`F1`) | return `{}`; zero trapped calls | `S3` |
 | 12 | `test_autocorrelation_ess_routes_through_the_real_markov_history` | ESS is measured on `.chain`, never a contour's complex `f` | identity (`is chain`) + label provenance, both demonstrated discriminating (`A3`) | identity; label membership | `S3` |
 | 13 | `test_autocorrelation_ess_declines_non_markov_inputs` | importance draws / fixed posteriors report no autocorrelation | two distinct `_markov_chain` guard clauses (`F1`) | identity; exact dict | `S3` |
@@ -71,8 +72,8 @@ inference entry points stubbed; none compiles a model, builds a kernel, or runs 
 | 16 | `test_summary_reports_both_effective_sample_sizes` | summary keeps 2 ESS figures under distinct keys reading distinct sources | 2 source substrings pin the exact dict-value expressions (`F2`) | substring presence | `S3` |
 | 17 | `test_suite_runner_records_case_failures_and_continues` | `main` catches per-case exceptions, writes 2 output files, honors `--fail-fast` | 4 source substrings (`F2`) | substring presence | `S3` |
 | 18 | `test_suite_kernel_only_mode_builds_without_fitting` | `--kernels-only` builds every `(Q, mode)` cache and never fits | real `runner.main()` execution with monkeypatch traps (`F1`) | exact list; zero trapped calls | `S3` |
-| 19 | `test_small_run_fit_configures_vegas_from_the_model_not_the_mode` | for all three modes, `run_fit` reaches `infer_mcmc` with `sampler="vegas"`, `auxiliary` following `has_bilinear`, and exactly the nested option keys for a bilinear model / exactly the ordinary ones for a linear one | `run_fit` driven to its real inference call (`F1`) | exact key sets and values | `S1` |
-| 20 | `test_full_run_fit_routes_each_model_to_its_own_sampler_options` | each of the four full-suite dispatch branches reaches inference with its own option block, through the right entry point (`direct_nuts` alone via `pixel.run_direct_mcmc`), and the two contour caches appear on the bilinear-NUTS branch only | `run_fit` driven to its real inference call (`F1`) | exact entry point, keys and values | `S1` |
+| 19 | `test_small_run_fit_configures_vegas_from_the_model_not_the_mode` | under the VEGAS comparison switch, all three modes reach the correct ordinary/nested option block | `run_fit` driven to its real inference call (`F1`) | exact key sets and values | `S1` |
+| 20 | `test_full_run_fit_routes_each_model_to_its_own_sampler_options` | every full-suite branch reaches the right entry point/options; both H-S branches receive `T=0.2`/8 steps and normalization-reference NUTS requests affine-reference flow | `run_fit` driven to its real inference call (`F1`) | exact entry point, keys and values | `S1` |
 | 21 | `test_dis_t0_predictions_are_sliced_per_dataset` | MAP runs once; each DIS table gets its own `layout.data_slice`; a table without `correlated_systematics` is absent from both the result and the slicing | index-valued prediction vector (`F1`) | exact arrays | `S2` |
 | 22 | `test_markov_chain_rejects_a_history_it_cannot_analyze` | a chainless **complex** history, a 1-D history and a single-row history are all rejected; a real history of the same shape is accepted | direct calls on the guard's own inputs + control (`F1`) | `is None` / `is not None` | `S3` |
 | 23 | `test_effective_sample_size_dispatches_on_the_sample_type` | `PosteriorResult` -> `1.0`; `ess_frac` carrier -> `600*0.25 = 150`; fallback -> `1/sum|w|^2 = 1/0.875` | arithmetic on the fixture (`A1`) | `rel=1e-12` | `S2` |
@@ -80,7 +81,8 @@ inference entry points stubbed; none compiles a model, builds a kernel, or runs 
 
 **Weak spots**
 
-- **RESOLVED 2026-08-13 by `test_small_run_fit_configures_vegas_from_the_model_not_the_mode`.**
+- **RESOLVED 2026-08-13 by `test_small_run_fit_configures_vegas_from_the_model_not_the_mode`,
+  superseded by the explicit sampler switch on 2026-09-29.**
   `test_small_dy_mode_uses_joint_affine_vegas`, the now-removed
   `test_small_mixed_mode_samples_explicit_normalizations_with_joint_vegas`, and
   `test_small_linear_closures_use_ordinary_vegas` each asserted
@@ -90,14 +92,11 @@ inference entry points stubbed; none compiles a model, builds a kernel, or runs 
   "vegas"` holds for garbage input too. Those assertions could not fail for any model or mode,
   and the elaborate mocks built for two of them (`contour_partition`,
   `_bilinear_normalization_design`) were read by nothing. Both halves of the recorded fix are
-  taken: the dispatcher's constancy is now asserted *as* a constant contract, against
-  deliberately invalid input, and the real per-mode claim has moved onto `run_fit`, driven to
-  its actual `infer_mcmc` call. Acceptance: a small dispatcher that returns `"nuts"` for mode
-  `"dy"` -- a pure function replacement, no source recompilation, so `inspect.getsource` is
-  untouched -- fails **only** the new test (`2 failed, 76 passed`; counts predate the
-  2026-08-14 JAM trim -- re-measure before quoting); all four original
-  small-suite tests pass under it. A second mutation dropping the `if model.has_bilinear:`
-  gate in `run_fit` also fails it.
+  taken at the time: the constant route was asserted explicitly and the real per-model claim
+  moved onto `run_fit`, driven to its actual `infer_mcmc` call.  The dispatcher is no longer a
+  literal constant: it follows `SMALL_CLOSURE_SAMPLER`, now defaulting to NUTS, while these VEGAS
+  checks monkeypatch the comparison value deliberately.  A mutation dropping the
+  `if model.has_bilinear:` gate in the retained VEGAS block still fails #19.
 - **RESOLVED 2026-08-13 by deletion.**
   `test_small_mixed_mode_samples_explicit_normalizations_with_joint_vegas`'s two real
   assertions (`inspect.getsource(run_fit)` substrings) were a strict subset of
@@ -111,7 +110,7 @@ inference entry points stubbed; none compiles a model, builds a kernel, or runs 
   `np.iscomplexobj`/weights guard is never exercised on a *chainless* complex object by this
   fixture -- a mutant with that guard deleted but `.chain`-preference intact returns the
   identical result -- and (b) feeding the complex array straight to
-  `pixel.infer.gamma_method.autocorrelation_summary` raises `ValueError` today (an independent
+  `pixel.infer.diagnostics.gamma_method.autocorrelation_summary` raises `ValueError` today (an independent
   guard in `_resolve_chain`), so the failure mode is currently loud, not silent. The docstring
   was corrected in the audit pass; the guard itself is now fed the inputs that trip it.
   Acceptance: deleting the `ndim != 2 or shape[0] < 2 or iscomplexobj` line fails only the new
@@ -134,3 +133,15 @@ inference entry points stubbed; none compiles a model, builds a kernel, or runs 
 - Real sampler behaviour. Every dispatch claim here is about which sampler and which options
   are selected, never about what that sampler then does; the VEGAS/NUTS/HMC numerics live in
   `src/pixel/infer` and are tested there.
+| 25 | `test_small_sampler_defaults_to_nuts_for_every_mode_and_vegas_keeps_z_fallback` | default NUTS covers every mode including synthetic Z; under the VEGAS comparison switch only synthetic Z falls back to Gaussian; an unknown value raises | direct dispatch (`F1`) | exact strings; `ValueError` | `S2` |
+| 26 | `test_small_run_fit_configures_full_suite_contour_nuts_when_switched` | normalization-reference and fixed-H-S NUTS both receive `T=0.2`/8 steps; only the former receives affine-reference flow, reference cache and memory budget; linear NUTS receives no contour options | `run_fit` driven to its real inference call (`F1`) | exact key sets and values | `S1` |
+| 27 | `test_small_contour_nuts_refuses_a_collapsed_residual_ess` | a `JointContourHMCSamples` below `CONTOUR_NUTS_MIN_RESIDUAL_ESS_FRAC` raises before marginalization; one above reaches it | `run_fit` driven past inference with a stub artifact of PIXEL's own class (`F1`) | `RuntimeError` / sentinel reached | `S2` |
+
+**2026-09-15 addendum (SMALL_CLOSURE_SAMPLER switch).** #25–#27 were each demonstrated to fail
+under an in-memory mutation (throwaway pytest plugin, no source edited): the dispatcher ignoring
+the switch (4 of the 5 new cases fail), the affine-reference flag dropped from the options (3 fail),
+and the residual-ESS gate no longer recognising the contour artifact (1 fails; this needed the stub
+to be built from `suite.pixel.infer.JointContourHMCSamples` rather than the suite's imported name,
+or the mutation was invisible). On 2026-09-29 NUTS became the default and synthetic Z joined it;
+the optional `"vegas"` route remains explicitly pinned by #4, #7, #10 and #19. #20/#26 now pin
+the positive-flow call contract (`T=0.2`, 8 steps, affine-reference start where supported).

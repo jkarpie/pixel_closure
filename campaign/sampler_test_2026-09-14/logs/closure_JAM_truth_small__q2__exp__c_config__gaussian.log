@@ -1,0 +1,4 @@
+[run-cell] infer_mcmc {'implementation': 'normalization_reference_saddle_contour', 'resolved_auxiliary': 'sample', 'n_ordinary': 0, 'n_normalization': 7, 'n_hubbard': 12, 'kwargs': {'sampler': 'gaussian', 'auxiliary': 'auto', 'n_samples': 1000, 'run_map': False, 'seed': 0, 'saddle_tol': 0.005, 'reference_cache_path': 'campaign/sampler_test_2026-09-14/inference_cache/closure_JAM_truth_small__q2__exp__c_config__gaussian_reference.npz'}}
+/Users/jkarpie-admin/work/building/pixel/src/pixel/infer/__init__.py:1032: StiffBilinearSamplingWarning: normalization-reference saddle-contour effective sample size fraction 0.001 is below 0.1; moments are untrustworthy
+  return normalization_reference_saddle_contour_moments(
+[run-cell] closure_JAM_truth_small q=2 exp c_config gaussian: gate_fail (465.0 s)

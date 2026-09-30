@@ -1,7 +1,7 @@
 ### `tests/test_closure_sampler_routing.py`
 
 **Exercises** `closure_*/fit._closure_sampler` and `Model.has_nonlinear` against
-`pixel.data.nnpdf40_native`'s `_SAMPLER_ROUTES` / `requires_direct_sampler` and
+`pixel.data.nnpdf.native`'s `_SAMPLER_ROUTES` / `requires_direct_sampler` and
 `core.model.dataset_nonlinear_kind`. Four config imports and one small `F2Ratio`; no
 sampling, no kernels beyond that dataset's lazy construction.
 

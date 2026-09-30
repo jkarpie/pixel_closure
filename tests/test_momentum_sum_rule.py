@@ -1,6 +1,6 @@
 """Momentum and valence sum-rule checks against the JAM24 LHAPDF closure input.
 
-Exercises ``pixel.kernels.pqcd.evolution.NonSingletEvolution``/``SingletEvolution``
+Exercises ``pixel.kernels.evolution.pqcd.evolution.NonSingletEvolution``/``SingletEvolution``
 (via ``pixel.kernels.evolution.evolution_factors``/``singlet_evolution_factors`` in
 Mellin space, and ``evolution_matrix``/``singlet_evolution_matrix`` in x space) at
 ``cfg.ORDER = "NLO"`` (``closure_JAM_truth_small/config.py:190``) only -- this file
@@ -627,7 +627,7 @@ def test_conservation_atol_catches_a_realistic_splitting_coefficient_error(
     only ever gets a "caught it" assertion can be tightened into uselessness (a
     false alarm on the clean case) without any test objecting.
     """
-    import pixel.kernels.pqcd.splitting as splitting
+    import pixel.kernels.evolution.pqcd.splitting as splitting
 
     original = splitting.lo_singlet
 

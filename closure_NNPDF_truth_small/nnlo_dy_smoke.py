@@ -78,6 +78,8 @@ def _point():
 def _dataset(source, point, *, nodes, panels, mean=None, cov=None):
     fields_a, fields_b = cfg.dy_field_maps("pp")
     return data.DrellYan(
+        # Closure fields are momentum densities x*f (PIXEL fits x*f, never f).
+        momentum_density=True,
         name="nnlo_dy_e866_pp_smoke",
         fields_A=fields_a,
         fields_B=fields_b,

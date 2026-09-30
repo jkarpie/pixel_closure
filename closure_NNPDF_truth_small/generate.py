@@ -443,7 +443,8 @@ def _dy_floor(central) -> float:
 
 def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
                     fields=None, operators=None, sys_seed=None,
-                    norm_betas=None):
+                    norm_betas=None, stat_error_scale: float = 1.0,
+                    stat_noise: bool | None = None):
     """Generate and save all closure data for one original-scale truth member.
 
     The truth field is the NNPDF replica-ensemble **mean**; the fake-data
@@ -457,6 +458,9 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
     ``kernel.matrix`` assembly/verification.  Returns ``(truth_dir, fields,
     operators)`` so a driver can thread the shared operators through every member.
     """
+    if not np.isfinite(stat_error_scale) or stat_error_scale <= 0:
+        raise ValueError("stat_error_scale must be finite and positive")
+    draw_stat_noise = noise if stat_noise is None else bool(stat_noise)
     truth_dir = cfg.truth_dir(q_key)
     (truth_dir / "lattice").mkdir(parents=True, exist_ok=True)
     (truth_dir / "exp").mkdir(parents=True, exist_ok=True)
@@ -562,8 +566,9 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
         # Both lattice and experimental data keep only the diagonal of the
         # replica covariance and are jiggled -- the fake data are uncorrelated.
         sigma = np.sqrt(np.clip(np.diag(cov), 0.0, None))
+        sigma = sigma * stat_error_scale
         cov = diag_cov(sigma)
-        measured = draw(central, sigma, rng) if noise else central
+        measured = draw(central, sigma, rng) if draw_stat_noise else central
 
         write_dat(truth_dir / rec["file"], rec["_leading"], measured, cov)
 
@@ -590,8 +595,9 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
                 central = (1.0 + rec["norm_beta"] * rec["rel_norm"]) * central
             rel = np.asarray(rec["rel_stat"], dtype=float)
             sigma = np.abs(rel) * np.abs(central) + _dy_floor(central)
+            sigma = sigma * stat_error_scale
             cov = np.diag(sigma * sigma)
-            measured = draw(central, sigma, rng) if noise else central
+            measured = draw(central, sigma, rng) if draw_stat_noise else central
             write_dat(truth_dir / rec["file"],
                       (np.asarray(rec["Q2"]), np.asarray(rec["S"]), np.asarray(rec["Y"])),
                       measured, cov)
@@ -613,8 +619,9 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
         central = dy_central(ds, mean_curves, fields, rec["reaction"])
         sigma = np.asarray(rec["rel_stat"], dtype=float) * np.abs(central)
         sigma = sigma + _dy_floor(central)
+        sigma = sigma * stat_error_scale
         cov = np.diag(sigma * sigma)
-        measured = draw(central, sigma, rng) if noise else central
+        measured = draw(central, sigma, rng) if draw_stat_noise else central
         write_dat(
             truth_dir / rec["file"],
             (np.asarray(rec["Q2"]), np.asarray(rec["S"]), np.asarray(rec["Y"])),

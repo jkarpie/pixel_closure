@@ -1,0 +1,156 @@
+{
+  "cache_version": 1,
+  "fingerprint": "a403a32067ab624ac7e756badb7e6e2828517e85c5027dbba7253c9fc587348e",
+  "format": "pixel-kernel-cache",
+  "generation": {
+    "blas_evidence": "no BLAS thread limit is set and threadpoolctl recognized no BLAS backend (Accelerate is invisible to it) (expected one of OMP_NUM_THREADS, OPENBLAS_NUM_THREADS, MKL_NUM_THREADS, VECLIB_MAXIMUM_THREADS, NUMEXPR_NUM_THREADS=1)",
+    "blas_single_threaded": false,
+    "created_utc": "2026-09-28T16:15:47+00:00",
+    "git_commit": "ad6973c3",
+    "hostname": "cctemps-MacBook-Pro.local",
+    "numpy": "2.5.2",
+    "pixel_version": "0.2.0",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.14",
+    "thread_env": {}
+  },
+  "kernel_code": "b264d836fb3c00de47b73f10581188b36bd6ff30be08f193a22fb28cbce3d6b2",
+  "metadata": {
+    "assembly_block_entries": 8000000,
+    "assembly_column_block": 16,
+    "assembly_row_block": 64,
+    "basis": {
+      "axis_bases": [
+        {
+          "grid": {
+            "dtype": "float64",
+            "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+            "shape": [
+              146
+            ]
+          },
+          "n_elements": 146,
+          "order": 5,
+          "type": "pixel.geometry.finite_elements.PiecewiseQuintic"
+        }
+      ],
+      "grid": {
+        "axes": [
+          {
+            "dtype": "float64",
+            "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+            "shape": [
+              146
+            ]
+          }
+        ]
+      },
+      "n_elements": 146,
+      "ndim": 1,
+      "order": 5,
+      "type": "pixel.geometry.finite_elements.ProductBasis"
+    },
+    "cache_version": 1,
+    "kind": "Sine",
+    "nu": {
+      "dtype": "float64",
+      "sha256": "12864f54f2f8444dd02ccfb0a507ead99407c8a205e43163f76cc14a458b3e3b",
+      "shape": [
+        7
+      ]
+    },
+    "points_per_interval": 16,
+    "readable": {
+      "basis": {
+        "axis_bases": [
+          {
+            "continuity": "C0",
+            "family": "piecewise-lagrange",
+            "grid": {
+              "head": [
+                1e-06,
+                1.173395570493071e-06,
+                1.3768571648527597e-06,
+                1.6155980984398728e-06
+              ],
+              "max": 1.0,
+              "min": 1e-06,
+              "n": 146,
+              "spacing": "custom",
+              "tail": [
+                0.9876712328767123,
+                1.0
+              ]
+            },
+            "label": "piecewise-poly(order=5)",
+            "n_elements": 146,
+            "order": 5
+          }
+        ],
+        "container": "product",
+        "continuity": "C0",
+        "family": "piecewise-lagrange",
+        "grid_axes": [
+          {
+            "head": [
+              1e-06,
+              1.173395570493071e-06,
+              1.3768571648527597e-06,
+              1.6155980984398728e-06
+            ],
+            "max": 1.0,
+            "min": 1e-06,
+            "n": 146,
+            "spacing": "custom",
+            "tail": [
+              0.9876712328767123,
+              1.0
+            ]
+          }
+        ],
+        "label": "piecewise-poly(order=5)",
+        "n_elements": 146,
+        "order": 5
+      },
+      "nu": {
+        "head": [
+          0.6544984694978735,
+          1.308996938995747,
+          1.9634954084936207,
+          2.617993877991494
+        ],
+        "max": 4.581489286485115,
+        "min": 0.6544984694978735,
+        "n": 7,
+        "spacing": "linear",
+        "step": 0.6544984694978735,
+        "tail": [
+          3.9269908169872414,
+          4.581489286485115
+        ]
+      }
+    },
+    "settings": {
+      "alpha": 0.0,
+      "low_x_extension": {
+        "alpha": 0.0,
+        "kind": "flat",
+        "npts": 32,
+        "r_power": 0.0
+      },
+      "name": "Sine",
+      "points_per_interval": 16,
+      "type": "pixel.kernels.common.Sine"
+    }
+  },
+  "saved_arrays": {
+    "matrix": {
+      "dtype": "float64",
+      "sha256": "d238e0234b9f98cce0291dfba86b94eb188f123963fa706846160b10b641c509",
+      "shape": [
+        7,
+        146
+      ]
+    }
+  }
+}

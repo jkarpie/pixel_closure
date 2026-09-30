@@ -1,0 +1,5 @@
+[run-cell] infer_mcmc {'implementation': 'ordinary_gaussian', 'resolved_auxiliary': 'none', 'n_ordinary': 0, 'n_normalization': 5, 'n_hubbard': 0, 'kwargs': {'sampler': 'gaussian', 'auxiliary': 'auto', 'n_samples': 1000, 'run_map': True, 'seed': 0}}
+   [time] build+kernels 8.54s  mcmc 3.99s  marginal 31.7s  chi2 0.06s  fit total 44.2s
+Matplotlib is building the font cache; this may take a moment.
+   [time] fit 44.2s  summary 0.41s  pdf-plot 11.7s  data-plot 0.85s  run total 57.2s
+[run-cell] closure_NNPDF_truth_small q=2 dis e_config gaussian: ok (57.2 s)

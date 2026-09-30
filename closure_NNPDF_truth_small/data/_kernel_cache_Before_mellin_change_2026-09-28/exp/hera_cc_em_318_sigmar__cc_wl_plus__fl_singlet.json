@@ -1,0 +1,227 @@
+{
+  "cache_version": 1,
+  "fingerprint": "7c8149041c95f52e850328c48ed56212d3966249c1c6f26c9d9f2b5f76206db6",
+  "format": "pixel-kernel-cache",
+  "generation": {
+    "blas_evidence": "environment pins BLAS to one thread (MKL_NUM_THREADS=1, NUMEXPR_NUM_THREADS=1, OMP_NUM_THREADS=1, OPENBLAS_NUM_THREADS=1, VECLIB_MAXIMUM_THREADS=1)",
+    "blas_single_threaded": true,
+    "created_utc": "2026-09-25T03:45:33+00:00",
+    "git_commit": "9f29eaa4",
+    "hostname": "cctemps-MacBook-Pro.local",
+    "numpy": "2.5.2",
+    "pixel_version": "0.2.0",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.14",
+    "thread_env": {
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    }
+  },
+  "kernel_code": "865e772fede4f69200524d632e6d893b485556b8c847032d8447955039a3df10",
+  "metadata": {
+    "assembly_block_entries": 8000000,
+    "assembly_column_block": 16,
+    "assembly_row_block": 64,
+    "basis": {
+      "axis_bases": [
+        {
+          "grid": {
+            "dtype": "float64",
+            "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+            "shape": [
+              146
+            ]
+          },
+          "n_elements": 146,
+          "order": 5,
+          "type": "pixel.geometry.finite_elements.PiecewiseQuintic"
+        }
+      ],
+      "grid": {
+        "axes": [
+          {
+            "dtype": "float64",
+            "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+            "shape": [
+              146
+            ]
+          }
+        ]
+      },
+      "n_elements": 146,
+      "ndim": 1,
+      "order": 5,
+      "type": "pixel.geometry.finite_elements.ProductBasis"
+    },
+    "cache_version": 1,
+    "kind": "FLMatchingKernel",
+    "nu": {
+      "dtype": "float64",
+      "sha256": "be085eed3812129cee9d80df5cb16e02c8eb54e56eb27607cce5da5f070f1688",
+      "shape": [
+        16
+      ]
+    },
+    "numerics": {
+      "algorithm": "contour_contraction_v2",
+      "singlet_operator": "singlet_blocked_v1",
+      "subtract_endpoint_tail": false,
+      "workspace_bytes": 536870912
+    },
+    "readable": {
+      "basis": {
+        "axis_bases": [
+          {
+            "continuity": "C0",
+            "family": "piecewise-lagrange",
+            "grid": {
+              "head": [
+                1e-06,
+                1.173395570493071e-06,
+                1.3768571648527597e-06,
+                1.6155980984398728e-06
+              ],
+              "max": 1.0,
+              "min": 1e-06,
+              "n": 146,
+              "spacing": "custom",
+              "tail": [
+                0.9876712328767123,
+                1.0
+              ]
+            },
+            "label": "piecewise-poly(order=5)",
+            "n_elements": 146,
+            "order": 5
+          }
+        ],
+        "container": "product",
+        "continuity": "C0",
+        "family": "piecewise-lagrange",
+        "grid_axes": [
+          {
+            "head": [
+              1e-06,
+              1.173395570493071e-06,
+              1.3768571648527597e-06,
+              1.6155980984398728e-06
+            ],
+            "max": 1.0,
+            "min": 1e-06,
+            "n": 146,
+            "spacing": "custom",
+            "tail": [
+              0.9876712328767123,
+              1.0
+            ]
+          }
+        ],
+        "label": "piecewise-poly(order=5)",
+        "n_elements": 146,
+        "order": 5
+      },
+      "nu": {
+        "head": [
+          0.008,
+          0.013,
+          0.032,
+          0.032
+        ],
+        "max": 0.65,
+        "min": 0.008,
+        "n": 16,
+        "spacing": "custom",
+        "tail": [
+          0.65,
+          0.65
+        ]
+      },
+      "numerics": {
+        "algorithm": "contour_contraction_v2",
+        "singlet_operator": "singlet_blocked_v1",
+        "subtract_endpoint_tail": false,
+        "workspace_bytes": 536870912
+      }
+    },
+    "settings": {
+      "Q2": [
+        300.0,
+        1000.0,
+        500.0,
+        1000.0,
+        3000.0,
+        500.0,
+        300.0,
+        300.0,
+        500.0,
+        2000.0,
+        3000.0,
+        5000.0,
+        8000.0,
+        30000.0,
+        8000.0,
+        30000.0
+      ],
+      "Q20": 1.6384,
+      "alpha": -1.0,
+      "channel": "plus",
+      "component": "singlet",
+      "contour": null,
+      "dis_current": "charged_current",
+      "dis_nnlo_implementation": "mvv_parametrized",
+      "evolution": null,
+      "fixed_nf": null,
+      "fl11_factors": [],
+      "flavour_mode": "vfns",
+      "force_nonsinglet": false,
+      "gluon_weight": 3.9965612442,
+      "kind": "fl",
+      "low_x_extension": {
+        "alpha": 0.0,
+        "kind": "flat",
+        "npts": 32,
+        "r_power": 0.0
+      },
+      "matching_order": "NLO",
+      "name": "FL[singlet:matching-NLO]",
+      "quark_weight": 0.99914031105,
+      "singlet_evolution": {
+        "alphas": {
+          "alphaS_MZ": 0.118,
+          "mZ": 91.1879,
+          "mb": 4.18,
+          "mb_matching_scale_ratio": 1.0,
+          "mc": 1.28,
+          "mc_matching_scale_ratio": 1.0,
+          "order": "NLO",
+          "threshold_mass_scheme": "msbar_running",
+          "type": "pixel.kernels.evolution.pqcd.alphas.AlphaS"
+        },
+        "fixed_nf": null,
+        "flavour_mode": "vfns",
+        "itermax": 16,
+        "kind": "spacelike",
+        "mode": "truncated",
+        "order": "NLO",
+        "sector": "unpolarized",
+        "type": "pixel.kernels.evolution.pqcd.evolution.SingletEvolution"
+      },
+      "target_mass": null,
+      "tmc": null,
+      "tol": null
+    }
+  },
+  "saved_arrays": {
+    "matrix": {
+      "dtype": "float64",
+      "sha256": "b5a97ded6b61da5cdde3e9f0b69d0022b514ebefd3008593ec11f9ca8259ae97",
+      "shape": [
+        16,
+        146
+      ]
+    }
+  }
+}

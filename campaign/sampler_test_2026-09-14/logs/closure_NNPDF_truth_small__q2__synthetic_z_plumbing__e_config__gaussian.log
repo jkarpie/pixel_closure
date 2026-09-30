@@ -1,0 +1,4 @@
+[run-cell] infer_mcmc {'implementation': 'fixed_saddle_contour', 'resolved_auxiliary': 'sample', 'n_ordinary': 0, 'n_normalization': 0, 'n_hubbard': 1, 'kwargs': {'sampler': 'gaussian', 'auxiliary': 'auto', 'n_samples': 512, 'run_map': False, 'seed': 0, 'saddle_tol': 0.005}}
+/Users/jkarpie-admin/work/building/pixel/src/pixel/infer/__init__.py:1030: StiffBilinearSamplingWarning: fixed-theta saddle-contour effective sample size fraction 0.0259 is below 0.1; moments are untrustworthy
+  return saddle_contour_importance_sample(model, center, **common)
+[run-cell] closure_NNPDF_truth_small q=2 synthetic_z_plumbing e_config gaussian: gate_fail (110.3 s)

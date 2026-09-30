@@ -20,13 +20,16 @@ Two dispatch shapes are covered here, and they are genuinely different:
   ``model.contour_partition()`` and returns one of ``"direct_nuts"``,
   ``"hmc"``, ``"nuts"``. Real, three-way branch dispatch.
 * ``small_nnpdf`` (``SMALL_SUITES``) -- ``_closure_sampler(model, mode=None)``
-  unconditionally ``return "vegas"``; it reads neither argument (confirmed
-  directly: ``suite._closure_sampler(None, None) == "vegas"``). The actual
-  per-mode VEGAS configuration lives in ``run_fit``'s ``sampler_options``
-  construction, **not** in the dispatcher's return value.
+  never reads ``model``: it follows ``cfg.SMALL_CLOSURE_SAMPLER``, which defaults
+  to ``"nuts"`` for every mode.  If the comparison switch is changed to
+  ``"vegas"``, only ``synthetic_z_plumbing`` falls back to ``"gaussian"``. The actual
+  per-mode configuration lives in ``run_fit``'s ``sampler_options``
+  construction (and ``_nuts_sampler_options`` for the default ``"nuts"``),
+  **not** in the dispatcher's return value. The positive-flow path is covered
+  by the three small-suite NUTS tests at the end of this file.
 
-Because of that second point, every ``_closure_sampler(...) == "vegas"``
-assertion is true by construction, and until 2026-08-13 the small-suite claims
+Because of that second point, the family selection is configuration rather than
+model dispatch, and until 2026-08-13 the small-suite VEGAS claims
 rested entirely on ``inspect.getsource`` substrings. They now rest on
 ``test_small_run_fit_configures_vegas_from_the_model_not_the_mode`` and
 ``test_full_run_fit_routes_each_model_to_its_own_sampler_options``, which drive
@@ -77,8 +80,8 @@ from closure_NNPDF_truth import run_closure as full_nnpdf_runner
 from closure_NNPDF_truth_small import run_closure as small_nnpdf_runner
 
 
-# Full vs. small is the axis that matters here: they differ in sampler family
-# (NUTS/HMC vs. VEGAS) and in the whole shape of ``run_fit``'s ``sampler_options``.
+# Full vs. small is the axis that matters here: their dispatch and option-block
+# shapes differ even though NUTS is now the default family for both.
 #
 # JAM vs. NNPDF is not such an axis, and stopped being parametrized on 2026-08-14
 # (owner's instruction).  ``diff closure_JAM_truth/fit.py closure_NNPDF_truth/fit.py``
@@ -92,7 +95,7 @@ from closure_NNPDF_truth_small import run_closure as small_nnpdf_runner
 SUITES = (full_nnpdf, small_nnpdf)
 #: Full size only -- NUTS/HMC dispatch, which the ``_small`` drivers do not have.
 FULL_SUITES = (full_nnpdf,)
-#: Small size only -- the VEGAS path.
+#: Small size only -- configurable NUTS/VEGAS path.
 SMALL_SUITES = (small_nnpdf,)
 #: The matching ``run_closure`` modules, for the two runner-level tests below.
 RUNNERS = (full_nnpdf_runner, small_nnpdf_runner)
@@ -167,21 +170,21 @@ def test_full_mixed_linear_normalization_and_hs_closures_use_joint_hmc(suite):
 
 
 @pytest.mark.parametrize("suite", SMALL_SUITES)
-def test_small_dy_mode_uses_joint_affine_vegas(suite):
-    """The small dispatcher is constant by design, and the VEGAS constants hold.
+def test_small_dy_mode_uses_joint_affine_vegas(suite, monkeypatch):
+    """The optional VEGAS comparison route and its constants remain available.
 
     Two claims, kept apart because only one of them is about dispatch.
 
-    First, ``_closure_sampler(model, mode=None)`` is ``return "vegas"``
-    unconditionally -- it reads neither argument.  That is asserted here the
+    First, after selecting the VEGAS comparison family,
+    ``_closure_sampler(model, mode=None)`` returns ``"vegas"`` without reading
+    the model.  That is asserted here the
     only way it can be asserted honestly: against deliberately invalid input
     (``None`` model, a mode string no suite defines).  Before 2026-08-13 this
     test instead called it with an elaborate ``model`` mock and a real mode
     string, which read as a dispatch check but could not fail for any input;
     the mock (``contour_partition``, ``_bilinear_normalization_design``) was
-    never consulted by anything the test called.  Written this way the line
-    still fails if the small dispatcher ever *becomes* mode-dependent, which is
-    the point at which every small-suite test here needs revisiting.
+    never consulted by anything the test called.  Synthetic Z is the one
+    deliberate mode-dependent exception and is covered below.
 
     Second, the four ``cfg.VEGAS_*`` literals (oracle F2, config-drift pins).
     They confirm the constants have these values, not that DY mode wires them
@@ -191,6 +194,7 @@ def test_small_dy_mode_uses_joint_affine_vegas(suite):
     """
     # Intentionally invalid input: the contract being pinned is that the
     # answer does not depend on it.
+    monkeypatch.setattr(suite.cfg, "SMALL_CLOSURE_SAMPLER", "vegas")
     assert suite._closure_sampler(None, None) == "vegas"
     assert suite._closure_sampler(None, "not-a-real-mode") == "vegas"
     assert suite.cfg.VEGAS_N_ADAPT_INNER_SAMPLES == 128  # pilot inner draws/outer point
@@ -226,12 +230,11 @@ def test_full_linear_closures_use_nuts_without_a_contour(suite):
 
 
 @pytest.mark.parametrize("suite", SMALL_SUITES)
-def test_small_linear_closures_use_ordinary_vegas(suite):
-    """Small-suite ordinary-grid VEGAS tuning: bins, adaptation, samples.
+def test_small_linear_closures_use_ordinary_vegas(suite, monkeypatch):
+    """Optional small-suite ordinary-grid VEGAS tuning: bins and adaptation.
 
-    As in the other small-suite dispatch tests, ``_closure_sampler(model) ==
-    "vegas"`` cannot fail -- the function ignores ``model`` entirely for this
-    suite (``return "vegas"`` unconditionally; see the module docstring). The
+    Under the comparison switch, ``_closure_sampler(model) == "vegas"`` is a
+    configuration contract -- the function ignores ``model`` entirely. The
     ``model`` fixture here is at least minimal (no unused mock attributes),
     unlike the "dy"/"mixed" tests above. The four ``cfg.VEGAS_*``/
     ``MCMC_SAMPLES`` lines are real literal pins against
@@ -240,6 +243,7 @@ def test_small_linear_closures_use_ordinary_vegas(suite):
     establish that a linear model actually reaches ordinary (non-nested)
     VEGAS at runtime, only that these constants have these values.
     """
+    monkeypatch.setattr(suite.cfg, "SMALL_CLOSURE_SAMPLER", "vegas")
     model = SimpleNamespace(has_bilinear=False)
     assert suite._closure_sampler(model) == "vegas"  # unconditional; see docstring
     assert suite.cfg.VEGAS_N_BINS == 16  # per-dimension adaptive-grid resolution
@@ -265,6 +269,8 @@ def test_contour_saddle_tolerance_covers_observed_float_stall(suite):
     Oracle D1 (provenance recorded, but in ``config.py``, not here).
     """
     assert 3.0e-3 <= suite.cfg.CONTOUR_SADDLE_TOL <= 1.0e-2  # floor = stall point
+    assert suite.cfg.CONTOUR_FLOW_TIME == pytest.approx(0.2, rel=0.0, abs=0.0)
+    assert suite.cfg.CONTOUR_N_FLOW_STEPS == 8
 
 
 @pytest.mark.parametrize("suite", FULL_SUITES)
@@ -378,8 +384,8 @@ def _fake_model(**kwargs):
 def test_small_run_fit_configures_vegas_from_the_model_not_the_mode(suite, mode, monkeypatch):
     """Nested VEGAS options appear for a bilinear model and for no other reason.
 
-    The small suite's ``_closure_sampler(model, mode)`` is ``return "vegas"``
-    unconditionally -- it reads neither argument -- so every
+    With the comparison switch selected, the small suite's dispatcher returns
+    ``"vegas"`` for every physics mode without reading the model, so every
     ``_closure_sampler(...) == "vegas"`` assertion in this file is true by
     construction and the per-mode claims in those tests' names rest on
     ``inspect.getsource`` substrings, which cannot tell live code from the same
@@ -396,6 +402,7 @@ def test_small_run_fit_configures_vegas_from_the_model_not_the_mode(suite, mode,
     numerics themselves are ``pixel.infer``'s and are not touched here.
     """
     cfg = suite.cfg
+    monkeypatch.setattr(cfg, "SMALL_CLOSURE_SAMPLER", "vegas")
     ordinary_keys = {
         "n_bins", "n_adapt_iterations", "n_eval_per_iteration", "alpha",
         "covariance_inflation",
@@ -432,12 +439,14 @@ FULL_DISPATCH_CASES = (
     ({"has_nonlinear": False, "has_bilinear": False}, "nuts", "infer_mcmc"),
     (
         {"has_nonlinear": False, "has_bilinear": True,
-         "contour_partition": lambda: SimpleNamespace(n_ordinary=0)},
+         "contour_partition": lambda: SimpleNamespace(
+             n_ordinary=0, n_normalization=2, n_hubbard=12)},
         "nuts", "infer_mcmc",
     ),
     (
         {"has_nonlinear": False, "has_bilinear": True,
-         "contour_partition": lambda: SimpleNamespace(n_ordinary=5)},
+         "contour_partition": lambda: SimpleNamespace(
+             n_ordinary=5, n_normalization=0, n_hubbard=12)},
         "hmc", "infer_mcmc",
     ),
     (
@@ -490,10 +499,16 @@ def test_full_run_fit_routes_each_model_to_its_own_sampler_options(
     if sampler == "hmc":
         assert options["n_leapfrog"] == cfg.HMC_N_LEAPFROG
         assert options["saddle_tol"] == cfg.CONTOUR_SADDLE_TOL
+        assert options["flow_time"] == cfg.CONTOUR_FLOW_TIME == pytest.approx(0.2)
+        assert options["n_flow_steps"] == cfg.CONTOUR_N_FLOW_STEPS == 8
+        assert "flow_from_affine_reference" not in options
         assert not caches & set(options)  # the caches are NUTS-branch only
     elif model_kwargs["has_bilinear"]:
         assert options["max_tree_depth"] == cfg.NUTS_MAX_TREE_DEPTH
         assert options["saddle_tol"] == cfg.CONTOUR_SADDLE_TOL
+        assert options["flow_time"] == cfg.CONTOUR_FLOW_TIME == pytest.approx(0.2)
+        assert options["n_flow_steps"] == cfg.CONTOUR_N_FLOW_STEPS == 8
+        assert options["flow_from_affine_reference"] is True
         assert caches <= set(options)
         for key in caches:
             assert options[key].parent == cfg.INFERENCE_CACHE_ROOT
@@ -616,7 +631,7 @@ def test_autocorrelation_ess_routes_through_the_real_markov_history(suite):
     contour-family dataclass carries both), so that branch currently guards
     against a case with no known caller. Nor is "silently meaningless" quite
     right for what happens if the guard *were* bypassed today: handing the
-    complex array straight to ``pixel.infer.gamma_method.autocorrelation_summary``
+    complex array straight to ``pixel.infer.diagnostics.gamma_method.autocorrelation_summary``
     raises ``ValueError`` there instead (an independent ``np.iscomplexobj``
     check inside ``_resolve_chain``, verified directly) -- the failure this
     guards against is now doubly caught and would be loud either way.
@@ -912,3 +927,134 @@ def test_suite_kernel_only_mode_builds_without_fitting(runner, monkeypatch):
     )
     runner.main()
     assert calls == [(q_key, "both")]
+
+
+# -- default small-suite NUTS: positive-flow H-S contours ---------------------
+
+
+@pytest.mark.parametrize("suite", SMALL_SUITES)
+def test_small_sampler_defaults_to_nuts_for_every_mode_and_vegas_keeps_z_fallback(suite, monkeypatch):
+    """NUTS is the all-mode default; only the opt-in VEGAS route needs a Z fallback.
+
+    Every mode, including synthetic Z, must dispatch to NUTS by default so every
+    H-S coordinate is flowed.  Under the retained VEGAS comparison switch,
+    synthetic Z alone uses Gaussian saddle importance because it has no outer
+    coordinate.  An unknown value must raise rather than silently fall back.
+    """
+    assert suite.cfg.SMALL_CLOSURE_SAMPLER == "nuts"
+    for mode in ("lattice", "dis", "dy", "exp", "both", suite.cfg.TEST_MODE_SYNTHETIC_Z):
+        assert suite._closure_sampler(None, mode) == "nuts"
+    monkeypatch.setattr(suite.cfg, "SMALL_CLOSURE_SAMPLER", "vegas")
+    assert suite._closure_sampler(None, suite.cfg.TEST_MODE_SYNTHETIC_Z) == "gaussian"
+    assert suite._closure_sampler(None, "dy") == "vegas"
+    monkeypatch.setattr(suite.cfg, "SMALL_CLOSURE_SAMPLER", "hmc")
+    with pytest.raises(ValueError, match="SMALL_CLOSURE_SAMPLER"):
+        suite._closure_sampler(None, "dy")
+
+
+@pytest.mark.parametrize("suite", SMALL_SUITES)
+@pytest.mark.parametrize("mode", ("dy", "exp", "both"))
+def test_small_run_fit_configures_full_suite_contour_nuts_when_switched(suite, mode, monkeypatch):
+    """With ``"nuts"``, ``run_fit`` hands PIXEL the full suites' NUTS block, driven for real.
+
+    Bilinear model with fitted normalizations only (the small-suite partition):
+    ``auxiliary="sample"``, the ``NUTS_*`` values, the saddle tolerance, per-(truth,
+    mode) caches, and the affine-reference and memory-budget options.  A bilinear
+    model with no normalization routes to a PIXEL path that does not accept the
+    last two, so they must be absent; a linear model gets ordinary NUTS options
+    only.  Oracle F1 (structural, on the real call).
+    """
+    cfg = suite.cfg
+    monkeypatch.setattr(cfg, "SMALL_CLOSURE_SAMPLER", "nuts")
+    monkeypatch.setattr(cfg, "CONTOUR_NUTS_AFFINE_REFERENCE", False)
+    monkeypatch.setattr(cfg, "CONTOUR_NUTS_FLOW_FROM_AFFINE_REFERENCE", True)
+    monkeypatch.setattr(cfg, "CONTOUR_NUTS_REFERENCE_BUDGET_BYTES", 123)
+    nuts_keys = {"n_warmup", "step_size", "integrator", "max_tree_depth", "adapt_mass",
+                 "use_hessian_mass"}
+    contour_keys = {
+        "flow_time", "n_flow_steps", "saddle_tol",
+        "hessian_cache_path",
+    }
+    reference_keys = {
+        "reference_cache_path",
+        "affine_reference_contour", "flow_from_affine_reference",
+        "reference_budget_bytes",
+    }
+
+    def partition(n_normalization):
+        return lambda: SimpleNamespace(n_ordinary=0, n_normalization=n_normalization, n_hubbard=12)
+
+    call = _capture_sampler_call(
+        suite, monkeypatch, _fake_model(has_bilinear=True, contour_partition=partition(2)), mode)
+    assert (call["entry"], call["sampler"], call["auxiliary"]) == ("infer_mcmc", "nuts", "sample")
+    assert set(call["options"]) == nuts_keys | contour_keys | reference_keys
+    options = call["options"]
+    assert (options["n_warmup"], options["step_size"], options["integrator"]) == (
+        cfg.NUTS_WARMUP, cfg.NUTS_INITIAL_STEP_SIZE, cfg.NUTS_INTEGRATOR)
+    assert (options["max_tree_depth"], options["adapt_mass"], options["use_hessian_mass"]) == (
+        cfg.NUTS_MAX_TREE_DEPTH, cfg.NUTS_ADAPT_MASS, True)
+    assert options["saddle_tol"] == cfg.CONTOUR_SADDLE_TOL
+    assert options["flow_time"] == cfg.CONTOUR_FLOW_TIME == pytest.approx(0.2)
+    assert options["n_flow_steps"] == cfg.CONTOUR_N_FLOW_STEPS == 8
+    assert options["affine_reference_contour"] is False
+    assert options["flow_from_affine_reference"] is True
+    assert options["reference_budget_bytes"] == 123
+    for key in ("reference_cache_path", "hessian_cache_path"):
+        assert options[key].parent == cfg.INFERENCE_CACHE_ROOT
+        assert f"_{mode}_" in options[key].name
+    assert options["reference_cache_path"] != options["hessian_cache_path"]
+
+    # The no-normalization form is the real synthetic-Z partition.  It must use
+    # fixed-contour NUTS with the same positive flow, not the old Gaussian path.
+    call = _capture_sampler_call(
+        suite, monkeypatch,
+        _fake_model(has_bilinear=True, contour_partition=partition(0)),
+        cfg.TEST_MODE_SYNTHETIC_Z,
+    )
+    assert (call["sampler"], call["auxiliary"]) == ("nuts", "sample")
+    assert set(call["options"]) == nuts_keys | contour_keys
+
+    call = _capture_sampler_call(suite, monkeypatch, _fake_model(has_bilinear=False), mode)
+    assert (call["sampler"], call["auxiliary"]) == ("nuts", "auto")
+    assert set(call["options"]) == nuts_keys
+
+
+@pytest.mark.parametrize("suite", SMALL_SUITES)
+def test_small_contour_nuts_refuses_a_collapsed_residual_ess(suite, monkeypatch):
+    """A contour-NUTS result below the residual-ESS floor stops ``run_fit``; one above passes on.
+
+    ``infer_mcmc`` returns a bare ``JointContourHMCSamples`` carrying only
+    ``ess_frac``; past the gate, ``marginal_posterior`` is replaced by a sentinel
+    so reaching it is the pass signal.
+    """
+    cfg = suite.cfg
+    monkeypatch.setattr(cfg, "SMALL_CLOSURE_SAMPLER", "nuts")
+    model = _fake_model(has_bilinear=True, contour_partition=lambda: SimpleNamespace(
+        n_ordinary=0, n_normalization=2, n_hubbard=12))
+
+    def samples_with(ess_frac):
+        # PIXEL's class, not the suite's imported name, so a gate that stops
+        # recognising the real artifact type cannot pass by matching a stub.
+        samples = object.__new__(suite.pixel.infer.JointContourHMCSamples)
+        object.__setattr__(samples, "ess_frac", ess_frac)
+        return samples
+
+    class _PastGate(Exception):
+        pass
+
+    def marginal(model_, samples):
+        raise _PastGate
+
+    monkeypatch.setattr(suite, "build_analysis",
+                        lambda q, m, *, use_kernel_cache=True, t0=None: (SimpleNamespace(compile=lambda: model), {}))
+    monkeypatch.setattr(suite, "_iterate_t0", lambda *a, **k: ({}, 0))
+    monkeypatch.setattr(suite, "marginal_posterior", marginal)
+    q_key = next(iter(cfg.TRUTH_Q_CHOICES))
+    floor = cfg.CONTOUR_NUTS_MIN_RESIDUAL_ESS_FRAC
+
+    monkeypatch.setattr(suite, "infer_mcmc", lambda *a, **k: samples_with(0.5 * floor))
+    with pytest.raises(RuntimeError, match="contour NUTS residual ESS fraction"):
+        suite.run_fit(q_key, "dy", use_kernel_cache=False, n_samples=4)
+    monkeypatch.setattr(suite, "infer_mcmc", lambda *a, **k: samples_with(2.0 * floor))
+    with pytest.raises(_PastGate):
+        suite.run_fit(q_key, "dy", use_kernel_cache=False, n_samples=4)

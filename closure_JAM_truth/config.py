@@ -62,7 +62,7 @@ NNPDF_COMMONDATA = REPO_ROOT.parent / "nnpdf" / "nnpdf_data" / "nnpdf_data" / "c
 # NNPDF checkout.  Native builders land family by family; until every selected
 # record passes its readiness gate, the contracts remain an explicit target
 # rather than silently entering with a wrong inclusive proxy.
-from pixel.data.nnpdf40_native import (
+from pixel.data.nnpdf.native import (
     assert_native_campaign_ready as _assert_native_campaign_ready,
     nnpdf40_native_contracts_for_mode as _nnpdf40_native_contracts_for_mode,
 )
@@ -1074,7 +1074,7 @@ GP_AMPLITUDE_FREE = False
 #: width can never shrink below 1.  Deliberately a hair under 1.0 rather than
 #: exactly 1.0, because GP_AMPLITUDE_LOW *is* 1.0 and a bound sitting exactly on
 #: the starting value maps to ``eta = -inf`` under the sampler's lower-softplus
-#: transform (pixel.infer.hmc.ParameterCoordinates).
+#: transform (pixel.infer.samplers.hmc.ParameterCoordinates).
 GP_AMPLITUDE_FLOOR = 0.99
 #: Log-normal width of that hyper-prior, in e-folds about the tier amplitude.
 GP_AMPLITUDE_PRIOR_SIGMA = 0.5
@@ -1215,7 +1215,24 @@ GP_ENVELOPE = {
 #:
 #: Required jitter scales with system size: `dy` (n=14) runs at 1e-10, while
 #: `exp`/`both` (n=158/230) need 1e-4 for the envelope prior.
-GP_JITTER = 1.0e-10
+#: **1e-8, not 1e-10 — raised 2026-09-22.**  At 1e-10 roughly 900 of `H`'s 1314
+#: eigenvalues sit *at the jitter* rather than decaying, so `Hinv = inv(H)` carries
+#: ~900 directions of size 1e10 holding no information and `cond(H) = 6.96e12` is
+#: inherited whole by the H-S matrix `A = Hinv + T(f)`.  The consequence is a wrong
+#: number, not slow convergence: `force^T A^-1 force` has a forward error of ~1.8e6
+#: and must cancel against `constant` (both 2.9e9) to leave ~66.  Measured on the
+#: frozen JAM `dy`/`c_config` block at Q=2, `E^2` carries 0.17 peak-to-peak of noise
+#: against a true variation of 0.0025, and its value is wrong by **85**.  One decade
+#: of jitter takes the jaggedness to 5.27e-5 (**3200x**) with the frame-pinned
+#: quadratic coefficient still right to 1.6%.
+#:
+#: **Carried here to hold `test_all_four_suites_share_the_numerical_settings`, and
+#: measured only on the small suites.**  The mechanism is a property of the shared
+#: GP prior and evidence algebra, but this suite's own grid and data volume differ;
+#: confirm before relying on it at full scale.
+#:
+#: Full derivation and the ladder: `EXT:pixel/plans/hs_saddle_contour_algorithms.md`.
+GP_JITTER = 1.0e-8
 
 
 #: Jitter for the ENVELOPE prior, which needs far more than the constant one.
@@ -1286,6 +1303,16 @@ HMC_WARMUP = 100
 HMC_STEP_SIZE = 0.03
 HMC_N_LEAPFROG = 12
 HMC_INTEGRATOR = "omelyan"
+#: Deform every sampled Hubbard-Stratonovich sector with PIXEL's generalized
+#: thimble flow.  The affine-whitened flow scan in
+#: ``pixel/plans/hs_saddle_contour_algorithms.md`` found ``T=0.2`` to be the
+#: deepest consistently stable/improving point, with the 8-step RK4 result
+#: converged against the 2/32-step checks.  Normalization-only contours can
+#: start from the affine saddle reference; generic joint contours use PIXEL's
+#: theta-dependent flowed map with the same time and resolution.
+CONTOUR_FLOW_TIME = 0.2
+CONTOUR_N_FLOW_STEPS = 8
+CONTOUR_FLOW_FROM_AFFINE_REFERENCE = True
 # Some closure likelihoods stall just below a 3e-3 Newton decrement at
 # floating-point precision.  Keep a small margin so a numerically stationary
 # H-S saddle is accepted instead of aborting contour-NUTS initialization.

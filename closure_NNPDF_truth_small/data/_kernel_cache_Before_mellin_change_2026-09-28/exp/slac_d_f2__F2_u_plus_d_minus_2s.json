@@ -1,0 +1,220 @@
+{
+  "cache_version": 1,
+  "fingerprint": "29f62acdb01eb3fd9b4418e489f22f8b65ca22c437eba1ed8fe6a8eabbb70245",
+  "format": "pixel-kernel-cache",
+  "generation": {
+    "blas_evidence": "environment pins BLAS to one thread (MKL_NUM_THREADS=1, NUMEXPR_NUM_THREADS=1, OMP_NUM_THREADS=1, OPENBLAS_NUM_THREADS=1, VECLIB_MAXIMUM_THREADS=1)",
+    "blas_single_threaded": true,
+    "created_utc": "2026-09-25T03:27:08+00:00",
+    "git_commit": "9f29eaa4",
+    "hostname": "cctemps-MacBook-Pro.local",
+    "numpy": "2.5.2",
+    "pixel_version": "0.2.0",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "python": "3.12.14",
+    "thread_env": {
+      "MKL_NUM_THREADS": "1",
+      "NUMEXPR_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1"
+    }
+  },
+  "kernel_code": "865e772fede4f69200524d632e6d893b485556b8c847032d8447955039a3df10",
+  "metadata": {
+    "assembly_block_entries": 8000000,
+    "assembly_column_block": 16,
+    "assembly_row_block": 64,
+    "basis": {
+      "axis_bases": [
+        {
+          "grid": {
+            "dtype": "float64",
+            "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+            "shape": [
+              146
+            ]
+          },
+          "n_elements": 146,
+          "order": 5,
+          "type": "pixel.geometry.finite_elements.PiecewiseQuintic"
+        }
+      ],
+      "grid": {
+        "axes": [
+          {
+            "dtype": "float64",
+            "sha256": "167446c159701b66e1c4d86471902e555d2566c6b20aa4b218be584127968828",
+            "shape": [
+              146
+            ]
+          }
+        ]
+      },
+      "n_elements": 146,
+      "ndim": 1,
+      "order": 5,
+      "type": "pixel.geometry.finite_elements.ProductBasis"
+    },
+    "cache_version": 1,
+    "kind": "ComposedKernel",
+    "nu": {
+      "dtype": "float64",
+      "sha256": "faab7bf0b6f9d8b2478aea898c649009621077a19945a91258f0354e383c8bfb",
+      "shape": [
+        16
+      ]
+    },
+    "points_per_interval": 8,
+    "readable": {
+      "basis": {
+        "axis_bases": [
+          {
+            "continuity": "C0",
+            "family": "piecewise-lagrange",
+            "grid": {
+              "head": [
+                1e-06,
+                1.173395570493071e-06,
+                1.3768571648527597e-06,
+                1.6155980984398728e-06
+              ],
+              "max": 1.0,
+              "min": 1e-06,
+              "n": 146,
+              "spacing": "custom",
+              "tail": [
+                0.9876712328767123,
+                1.0
+              ]
+            },
+            "label": "piecewise-poly(order=5)",
+            "n_elements": 146,
+            "order": 5
+          }
+        ],
+        "container": "product",
+        "continuity": "C0",
+        "family": "piecewise-lagrange",
+        "grid_axes": [
+          {
+            "head": [
+              1e-06,
+              1.173395570493071e-06,
+              1.3768571648527597e-06,
+              1.6155980984398728e-06
+            ],
+            "max": 1.0,
+            "min": 1e-06,
+            "n": 146,
+            "spacing": "custom",
+            "tail": [
+              0.9876712328767123,
+              1.0
+            ]
+          }
+        ],
+        "label": "piecewise-poly(order=5)",
+        "n_elements": 146,
+        "order": 5
+      },
+      "nu": {
+        "head": [
+          0.075,
+          0.106,
+          0.131,
+          0.156
+        ],
+        "max": 0.726,
+        "min": 0.075,
+        "n": 16,
+        "spacing": "custom",
+        "tail": [
+          0.587,
+          0.726
+        ]
+      }
+    },
+    "settings": {
+      "factor_types": [
+        "VariableQ2NonSingletEvolutionMatrix"
+      ],
+      "factors": [
+        {
+          "Q2": [
+            1.66,
+            2.14,
+            3.36,
+            2.36,
+            2.51,
+            3.62,
+            7.31,
+            6.68,
+            5.14,
+            5.09,
+            11.39,
+            8.56,
+            11.56,
+            13.91,
+            13.52,
+            24.84
+          ],
+          "Q20": 1.6384,
+          "alpha": -1.0,
+          "contour": null,
+          "evolution": {
+            "alphas": {
+              "alphaS_MZ": 0.118,
+              "mZ": 91.1879,
+              "mb": 4.18,
+              "mb_matching_scale_ratio": 1.0,
+              "mc": 1.28,
+              "mc_matching_scale_ratio": 1.0,
+              "order": "NLO",
+              "threshold_mass_scheme": "msbar_running",
+              "type": "pixel.kernels.evolution.pqcd.alphas.AlphaS"
+            },
+            "channel": "plus",
+            "fixed_nf": null,
+            "flavour_mode": "vfns",
+            "kind": "spacelike",
+            "mode": "truncated",
+            "order": "NLO",
+            "sector": "unpolarized",
+            "type": "pixel.kernels.evolution.pqcd.evolution.NonSingletEvolution"
+          },
+          "low_x_extension": {
+            "alpha": 1.0,
+            "alpha_frozen": true,
+            "alpha_tags": [
+              "low_x_extension",
+              "low_x_alpha"
+            ],
+            "kind": "power",
+            "npts": 32,
+            "r_power": 0.0
+          },
+          "mapping": "EvolutionMapping(kind='non_singlet', source='u_plus_d_minus_2s', target='u_plus_d_minus_2s', sources=('u_plus_d_minus_2s',), targets=('u_plus_d_minus_2s',))",
+          "name": "VariableQ2NonSingletEvolutionMatrix",
+          "region_tilt": true,
+          "tol": null,
+          "unsafe_contour": false
+        }
+      ],
+      "low_x_extension": "LowXExtension(kind='flat', alpha=0.0, beta=0.0)",
+      "name": "F2[u_plus_d_minus_2s]",
+      "points_per_interval": 8,
+      "type": "pixel.kernels.base.ComposedKernel"
+    }
+  },
+  "saved_arrays": {
+    "matrix": {
+      "dtype": "float64",
+      "sha256": "e98af2af9c5cd94b914a8bea7fb677254284d45bbaff19f7d84aec0c5a4cbd58",
+      "shape": [
+        16,
+        146
+      ]
+    }
+  }
+}

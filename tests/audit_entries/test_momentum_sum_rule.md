@@ -1,10 +1,10 @@
 ### `tests/test_momentum_sum_rule.py`
 
-**Exercises** `pixel.kernels.pqcd.evolution.NonSingletEvolution`/`SingletEvolution` (via
+**Exercises** `pixel.kernels.evolution.pqcd.evolution.NonSingletEvolution`/`SingletEvolution` (via
 `pixel.kernels.evolution.evolution_factors`/`singlet_evolution_factors` in Mellin space and
-`evolution_matrix`/`singlet_evolution_matrix` in x space), `pixel.kernels.pqcd.splitting`'s
+`evolution_matrix`/`singlet_evolution_matrix` in x space), `pixel.kernels.evolution.pqcd.splitting`'s
 `lo_singlet`/`nlo_singlet`/`lo_nonsinglet`/`nlo_nonsinglet`, the VFNS threshold-matching
-operators in `pixel.kernels.pqcd.heavy_threshold`, `pixel.kernels.evolution.contour.adaptive_contour`,
+operators in `pixel.kernels.evolution.pqcd.heavy_threshold`, `pixel.kernels.evolution.contour.adaptive_contour`,
 and `pixel.geometry.finite_elements.CubicSplineBasis`. Two of its six tests (see table) exercise
 only `closure_JAM_truth_small.pdf_guidance.dump_jam`, not `src/pixel`.
 

@@ -1,0 +1,1124 @@
+{
+  "suite": "closure_NNPDF_truth_small",
+  "q": "2",
+  "mode": "lattice",
+  "cell": "c2_s1_g1_ns1_val0p5_t150p5",
+  "cell_hash": "8df447c08bc6",
+  "prior_form": "const_logrbf",
+  "resolved_prior": {
+    "GP_AMPLITUDES": {
+      "t3": 0.25,
+      "t8": 0.5,
+      "sigma": 1.0,
+      "t15": 0.5,
+      "g": 1.0,
+      "v3": 0.125,
+      "v8": 0.25,
+      "v": 0.25,
+      "v15": 0.25
+    },
+    "GP_ENVELOPE": {
+      "t3": {
+        "alpha": 0.25,
+        "beta": 2.1,
+        "sigma": 3.0
+      },
+      "t8": {
+        "alpha": 0.0,
+        "beta": 1.35,
+        "sigma": 139.0
+      },
+      "sigma": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 53.0
+      },
+      "t15": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 49.0
+      },
+      "g": {
+        "alpha": 0.0,
+        "beta": 1.95,
+        "sigma": 8.0
+      },
+      "v3": {
+        "alpha": 0.5,
+        "beta": 2.05,
+        "sigma": 3.0
+      },
+      "v8": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7.0
+      },
+      "v": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7.0
+      },
+      "v15": {
+        "alpha": 0.4,
+        "beta": 2.15,
+        "sigma": 7.0
+      }
+    },
+    "GP_ENVELOPE_JITTER": 0.01,
+    "GP_JITTER": 1e-10,
+    "GP_LENGTH_LOG": 0.6931471805599453,
+    "prior_form": "const_logrbf"
+  },
+  "provenance": {
+    "pixel": {
+      "sha": "08b8482278a1968720042426b155e9ec8f67c9bd",
+      "dirty": true
+    },
+    "pixel_closure": {
+      "sha": "3c1dce605dcd36d90927e3d6d8937f77530e636e",
+      "dirty": true
+    },
+    "env": {
+      "XLA_FLAGS": "--xla_cpu_multi_thread_eigen=false",
+      "OMP_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "OPENBLAS_NUM_THREADS": "1",
+      "PIXEL_KERNEL_WORKERS": "7",
+      "PIXEL_ASSEMBLY_WORKERS": "7",
+      "PIXEL_POSTERIOR_WORKERS": "7"
+    }
+  },
+  "status": "ok",
+  "chi2": 37.61581070058194,
+  "n_data": 86,
+  "n_physical_data": 72,
+  "chi2_per_physical": 0.5224418152858603,
+  "gate": {},
+  "pulls": {
+    "t3": {
+      "rms": 1.005629706339778,
+      "signed": 0.1104321995433314,
+      "frac_le_2": 1.0
+    },
+    "t8": {
+      "rms": 0.5441940248556084,
+      "signed": 0.2490957499869421,
+      "frac_le_2": 1.0
+    },
+    "sigma": {
+      "rms": 0.7428236755681358,
+      "signed": 0.12078955041921773,
+      "frac_le_2": 1.0
+    },
+    "t15": {
+      "rms": 0.7323508440546989,
+      "signed": -0.06509604619692266,
+      "frac_le_2": 1.0
+    },
+    "g": {
+      "rms": 0.8756336561531547,
+      "signed": -0.09263940488840891,
+      "frac_le_2": 0.9873417721518988
+    },
+    "v3": {
+      "rms": 1.2419438110664556,
+      "signed": -0.12120331827089802,
+      "frac_le_2": 0.8734177215189873
+    },
+    "v8": {
+      "rms": 1.1445892156996758,
+      "signed": 0.028200681383757784,
+      "frac_le_2": 0.9113924050632911
+    },
+    "v": {
+      "rms": 1.2460813344220811,
+      "signed": 0.2549458326515136,
+      "frac_le_2": 1.0
+    },
+    "v15": {
+      "rms": 0.6622906632370473,
+      "signed": 0.028578375614439162,
+      "frac_le_2": 1.0
+    }
+  },
+  "worst_abs_constraint_residual": 2.394717214970754e-06,
+  "constraints": {
+    "cons_endpoint_t3": {
+      "target": -8.791720397805861e-24,
+      "realized": -2.373827800994377e-08,
+      "abs_residual": 2.373827800994376e-08,
+      "nominal_target": 0.0
+    },
+    "cons_endpoint_t8": {
+      "target": 5.407875664648769e-23,
+      "realized": -5.796285007519941e-09,
+      "abs_residual": 5.796285007519995e-09,
+      "nominal_target": 0.0
+    },
+    "cons_endpoint_sigma": {
+      "target": -3.5734244253099104e-23,
+      "realized": -7.162731208154582e-08,
+      "abs_residual": 7.162731208154578e-08,
+      "nominal_target": 0.0
+    },
+    "cons_endpoint_t15": {
+      "target": 1.683743006911256e-23,
+      "realized": -9.044014248615895e-08,
+      "abs_residual": 9.044014248615896e-08,
+      "nominal_target": 0.0
+    },
+    "cons_endpoint_g": {
+      "target": -3.517015937765035e-25,
+      "realized": 1.253772552445298e-08,
+      "abs_residual": 1.253772552445298e-08,
+      "nominal_target": 0.0
+    },
+    "cons_endpoint_v3": {
+      "target": 4.4021053747898985e-25,
+      "realized": -3.873178897606522e-07,
+      "abs_residual": 3.873178897606522e-07,
+      "nominal_target": 0.0
+    },
+    "cons_endpoint_v8": {
+      "target": -6.398988436676332e-23,
+      "realized": 3.698479611458083e-08,
+      "abs_residual": 3.69847961145809e-08,
+      "nominal_target": 0.0
+    },
+    "cons_endpoint_v": {
+      "target": -1.0755910563366007e-23,
+      "realized": -2.2558410694983877e-08,
+      "abs_residual": 2.2558410694983867e-08,
+      "nominal_target": 0.0
+    },
+    "cons_endpoint_v15": {
+      "target": -4.515669066072676e-23,
+      "realized": -2.667981748860626e-07,
+      "abs_residual": 2.6679817488606256e-07,
+      "nominal_target": 0.0
+    },
+    "cons_norm_v3": {
+      "target": 1.0000016085572823,
+      "realized": 0.9999992138400673,
+      "abs_residual": 2.394717214970754e-06,
+      "nominal_target": 1.0,
+      "floor": 1.0000016085572823,
+      "residual": 2.3947133629371353e-06
+    },
+    "cons_norm_v8": {
+      "target": 2.9770563310820064,
+      "realized": 2.9770572208520227,
+      "abs_residual": 8.897700163323918e-07,
+      "nominal_target": 3.0,
+      "floor": 2.9770563310820064,
+      "residual": 2.9887577438247747e-07
+    },
+    "cons_norm_v": {
+      "target": 2.9912048802015985,
+      "realized": 2.9912049575105217,
+      "abs_residual": 7.730892326307526e-08,
+      "nominal_target": 3.0,
+      "floor": 2.9912048802015985,
+      "residual": 2.5845412253360882e-08
+    },
+    "cons_norm_v15": {
+      "target": 2.991291317930715,
+      "realized": 2.991292682289288,
+      "abs_residual": 1.3643585727862728e-06,
+      "nominal_target": 3.0,
+      "floor": 2.991291317930715,
+      "residual": 4.5611023059101275e-07
+    },
+    "cons_momentum": {
+      "target": 1.000005646519793,
+      "realized": 1.000005413110488,
+      "abs_residual": 2.3340930499493595e-07,
+      "nominal_target": 1.0,
+      "floor": 1.000005646519793,
+      "residual": 2.334079870521172e-07
+    }
+  },
+  "posterior_npz": "posteriors/closure_NNPDF_truth_small__q2__lattice__c2_s1_g1_ns1_val0p5_t150p5.npz",
+  "summary": {
+    "q_key": "2",
+    "mode": "lattice",
+    "sampler": "vegas",
+    "n_data": 86,
+    "n_free_parameters": 0,
+    "n_free_hyperparams": 0,
+    "n_gp_latent_coefficients": 1314,
+    "n_datasets": 32,
+    "n_constraint_data": 14,
+    "n_physical_data": 72,
+    "chi2": 37.61581070058194,
+    "chi2_per_data": 0.4373931476811853,
+    "chi2_components": {
+      "linear": 37.61581070058194,
+      "bilinear": 0.0
+    },
+    "effective_sample_size": null,
+    "phase_effective_sample_size": 1.0,
+    "sampler_diagnostics": {
+      "n_fields": 9,
+      "n_datasets": 32,
+      "n_data": 86,
+      "n_free": 0,
+      "evidence": -357.3164845905826,
+      "chi2": 37.61581070058193,
+      "chi2_per_data": 0.43739314768118526,
+      "fields": [
+        {
+          "name": "t3",
+          "n_grid": 146,
+          "grid_ndim": 1,
+          "basis": "ProductBasis",
+          "prior": "GaussianProcess",
+          "is_gaussian": true
+        },
+        {
+          "name": "t8",
+          "n_grid": 146,
+          "grid_ndim": 1,
+          "basis": "ProductBasis",
+          "prior": "GaussianProcess",
+          "is_gaussian": true
+        },
+        {
+          "name": "sigma",
+          "n_grid": 146,
+          "grid_ndim": 1,
+          "basis": "ProductBasis",
+          "prior": "GaussianProcess",
+          "is_gaussian": true
+        },
+        {
+          "name": "t15",
+          "n_grid": 146,
+          "grid_ndim": 1,
+          "basis": "ProductBasis",
+          "prior": "GaussianProcess",
+          "is_gaussian": true
+        },
+        {
+          "name": "g",
+          "n_grid": 146,
+          "grid_ndim": 1,
+          "basis": "ProductBasis",
+          "prior": "GaussianProcess",
+          "is_gaussian": true
+        },
+        {
+          "name": "v3",
+          "n_grid": 146,
+          "grid_ndim": 1,
+          "basis": "ProductBasis",
+          "prior": "GaussianProcess",
+          "is_gaussian": true
+        },
+        {
+          "name": "v8",
+          "n_grid": 146,
+          "grid_ndim": 1,
+          "basis": "ProductBasis",
+          "prior": "GaussianProcess",
+          "is_gaussian": true
+        },
+        {
+          "name": "v",
+          "n_grid": 146,
+          "grid_ndim": 1,
+          "basis": "ProductBasis",
+          "prior": "GaussianProcess",
+          "is_gaussian": true
+        },
+        {
+          "name": "v15",
+          "n_grid": 146,
+          "grid_ndim": 1,
+          "basis": "ProductBasis",
+          "prior": "GaussianProcess",
+          "is_gaussian": true
+        }
+      ],
+      "datasets": [
+        {
+          "name": "itd_t3_imag",
+          "n_data": 7,
+          "nu_shape": [
+            7
+          ],
+          "fields": [
+            "t3"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": "imag",
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/itd_t3_imag.dat",
+          "independent": [
+            "nu",
+            "p",
+            "z",
+            "z2"
+          ]
+        },
+        {
+          "name": "itd_t8_imag",
+          "n_data": 7,
+          "nu_shape": [
+            7
+          ],
+          "fields": [
+            "t8"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": "imag",
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/itd_t8_imag.dat",
+          "independent": [
+            "nu",
+            "p",
+            "z",
+            "z2"
+          ]
+        },
+        {
+          "name": "itd_sigma_imag",
+          "n_data": 7,
+          "nu_shape": [
+            7
+          ],
+          "fields": [
+            "sigma"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": "imag",
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/itd_sigma_imag.dat",
+          "independent": [
+            "nu",
+            "p",
+            "z",
+            "z2"
+          ]
+        },
+        {
+          "name": "itd_t15_imag",
+          "n_data": 7,
+          "nu_shape": [
+            7
+          ],
+          "fields": [
+            "t15"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": "imag",
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/itd_t15_imag.dat",
+          "independent": [
+            "nu",
+            "p",
+            "z",
+            "z2"
+          ]
+        },
+        {
+          "name": "itd_g_imag",
+          "n_data": 7,
+          "nu_shape": [
+            7
+          ],
+          "fields": [
+            "g"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": "imag",
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/itd_g_imag.dat",
+          "independent": [
+            "nu",
+            "p",
+            "z",
+            "z2"
+          ]
+        },
+        {
+          "name": "itd_v3_real",
+          "n_data": 7,
+          "nu_shape": [
+            7
+          ],
+          "fields": [
+            "v3"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": "real",
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/itd_v3_real.dat",
+          "independent": [
+            "nu",
+            "p",
+            "z",
+            "z2"
+          ]
+        },
+        {
+          "name": "itd_v8_real",
+          "n_data": 7,
+          "nu_shape": [
+            7
+          ],
+          "fields": [
+            "v8"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": "real",
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/itd_v8_real.dat",
+          "independent": [
+            "nu",
+            "p",
+            "z",
+            "z2"
+          ]
+        },
+        {
+          "name": "itd_v_real",
+          "n_data": 7,
+          "nu_shape": [
+            7
+          ],
+          "fields": [
+            "v"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": "real",
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/itd_v_real.dat",
+          "independent": [
+            "nu",
+            "p",
+            "z",
+            "z2"
+          ]
+        },
+        {
+          "name": "itd_v15_real",
+          "n_data": 7,
+          "nu_shape": [
+            7
+          ],
+          "fields": [
+            "v15"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": "real",
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/itd_v15_real.dat",
+          "independent": [
+            "nu",
+            "p",
+            "z",
+            "z2"
+          ]
+        },
+        {
+          "name": "moments_t3",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "t3"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": null,
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/moments_t3.dat",
+          "independent": [
+            "n",
+            "nu"
+          ]
+        },
+        {
+          "name": "moments_t8",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "t8"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": null,
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/moments_t8.dat",
+          "independent": [
+            "n",
+            "nu"
+          ]
+        },
+        {
+          "name": "moments_sigma",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "sigma"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": null,
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/moments_sigma.dat",
+          "independent": [
+            "n",
+            "nu"
+          ]
+        },
+        {
+          "name": "moments_t15",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "t15"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": null,
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/moments_t15.dat",
+          "independent": [
+            "n",
+            "nu"
+          ]
+        },
+        {
+          "name": "moments_g",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "g"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": null,
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/moments_g.dat",
+          "independent": [
+            "n",
+            "nu"
+          ]
+        },
+        {
+          "name": "moments_v3",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "v3"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": null,
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/moments_v3.dat",
+          "independent": [
+            "n",
+            "nu"
+          ]
+        },
+        {
+          "name": "moments_v8",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "v8"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": null,
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/moments_v8.dat",
+          "independent": [
+            "n",
+            "nu"
+          ]
+        },
+        {
+          "name": "moments_v",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "v"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": null,
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/moments_v.dat",
+          "independent": [
+            "n",
+            "nu"
+          ]
+        },
+        {
+          "name": "moments_v15",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "v15"
+          ],
+          "n_contributions": 1,
+          "source": "file",
+          "component": null,
+          "path": "/Users/jkarpie-admin/work/building/pixel_closure/closure_NNPDF_truth_small/data/truthQ_2/lattice/moments_v15.dat",
+          "independent": [
+            "n",
+            "nu"
+          ]
+        },
+        {
+          "name": "cons_endpoint_t3",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "t3"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_endpoint_t8",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "t8"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_endpoint_sigma",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "sigma"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_endpoint_t15",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "t15"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_endpoint_g",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "g"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_endpoint_v3",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "v3"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_endpoint_v8",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "v8"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_endpoint_v",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "v"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_endpoint_v15",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "v15"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_norm_v3",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "v3"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_norm_v8",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "v8"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_norm_v",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "v"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_norm_v15",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "v15"
+          ],
+          "n_contributions": 1,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        },
+        {
+          "name": "cons_momentum",
+          "n_data": 1,
+          "nu_shape": [
+            1
+          ],
+          "fields": [
+            "sigma",
+            "g"
+          ],
+          "n_contributions": 2,
+          "source": null,
+          "component": null,
+          "path": null,
+          "independent": []
+        }
+      ],
+      "success": true,
+      "message": "No free parameters; posterior evaluated at fixed parameters.",
+      "fun": -357.3164845905826,
+      "metadata": {
+        "sampler": "posterior",
+        "requested_sampler": "vegas",
+        "canonical_sampler": "vegas",
+        "requested_auxiliary": "auto",
+        "resolved_auxiliary": "none",
+        "resolved_implementation": "fixed_posterior",
+        "parameter_partition": {
+          "ordinary": 0,
+          "normalization": 0,
+          "hubbard": 0
+        },
+        "sampled_blocks": [],
+        "marginalized_blocks": [],
+        "run_map": false
+      }
+    },
+    "tau_int_max": null,
+    "slowest_param": null,
+    "tau_reliable": null,
+    "t0_iterations": 0,
+    "timing_seconds": {
+      "build_and_kernels": 0.7279655830352567,
+      "inference": 1.060577625001315,
+      "marginalization": 8.79999715834856e-05,
+      "predictive_chi2": 0.04993383400142193,
+      "fit_total": 1.8385654999874532
+    },
+    "coverage": {
+      "t3": {
+        "n_points": 79,
+        "pull_chi2": 79.89199739556923,
+        "pull_chi2_per_point": 1.0112911062730283,
+        "mean_squared_standardized_residual": 1.0112911062730283,
+        "points_are_correlated": true,
+        "n_pull_le_1": 32,
+        "n_pull_le_2": 79,
+        "frac_pull_le_1": 0.4050632911392405,
+        "frac_pull_le_2": 1.0,
+        "mean_abs_pull": 0.9485681271933859,
+        "mean_signed_pull": 0.1104321995433314,
+        "signed_pull_bins": {
+          "0.01-0.05": 1.0187944869243883,
+          "0.05-0.1": 0.858307285110586,
+          "0.1-0.2": -0.07706787646927943,
+          "0.2-0.35": -1.0585390392975047,
+          "0.35-0.5": -1.195257145781613,
+          "0.5-0.9": 0.7138167144815588
+        }
+      },
+      "t8": {
+        "n_points": 79,
+        "pull_chi2": 23.395623798395178,
+        "pull_chi2_per_point": 0.29614713668854653,
+        "mean_squared_standardized_residual": 0.29614713668854653,
+        "points_are_correlated": true,
+        "n_pull_le_1": 70,
+        "n_pull_le_2": 79,
+        "frac_pull_le_1": 0.8860759493670886,
+        "frac_pull_le_2": 1.0,
+        "mean_abs_pull": 0.4234730710170268,
+        "mean_signed_pull": 0.2490957499869421,
+        "signed_pull_bins": {
+          "0.01-0.05": 0.1707417939488956,
+          "0.05-0.1": 0.08012633527453225,
+          "0.1-0.2": 0.02217144705980376,
+          "0.2-0.35": -0.31605807476286485,
+          "0.35-0.5": -0.22363430967767892,
+          "0.5-0.9": 0.747731454941551
+        }
+      },
+      "sigma": {
+        "n_points": 79,
+        "pull_chi2": 43.59117402577984,
+        "pull_chi2_per_point": 0.551787012984555,
+        "mean_squared_standardized_residual": 0.551787012984555,
+        "points_are_correlated": true,
+        "n_pull_le_1": 69,
+        "n_pull_le_2": 79,
+        "frac_pull_le_1": 0.8734177215189873,
+        "frac_pull_le_2": 1.0,
+        "mean_abs_pull": 0.6475153876422638,
+        "mean_signed_pull": 0.12078955041921773,
+        "signed_pull_bins": {
+          "0.01-0.05": 0.04595269130175733,
+          "0.05-0.1": 0.8852189576818752,
+          "0.1-0.2": 0.5015078208454506,
+          "0.2-0.35": -0.7483876570209292,
+          "0.35-0.5": -0.7460093987230362,
+          "0.5-0.9": 0.5925364381466142
+        }
+      },
+      "t15": {
+        "n_points": 79,
+        "pull_chi2": 42.37068294422276,
+        "pull_chi2_per_point": 0.5363377587876298,
+        "mean_squared_standardized_residual": 0.5363377587876298,
+        "points_are_correlated": true,
+        "n_pull_le_1": 65,
+        "n_pull_le_2": 79,
+        "frac_pull_le_1": 0.8227848101265823,
+        "frac_pull_le_2": 1.0,
+        "mean_abs_pull": 0.5916391226964228,
+        "mean_signed_pull": -0.06509604619692266,
+        "signed_pull_bins": {
+          "0.01-0.05": -1.3854530890402212,
+          "0.05-0.1": -0.2169991101768854,
+          "0.1-0.2": 0.8669810004340317,
+          "0.2-0.35": 0.7867801310434087,
+          "0.35-0.5": 0.28025431110452487,
+          "0.5-0.9": -0.3446032071290196
+        }
+      },
+      "g": {
+        "n_points": 79,
+        "pull_chi2": 60.57200968326316,
+        "pull_chi2_per_point": 0.7667342997881412,
+        "mean_squared_standardized_residual": 0.7667342997881412,
+        "points_are_correlated": true,
+        "n_pull_le_1": 58,
+        "n_pull_le_2": 78,
+        "frac_pull_le_1": 0.7341772151898734,
+        "frac_pull_le_2": 0.9873417721518988,
+        "mean_abs_pull": 0.7609080444529114,
+        "mean_signed_pull": -0.09263940488840891,
+        "signed_pull_bins": {
+          "0.01-0.05": -1.2505291095654387,
+          "0.05-0.1": 0.37723354858327657,
+          "0.1-0.2": 0.9887103587487152,
+          "0.2-0.35": -0.2928101902701961,
+          "0.35-0.5": -1.1273237867041506,
+          "0.5-0.9": 0.36940807531533437
+        }
+      },
+      "v3": {
+        "n_points": 79,
+        "pull_chi2": 121.85152995785549,
+        "pull_chi2_per_point": 1.542424429846272,
+        "mean_squared_standardized_residual": 1.542424429846272,
+        "points_are_correlated": true,
+        "n_pull_le_1": 36,
+        "n_pull_le_2": 69,
+        "frac_pull_le_1": 0.45569620253164556,
+        "frac_pull_le_2": 0.8734177215189873,
+        "mean_abs_pull": 1.0750728073184523,
+        "mean_signed_pull": -0.12120331827089802,
+        "signed_pull_bins": {
+          "0.01-0.05": -0.48261696807262916,
+          "0.05-0.1": -0.5168491531017458,
+          "0.1-0.2": 0.804965523733128,
+          "0.2-0.35": 1.079129807859396,
+          "0.35-0.5": -1.2802134844483748,
+          "0.5-0.9": -0.23478692014993996
+        }
+      },
+      "v8": {
+        "n_points": 79,
+        "pull_chi2": 103.49667334298391,
+        "pull_chi2_per_point": 1.3100844726959988,
+        "mean_squared_standardized_residual": 1.3100844726959988,
+        "points_are_correlated": true,
+        "n_pull_le_1": 39,
+        "n_pull_le_2": 72,
+        "frac_pull_le_1": 0.4936708860759494,
+        "frac_pull_le_2": 0.9113924050632911,
+        "mean_abs_pull": 0.9583826150852586,
+        "mean_signed_pull": 0.028200681383757784,
+        "signed_pull_bins": {
+          "0.01-0.05": -0.031495423446998294,
+          "0.05-0.1": 0.4889157372687575,
+          "0.1-0.2": 0.5338109062074954,
+          "0.2-0.35": -1.1468793583483576,
+          "0.35-0.5": -1.8118950241444454,
+          "0.5-0.9": 0.9777543608986874
+        }
+      },
+      "v": {
+        "n_points": 79,
+        "pull_chi2": 122.66477666761402,
+        "pull_chi2_per_point": 1.5527186919951141,
+        "mean_squared_standardized_residual": 1.5527186919951141,
+        "points_are_correlated": true,
+        "n_pull_le_1": 36,
+        "n_pull_le_2": 79,
+        "frac_pull_le_1": 0.45569620253164556,
+        "frac_pull_le_2": 1.0,
+        "mean_abs_pull": 1.0375678379086957,
+        "mean_signed_pull": 0.2549458326515136,
+        "signed_pull_bins": {
+          "0.01-0.05": -0.2182911858281551,
+          "0.05-0.1": 0.07013892028768938,
+          "0.1-0.2": 0.20472496393263676,
+          "0.2-0.35": -1.1269374529326879,
+          "0.35-0.5": -1.2413336064145541,
+          "0.5-0.9": 1.519368906042923
+        }
+      },
+      "v15": {
+        "n_points": 79,
+        "pull_chi2": 34.65168488626647,
+        "pull_chi2_per_point": 0.43862892261096803,
+        "mean_squared_standardized_residual": 0.43862892261096803,
+        "points_are_correlated": true,
+        "n_pull_le_1": 70,
+        "n_pull_le_2": 79,
+        "frac_pull_le_1": 0.8860759493670886,
+        "frac_pull_le_2": 1.0,
+        "mean_abs_pull": 0.5180227335120947,
+        "mean_signed_pull": 0.028578375614439162,
+        "signed_pull_bins": {
+          "0.01-0.05": -0.8763739582308757,
+          "0.05-0.1": -1.4988721923379893,
+          "0.1-0.2": -0.3256124327506464,
+          "0.2-0.35": 0.1202659470012667,
+          "0.35-0.5": 0.0031138403647001885,
+          "0.5-0.9": 0.5770898272364258
+        }
+      }
+    },
+    "dy_normalization": {},
+    "exp_nuisances": {}
+  },
+  "elapsed_s": 11.2
+}
