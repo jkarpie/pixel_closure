@@ -231,6 +231,29 @@ def _bilinear_predictive_band(blocks, mean, covariance):
 def _posterior_predictive_bands(model, samples, vec):
     """Return linear and DY posterior means/standard deviations in data space."""
     blocks = model._blocks(model._rebuild(vec))
+    direct = getattr(samples, "_pixel_direct_predictive_moments", None)
+    if direct is not None:
+        mean, covariance = direct
+        mean = np.asarray(mean, dtype=float).reshape(-1)
+        variance = np.clip(np.diag(np.asarray(covariance, dtype=float)), 0.0, None)
+        n_linear = int(np.asarray(blocks.M).size)
+        n_bilinear = (
+            0 if blocks.bilinear_M is None
+            else int(np.asarray(blocks.bilinear_M).size)
+        )
+        expected = n_linear + n_bilinear
+        if mean.size < expected or variance.size < expected:
+            raise ValueError(
+                "explicit-q predictive moments do not cover the linear and "
+                "bilinear closure rows"
+            )
+        return (
+            mean[:n_linear],
+            np.sqrt(variance[:n_linear]),
+            mean[n_linear:expected],
+            np.sqrt(variance[n_linear:expected]),
+            blocks,
+        )
     moments = _physical_gp_moments(samples, int(np.asarray(blocks.g).size))
     if model.has_bilinear and moments is not None:
         mean, covariance = moments

@@ -501,14 +501,14 @@ def test_full_run_fit_routes_each_model_to_its_own_sampler_options(
         assert options["saddle_tol"] == cfg.CONTOUR_SADDLE_TOL
         assert options["flow_time"] == cfg.CONTOUR_FLOW_TIME == pytest.approx(0.2)
         assert options["n_flow_steps"] == cfg.CONTOUR_N_FLOW_STEPS == 8
-        assert "flow_from_affine_reference" not in options
+        assert options["flow_from_affine_reference"] is False
         assert not caches & set(options)  # the caches are NUTS-branch only
     elif model_kwargs["has_bilinear"]:
         assert options["max_tree_depth"] == cfg.NUTS_MAX_TREE_DEPTH
         assert options["saddle_tol"] == cfg.CONTOUR_SADDLE_TOL
         assert options["flow_time"] == cfg.CONTOUR_FLOW_TIME == pytest.approx(0.2)
         assert options["n_flow_steps"] == cfg.CONTOUR_N_FLOW_STEPS == 8
-        assert options["flow_from_affine_reference"] is True
+        assert options["flow_from_affine_reference"] is False
         assert caches <= set(options)
         for key in caches:
             assert options[key].parent == cfg.INFERENCE_CACHE_ROOT
@@ -948,6 +948,9 @@ def test_small_sampler_defaults_to_nuts_for_every_mode_and_vegas_keeps_z_fallbac
     assert suite._closure_sampler(None, suite.cfg.TEST_MODE_SYNTHETIC_Z) == "gaussian"
     assert suite._closure_sampler(None, "dy") == "vegas"
     monkeypatch.setattr(suite.cfg, "SMALL_CLOSURE_SAMPLER", "hmc")
+    assert suite._closure_sampler(None, suite.cfg.TEST_MODE_SYNTHETIC_Z) == "hmc"
+    assert suite._closure_sampler(None, "dy") == "hmc"
+    monkeypatch.setattr(suite.cfg, "SMALL_CLOSURE_SAMPLER", "bogus")
     with pytest.raises(ValueError, match="SMALL_CLOSURE_SAMPLER"):
         suite._closure_sampler(None, "dy")
 
@@ -960,25 +963,25 @@ def test_small_run_fit_configures_full_suite_contour_nuts_when_switched(suite, m
     Bilinear model with fitted normalizations only (the small-suite partition):
     ``auxiliary="sample"``, the ``NUTS_*`` values, the saddle tolerance, per-(truth,
     mode) caches, and the affine-reference and memory-budget options.  A bilinear
-    model with no normalization routes to a PIXEL path that does not accept the
-    last two, so they must be absent; a linear model gets ordinary NUTS options
-    only.  Oracle F1 (structural, on the real call).
+    model with no normalization routes to fixed-contour NUTS, which accepts the
+    same real-axis flow but not the normalization reference cache,
+    affine-only switch, or memory budget; a linear model gets ordinary NUTS
+    options only.  Oracle F1 (structural, on the real call).
     """
     cfg = suite.cfg
     monkeypatch.setattr(cfg, "SMALL_CLOSURE_SAMPLER", "nuts")
     monkeypatch.setattr(cfg, "CONTOUR_NUTS_AFFINE_REFERENCE", False)
-    monkeypatch.setattr(cfg, "CONTOUR_NUTS_FLOW_FROM_AFFINE_REFERENCE", True)
+    monkeypatch.setattr(cfg, "CONTOUR_NUTS_FLOW_FROM_AFFINE_REFERENCE", False)
     monkeypatch.setattr(cfg, "CONTOUR_NUTS_REFERENCE_BUDGET_BYTES", 123)
     nuts_keys = {"n_warmup", "step_size", "integrator", "max_tree_depth", "adapt_mass",
                  "use_hessian_mass"}
     contour_keys = {
         "flow_time", "n_flow_steps", "saddle_tol",
-        "hessian_cache_path",
+        "hessian_cache_path", "flow_from_affine_reference",
     }
     reference_keys = {
         "reference_cache_path",
-        "affine_reference_contour", "flow_from_affine_reference",
-        "reference_budget_bytes",
+        "affine_reference_contour", "reference_budget_bytes",
     }
 
     def partition(n_normalization):
@@ -997,7 +1000,7 @@ def test_small_run_fit_configures_full_suite_contour_nuts_when_switched(suite, m
     assert options["flow_time"] == cfg.CONTOUR_FLOW_TIME == pytest.approx(0.2)
     assert options["n_flow_steps"] == cfg.CONTOUR_N_FLOW_STEPS == 8
     assert options["affine_reference_contour"] is False
-    assert options["flow_from_affine_reference"] is True
+    assert options["flow_from_affine_reference"] is False
     assert options["reference_budget_bytes"] == 123
     for key in ("reference_cache_path", "hessian_cache_path"):
         assert options[key].parent == cfg.INFERENCE_CACHE_ROOT
@@ -1013,6 +1016,7 @@ def test_small_run_fit_configures_full_suite_contour_nuts_when_switched(suite, m
     )
     assert (call["sampler"], call["auxiliary"]) == ("nuts", "sample")
     assert set(call["options"]) == nuts_keys | contour_keys
+    assert call["options"]["flow_from_affine_reference"] is False
 
     call = _capture_sampler_call(suite, monkeypatch, _fake_model(has_bilinear=False), mode)
     assert (call["sampler"], call["auxiliary"]) == ("nuts", "auto")

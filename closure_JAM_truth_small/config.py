@@ -1078,15 +1078,13 @@ NUTS_MAX_TREE_DEPTH = 6
 # NUTS steppers and repeating costly step-size searches at mass-window updates.
 NUTS_ADAPT_MASS = False
 #: Deform every sampled H-S sector with the positive-flow generalized-thimble
-#: map.  The affine-whitened scan recorded in
-#: ``pixel/plans/hs_saddle_contour_algorithms.md`` found ``T=0.2`` to be the
-#: deepest consistently stable/improving point; the 8-step RK4 result converged
-#: against its 2/32-step checks.  Normalization-only contours start from the
-#: affine saddle reference so the flow acts in its well-conditioned frame.
+#: map.  The flow starts from the real H-S plane, rather than from the affine
+#: saddle contour, and runs to ``T=0.2`` with eight RK4 steps.  The affine-only
+#: contour remains available as the separate comparison variant.
 CONTOUR_FLOW_TIME = 0.2
 CONTOUR_N_FLOW_STEPS = 8
 CONTOUR_NUTS_AFFINE_REFERENCE = False
-CONTOUR_NUTS_FLOW_FROM_AFFINE_REFERENCE = True
+CONTOUR_NUTS_FLOW_FROM_AFFINE_REFERENCE = False
 #: Ceiling passed to PIXEL's normalization-reference memory refusal, in bytes;
 #: ``None`` keeps PIXEL's default (or ``PIXEL_NORMALIZATION_REFERENCE_BUDGET_BYTES``).
 #: That projection is calibrated on small GP grids and models the flowed map, so
@@ -1096,6 +1094,10 @@ CONTOUR_NUTS_REFERENCE_BUDGET_BYTES = None
 #: Refuse a contour-NUTS fit whose residual complex-weight ESS fraction falls
 #: below this, matching the small suites' VEGAS outer-ESS gate.
 CONTOUR_NUTS_MIN_RESIDUAL_ESS_FRAC = 0.10
+#: Source-suite runs fail fast when an importance or residual-ESS diagnostic is
+#: below its quality floor.  Development variants set this false so the fit is
+#: still serialized with explicit warnings for later experimental analysis.
+SMALL_CLOSURE_REJECT_UNRELIABLE_SAMPLES = True
 
 #: Retained for fixed-trajectory HMC comparisons; production small closures use
 #: the contour-NUTS settings above.

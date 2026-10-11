@@ -73,7 +73,7 @@ inference entry points stubbed; none compiles a model, builds a kernel, or runs 
 | 17 | `test_suite_runner_records_case_failures_and_continues` | `main` catches per-case exceptions, writes 2 output files, honors `--fail-fast` | 4 source substrings (`F2`) | substring presence | `S3` |
 | 18 | `test_suite_kernel_only_mode_builds_without_fitting` | `--kernels-only` builds every `(Q, mode)` cache and never fits | real `runner.main()` execution with monkeypatch traps (`F1`) | exact list; zero trapped calls | `S3` |
 | 19 | `test_small_run_fit_configures_vegas_from_the_model_not_the_mode` | under the VEGAS comparison switch, all three modes reach the correct ordinary/nested option block | `run_fit` driven to its real inference call (`F1`) | exact key sets and values | `S1` |
-| 20 | `test_full_run_fit_routes_each_model_to_its_own_sampler_options` | every full-suite branch reaches the right entry point/options; both H-S branches receive `T=0.2`/8 steps and normalization-reference NUTS requests affine-reference flow | `run_fit` driven to its real inference call (`F1`) | exact entry point, keys and values | `S1` |
+| 20 | `test_full_run_fit_routes_each_model_to_its_own_sampler_options` | every full-suite branch reaches the right entry point/options; all H-S branches receive real-axis `T=0.2`/8-step flow | `run_fit` driven to its real inference call (`F1`) | exact entry point, keys and values | `S1` |
 | 21 | `test_dis_t0_predictions_are_sliced_per_dataset` | MAP runs once; each DIS table gets its own `layout.data_slice`; a table without `correlated_systematics` is absent from both the result and the slicing | index-valued prediction vector (`F1`) | exact arrays | `S2` |
 | 22 | `test_markov_chain_rejects_a_history_it_cannot_analyze` | a chainless **complex** history, a 1-D history and a single-row history are all rejected; a real history of the same shape is accepted | direct calls on the guard's own inputs + control (`F1`) | `is None` / `is not None` | `S3` |
 | 23 | `test_effective_sample_size_dispatches_on_the_sample_type` | `PosteriorResult` -> `1.0`; `ess_frac` carrier -> `600*0.25 = 150`; fallback -> `1/sum|w|^2 = 1/0.875` | arithmetic on the fixture (`A1`) | `rel=1e-12` | `S2` |
@@ -134,7 +134,7 @@ inference entry points stubbed; none compiles a model, builds a kernel, or runs 
   are selected, never about what that sampler then does; the VEGAS/NUTS/HMC numerics live in
   `src/pixel/infer` and are tested there.
 | 25 | `test_small_sampler_defaults_to_nuts_for_every_mode_and_vegas_keeps_z_fallback` | default NUTS covers every mode including synthetic Z; under the VEGAS comparison switch only synthetic Z falls back to Gaussian; an unknown value raises | direct dispatch (`F1`) | exact strings; `ValueError` | `S2` |
-| 26 | `test_small_run_fit_configures_full_suite_contour_nuts_when_switched` | normalization-reference and fixed-H-S NUTS both receive `T=0.2`/8 steps; only the former receives affine-reference flow, reference cache and memory budget; linear NUTS receives no contour options | `run_fit` driven to its real inference call (`F1`) | exact key sets and values | `S1` |
+| 26 | `test_small_run_fit_configures_full_suite_contour_nuts_when_switched` | normalization-reference and fixed-H-S NUTS both receive real-axis `T=0.2`/8-step flow; only the former receives the reference cache, affine-only switch and memory budget; linear NUTS receives no contour options | `run_fit` driven to its real inference call (`F1`) | exact key sets and values | `S1` |
 | 27 | `test_small_contour_nuts_refuses_a_collapsed_residual_ess` | a `JointContourHMCSamples` below `CONTOUR_NUTS_MIN_RESIDUAL_ESS_FRAC` raises before marginalization; one above reaches it | `run_fit` driven past inference with a stub artifact of PIXEL's own class (`F1`) | `RuntimeError` / sentinel reached | `S2` |
 
 **2026-09-15 addendum (SMALL_CLOSURE_SAMPLER switch).** #25–#27 were each demonstrated to fail
@@ -144,4 +144,4 @@ and the residual-ESS gate no longer recognising the contour artifact (1 fails; t
 to be built from `suite.pixel.infer.JointContourHMCSamples` rather than the suite's imported name,
 or the mutation was invisible). On 2026-09-29 NUTS became the default and synthetic Z joined it;
 the optional `"vegas"` route remains explicitly pinned by #4, #7, #10 and #19. #20/#26 now pin
-the positive-flow call contract (`T=0.2`, 8 steps, affine-reference start where supported).
+the positive-flow call contract (`T=0.2`, 8 steps, real-axis start on every H-S route).

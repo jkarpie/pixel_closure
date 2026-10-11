@@ -278,10 +278,11 @@ def build_kernels_only(q_key, mode):
     }
 
 
-def run_one(q_key, mode, *, make_plots=True, write_outputs=True, run_cache=None):
+def run_one(q_key, mode, *, make_plots=True, write_outputs=True, run_cache=None,
+            n_samples=None, seed=None):
     watch = Stopwatch()
     truth = fitmod.load_truth(q_key)
-    result = fitmod.run_fit(q_key, mode)
+    result = fitmod.run_fit(q_key, mode, n_samples=n_samples, seed=seed)
     t_fit = watch.lap()
     summary = fitmod.summarize(q_key, mode, result, truth)
     t_summary = watch.lap()

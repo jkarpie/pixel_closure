@@ -24,11 +24,18 @@ import numpy as np
 from pixel import priors, kernels
 from pixel.core.model import Contribution, Dataset
 from pixel.core.params import Parameter
-from pixel.infer import PosteriorResult, NestedVegasSamples, VegasImportanceSamples
+from pixel.infer import (
+    DirectMCMCSamples,
+    NestedVegasSamples,
+    PosteriorResult,
+    VegasImportanceSamples,
+)
 from pixel.infer import ContourHMCSamples, JointContourHMCSamples
 from pixel.infer import AutocorrelationWarning, autocorrelation_summary
 from pixel.infer import run_mcmc as infer_mcmc
+from pixel.infer import run_q_mcmc as infer_q_mcmc
 from pixel.infer import bilinear_posterior_moments
+from pixel.util.linalg import pinv_quad, svd_factor
 from pixel.util.progress import ProgressReporter, Stopwatch, format_duration
 
 from . import config as cfg
@@ -310,7 +317,7 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True, t0=N
     return analysis, fields
 
 
-# -- run: NUTS (default) or VEGAS over fitted normalizations ------------------
+# -- run: contour, VEGAS, or explicit retained-field q integration -----------
 
 
 def _closure_sampler(model, mode: str | None = None) -> str:
@@ -326,11 +333,14 @@ def _closure_sampler(model, mode: str | None = None) -> str:
     by :func:`_nuts_sampler_options`.  ``"vegas"`` remains available for
     comparisons.  Its synthetic-Z model has no outer theta or normalization
     coordinate, so marginalized VEGAS cannot represent it and that one fallback
-    remains Gaussian saddle importance.
+    remains Gaussian saddle importance.  The isolated q-integration copy sets
+    ``"q"`` and samples ordinary parameters plus retained physical grid fields,
+    bypassing H-S parameterization entirely.
     """
-    if cfg.SMALL_CLOSURE_SAMPLER not in ("vegas", "nuts"):
+    if cfg.SMALL_CLOSURE_SAMPLER not in ("vegas", "nuts", "hmc", "q"):
         raise ValueError(
-            "cfg.SMALL_CLOSURE_SAMPLER must be 'vegas' or 'nuts'; got "
+            "cfg.SMALL_CLOSURE_SAMPLER must be 'vegas', 'nuts', 'hmc', or "
+            "'q'; got "
             f"{cfg.SMALL_CLOSURE_SAMPLER!r}"
         )
     if mode == cfg.TEST_MODE_SYNTHETIC_Z and cfg.SMALL_CLOSURE_SAMPLER == "vegas":
@@ -343,12 +353,13 @@ def _nuts_sampler_options(q_key: str, mode: str, model) -> tuple[str, dict]:
 
     The full suites' NUTS block: ordinary NUTS with a Hessian metric for a
     linear model; for a bilinear one, ``auxiliary="sample"`` with the saddle
-    tolerance and a per-(truth, mode) Hessian-metric cache.  The optimized
-    normalization-reference path also receives a reference-saddle cache.
+    tolerance and a per-(truth, mode) Hessian-metric cache.  Every bilinear
+    route flows from the real H-S plane;
+    the normalization-reference path also receives a reference-saddle cache.
     PIXEL routes a bilinear model whose only real coordinates are fitted
     normalizations to ``normalization_reference_contour_nuts``, the one path
-    that takes the affine-reference and memory-budget options, so those are
-    added only there.
+    that additionally takes the affine-only switch and memory-budget options,
+    so those are added only there.
     """
     options = {
         "n_warmup": cfg.NUTS_WARMUP,
@@ -366,20 +377,92 @@ def _nuts_sampler_options(q_key: str, mode: str, model) -> tuple[str, dict]:
     options["saddle_tol"] = cfg.CONTOUR_SADDLE_TOL
     options["hessian_cache_path"] = cfg.INFERENCE_CACHE_ROOT / f"{stem}_hessian_mass.npz"
     partition = model.contour_partition()
+    options["flow_from_affine_reference"] = bool(
+        cfg.CONTOUR_NUTS_FLOW_FROM_AFFINE_REFERENCE
+    )
     if partition.n_normalization and not partition.n_ordinary:
         options["reference_cache_path"] = (
             cfg.INFERENCE_CACHE_ROOT / f"{stem}_reference.npz"
         )
         options["affine_reference_contour"] = bool(cfg.CONTOUR_NUTS_AFFINE_REFERENCE)
-        options["flow_from_affine_reference"] = bool(
-            cfg.CONTOUR_NUTS_FLOW_FROM_AFFINE_REFERENCE
-        )
         options["reference_budget_bytes"] = cfg.CONTOUR_NUTS_REFERENCE_BUDGET_BYTES
     return "sample", options
 
 
+def _hmc_sampler_options(q_key: str, mode: str, model) -> tuple[str, dict]:
+    """Hessian-rescaled HMC options for ordinary and H-S contour routes."""
+    options = {
+        "n_warmup": cfg.HMC_WARMUP,
+        "step_size": cfg.HMC_STEP_SIZE,
+        "n_leapfrog": cfg.HMC_N_LEAPFROG,
+        "integrator": cfg.HMC_INTEGRATOR,
+        "use_hessian_mass": bool(cfg.HMC_USE_HESSIAN_MASS),
+        "adapt_step_size": bool(getattr(cfg, "HMC_ADAPT_STEP_SIZE", False)),
+        "adapt_mass": bool(getattr(cfg, "HMC_ADAPT_MASS", False)),
+        "target_accept": float(getattr(cfg, "HMC_TARGET_ACCEPT", 0.8)),
+    }
+    if not model.has_bilinear:
+        return "auto", options
+    stem = f"{cfg.truth_label(q_key)}_{mode}_hmc"
+    options.update(
+        flow_time=cfg.CONTOUR_FLOW_TIME,
+        n_flow_steps=cfg.CONTOUR_N_FLOW_STEPS,
+        flow_from_affine_reference=bool(
+            cfg.CONTOUR_NUTS_FLOW_FROM_AFFINE_REFERENCE
+        ),
+        saddle_tol=cfg.CONTOUR_SADDLE_TOL,
+        hessian_cache_path=cfg.INFERENCE_CACHE_ROOT / f"{stem}_hessian_mass.npz",
+    )
+    partition = model.contour_partition()
+    if partition.n_normalization and not partition.n_ordinary:
+        options.update(
+            reference_cache_path=cfg.INFERENCE_CACHE_ROOT / f"{stem}_reference.npz",
+            affine_reference_contour=bool(cfg.CONTOUR_NUTS_AFFINE_REFERENCE),
+            reference_budget_bytes=cfg.CONTOUR_NUTS_REFERENCE_BUDGET_BYTES,
+        )
+    return "sample", options
+
+
+def _q_sampler_options() -> tuple[str, dict]:
+    """Return the engine and options for explicit retained-field integration.
+
+    The q target is already expressed in prior-whitened field coordinates, so
+    its scalable default is an identity metric.  In particular this path does
+    not request the dense full-target Hessian used by the legacy direct route.
+    """
+    engine = str(getattr(cfg, "Q_INTEGRATION_SAMPLER", "nuts"))
+    if engine not in ("nuts", "hmc"):
+        raise ValueError(
+            "cfg.Q_INTEGRATION_SAMPLER must be 'nuts' or 'hmc'; got "
+            f"{engine!r}"
+        )
+    options = {
+        "prior_rcond": float(getattr(cfg, "Q_INTEGRATION_PRIOR_RCOND", 0.0)),
+        "metric": str(getattr(cfg, "Q_INTEGRATION_METRIC", "prior_whitened")),
+        "n_warmup": int(getattr(cfg, "Q_INTEGRATION_WARMUP", cfg.NUTS_WARMUP)),
+        "step_size": getattr(
+            cfg, "Q_INTEGRATION_INITIAL_STEP_SIZE", cfg.NUTS_INITIAL_STEP_SIZE
+        ),
+        "integrator": str(getattr(cfg, "Q_INTEGRATION_INTEGRATOR", "leapfrog")),
+        "adapt_step_size": True,
+        "adapt_mass": bool(getattr(cfg, "Q_INTEGRATION_ADAPT_MASS", False)),
+        "target_accept": float(
+            getattr(cfg, "Q_INTEGRATION_TARGET_ACCEPT", 0.8)
+        ),
+    }
+    if engine == "nuts":
+        options["max_tree_depth"] = int(
+            getattr(cfg, "Q_INTEGRATION_MAX_TREE_DEPTH", cfg.NUTS_MAX_TREE_DEPTH)
+        )
+    else:
+        options["n_leapfrog"] = int(
+            getattr(cfg, "Q_INTEGRATION_N_LEAPFROG", cfg.HMC_N_LEAPFROG)
+        )
+    return engine, options
+
+
 def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
-            n_samples: int = cfg.MCMC_SAMPLES, seed: int = cfg.MCMC_SEED) -> dict:
+            n_samples: int | None = None, seed: int | None = None) -> dict:
     """Run inference and return posterior moments/coverage ingredients.
 
     Each stage is timed and the breakdown printed, because a full-scale fit runs
@@ -388,6 +471,13 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     assembled -- the later ``analysis.compile()`` reuses that cached model -- so
     its stage number is the kernel-assembly cost.
     """
+    # Resolve these at call time.  The small-closure contour copies apply a
+    # process-local configuration overlay, so definition-time defaults would
+    # silently retain the source suite's 1,000-draw/seed-zero settings.
+    if n_samples is None:
+        n_samples = int(cfg.MCMC_SAMPLES)
+    if seed is None:
+        seed = int(cfg.MCMC_SEED)
     watch = Stopwatch()
     # Keep synthetic-Z under its measured safety cap.  The old Gaussian fallback
     # hit ~23 GB at 1000 draws; the flowed-NUTS default has not been measured at
@@ -441,6 +531,11 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         sampler_options = {"saddle_tol": cfg.CONTOUR_SADDLE_TOL}
     elif sampler == "nuts":
         auxiliary, sampler_options = _nuts_sampler_options(q_key, mode, model)
+    elif sampler == "hmc":
+        auxiliary, sampler_options = _hmc_sampler_options(q_key, mode, model)
+    elif sampler == "q":
+        q_engine, sampler_options = _q_sampler_options()
+        auxiliary = "explicit_q"
     else:
         sampler_options = {
             "n_bins": cfg.VEGAS_N_BINS,
@@ -471,18 +566,25 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         f"inference start sampler={sampler} auxiliary={auxiliary} "
         f"n_samples={int(n_samples)}"
     )
-    samples = infer_mcmc(
-        model, sampler=sampler, auxiliary=auxiliary,
-        n_samples=n_samples, run_map=False, seed=seed,
-        **sampler_options,
-    )
+    if sampler == "q":
+        samples = infer_q_mcmc(
+            model, sampler=q_engine, n_samples=n_samples, seed=seed,
+            **sampler_options,
+        )
+    else:
+        samples = infer_mcmc(
+            model, sampler=sampler, auxiliary=auxiliary,
+            n_samples=n_samples, run_map=False, seed=seed,
+            **sampler_options,
+        )
+    sampling_quality_warnings = []
     if isinstance(samples, VegasImportanceSamples):
         ess_frac = samples.effective_sample_size / samples.n_samples
         if ess_frac < cfg.VEGAS_MIN_OUTER_ESS_FRAC:
-            raise RuntimeError(
+            sampling_quality_warnings.append(
                 "small-closure VEGAS ESS fraction "
                 f"{ess_frac:.3g} is below {cfg.VEGAS_MIN_OUTER_ESS_FRAC}; "
-                "refusing an unreliable fit"
+                "unreliable experimental fit"
             )
     elif isinstance(samples, NestedVegasSamples):
         absolute_frac = samples.absolute_ess / samples.n_samples
@@ -519,7 +621,7 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
                 f"{cfg.VEGAS_MIN_MEDIAN_INNER_ESS_FRAC}"
             )
         if failures:
-            raise RuntimeError(
+            sampling_quality_warnings.append(
                 "small-closure nested VEGAS diagnostics failed: "
                 + "; ".join(failures)
             )
@@ -528,12 +630,22 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         # Jacobian; a collapsed residual ESS means the moments are carried by a
         # few draws even when the chain itself mixed.
         if samples.ess_frac < cfg.CONTOUR_NUTS_MIN_RESIDUAL_ESS_FRAC:
-            raise RuntimeError(
-                "small-closure contour NUTS residual ESS fraction "
+            sampling_quality_warnings.append(
+                f"small-closure contour {sampler.upper()} residual ESS fraction "
                 f"{samples.ess_frac:.3g} is below "
-                f"{cfg.CONTOUR_NUTS_MIN_RESIDUAL_ESS_FRAC}; refusing an unreliable fit"
+                f"{cfg.CONTOUR_NUTS_MIN_RESIDUAL_ESS_FRAC}; unreliable experimental fit"
             )
-    reporter.emit(f"inference done sampler={sampler}", lap=True)
+    if sampling_quality_warnings:
+        message = "; ".join(sampling_quality_warnings)
+        if getattr(cfg, "SMALL_CLOSURE_REJECT_UNRELIABLE_SAMPLES", True):
+            raise RuntimeError(message)
+        reporter.emit(f"sampler diagnostic warning: {message}")
+    sampler_label = (
+        str(samples.metadata.get("sampler", f"q_{q_engine}"))
+        if isinstance(samples, DirectMCMCSamples)
+        else sampler
+    )
+    reporter.emit(f"inference done sampler={sampler_label}", lap=True)
     t_mcmc = watch.lap()
     reporter.emit("posterior marginalization start")
     marginal = marginal_posterior(model, samples)
@@ -543,7 +655,11 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     vec_bar = _weighted_mean_vec(samples, model=model)
     chi2_components = {"linear": None, "bilinear": None}
     try:
-        if model.has_bilinear and hasattr(samples, "mean"):
+        if isinstance(samples, DirectMCMCSamples):
+            chi2, chi2_components = q_integration_predictive_chi2(
+                model, samples, vec_bar
+            )
+        elif model.has_bilinear and hasattr(samples, "mean"):
             predictive = model.posterior_predictive_from_moments(
                 samples.mean, samples.covariance, vec_bar
             )
@@ -573,8 +689,25 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         "fitted_normalization_stats": fitted_normalization_posterior(model, samples),
         "chi2": chi2, "chi2_components": chi2_components,
         "n_data": int(sum(d.n_data for d in model.datasets)),
-        "n_free": int(model.free_vector().size),
-        "sampler": sampler,
+        "n_free": (
+            int(samples.theta_samples.shape[1])
+            if isinstance(samples, DirectMCMCSamples)
+            else int(model.free_vector().size)
+        ),
+        "n_hubbard_sampled": (
+            0 if isinstance(samples, DirectMCMCSamples)
+            else int(model.free_partition().n_hubbard)
+        ),
+        "q_retained_rank": (
+            int(samples.coordinates.prior_subspace.rank)
+            if isinstance(samples, DirectMCMCSamples)
+            else None
+        ),
+        "sampler": sampler_label,
+        "sampling_quality": {
+            "passed": not sampling_quality_warnings,
+            "warnings": sampling_quality_warnings,
+        },
         "sampler_diagnostics": (
             samples.summary() if hasattr(samples, "summary") else {}
         ),
@@ -678,6 +811,18 @@ def _weights(samples) -> np.ndarray:
 def _weighted_mean_vec(samples, model=None) -> np.ndarray:
     if isinstance(samples, PosteriorResult):
         return np.asarray(samples.x, dtype=float)
+    if isinstance(samples, DirectMCMCSamples):
+        theta = np.asarray(samples.theta_samples, dtype=float)
+        theta_mean = np.sum(_weights(samples)[:, None] * theta, axis=0)
+        if model is None:
+            return np.asarray(theta_mean, dtype=float)
+        partition = model.free_partition()
+        return np.asarray(
+            model.merge_free_vector(
+                theta_mean, np.zeros(partition.n_hubbard, dtype=float)
+            ),
+            dtype=float,
+        )
     if isinstance(samples, NestedVegasSamples):
         theta_mean = np.asarray(samples.theta_mean, dtype=float)
         if model is None:
@@ -810,6 +955,91 @@ def bilinear_marginal_posterior(model, samples) -> dict:
     return out
 
 
+def q_integration_marginal_posterior(model, samples) -> dict:
+    """Per-field moments and matched predictive draws from explicit q samples."""
+    joint = samples.posterior_joint()
+    qhat = np.asarray(joint["mean"], dtype=float).reshape(-1)
+    covariance = np.asarray(joint["cov"], dtype=float)
+    fields_by_name = {field.name: field for field in model.fields}
+    out = {}
+    for name, offset, dimension in model.q_layout():
+        section = slice(offset, offset + dimension)
+        variance = np.clip(np.diag(covariance[section, section]), 0.0, None)
+        out[name] = (
+            np.asarray(fields_by_name[name].nodes, dtype=float).reshape(-1),
+            qhat[section],
+            np.sqrt(variance),
+        )
+
+    # Plotting should use matched (theta, q) draws rather than rebuilding an
+    # analytically marginalized posterior from the retained sampler coordinates.
+    predictive = samples.posterior_predictive_moments()
+    object.__setattr__(samples, "mean", qhat)
+    object.__setattr__(samples, "covariance", covariance)
+    object.__setattr__(
+        samples,
+        "_pixel_direct_predictive_moments",
+        (
+            np.asarray(predictive["mean"], dtype=float),
+            np.asarray(predictive["cov"], dtype=float),
+        ),
+    )
+    n_linear = int(np.asarray(model._layout.M).size)
+    object.__setattr__(
+        samples,
+        "_pixel_linear_predictive_moments",
+        (
+            np.asarray(predictive["mean"], dtype=float)[:n_linear],
+            np.sqrt(
+                np.clip(
+                    np.diag(np.asarray(predictive["cov"], dtype=float))[:n_linear],
+                    0.0,
+                    None,
+                )
+            ),
+        ),
+    )
+    return out
+
+
+def q_integration_predictive_chi2(model, samples, vec) -> tuple[float, dict]:
+    """Chi2 of the matched-draw predictive mean for explicit q integration."""
+    cached = getattr(samples, "_pixel_direct_predictive_moments", None)
+    if cached is None:
+        predictive = samples.posterior_predictive_moments()
+        prediction = np.asarray(predictive["mean"], dtype=float).reshape(-1)
+    else:
+        prediction = np.asarray(cached[0], dtype=float).reshape(-1)
+    blocks = model._blocks(model._rebuild(vec))
+    n_linear = int(np.asarray(blocks.M).size)
+    linear_residual = np.asarray(blocks.M, dtype=float) - prediction[:n_linear]
+    linear_chi2 = (
+        float(pinv_quad(svd_factor(blocks.C, model.rcond), linear_residual))
+        if n_linear else 0.0
+    )
+    n_bilinear = (
+        0 if blocks.bilinear_M is None
+        else int(np.asarray(blocks.bilinear_M).size)
+    )
+    if n_bilinear:
+        start = n_linear
+        residual = (
+            np.asarray(blocks.bilinear_M, dtype=float)
+            - prediction[start:start + n_bilinear]
+        )
+        bilinear_chi2 = float(
+            pinv_quad(
+                svd_factor(blocks.bilinear_C, model.rcond), residual
+            )
+        )
+    else:
+        bilinear_chi2 = 0.0
+    return linear_chi2 + bilinear_chi2, {
+        "linear": linear_chi2,
+        "bilinear": bilinear_chi2,
+    }
+
+
 def marginal_posterior(model, samples) -> dict:
     """Hyperparameter-marginalized posterior per field: ``{name: (x, mean, std)}``.
 
@@ -818,6 +1048,9 @@ def marginal_posterior(model, samples) -> dict:
     model carries bilinear (Drell-Yan / H-S) data the field posterior is the
     complex-phase ``f``-integral, so dispatch accordingly.
     """
+    if isinstance(samples, DirectMCMCSamples):
+        return q_integration_marginal_posterior(model, samples)
+
     if getattr(model, "has_bilinear", False) and not isinstance(samples, PosteriorResult):
         return bilinear_marginal_posterior(model, samples)
 
@@ -992,6 +1225,24 @@ def fitted_normalization_posterior(model, samples) -> dict:
         values = np.asarray(samples.x, dtype=float).reshape(-1)
         return {owner: {"mean": float(values[i]), "std": 0.0}
                 for owner, i in pairs}
+    if isinstance(samples, DirectMCMCSamples):
+        label_to_index = {
+            label: index
+            for index, label in enumerate(model.free_partition().theta_labels)
+        }
+        weights = _weights(samples)
+        out = {}
+        for owner, full_index in pairs:
+            label = model.free_labels()[full_index]
+            if label not in label_to_index:
+                continue
+            values = np.asarray(samples.theta_samples, dtype=float)[
+                :, label_to_index[label]
+            ]
+            mean = float(np.sum(weights * values))
+            variance = float(np.sum(weights * (values - mean) ** 2))
+            out[owner] = {"mean": mean, "std": float(np.sqrt(max(variance, 0.0)))}
+        return out
     if isinstance(samples, NestedVegasSamples):
         label_to_index = {label: i for i, label in enumerate(samples.theta_labels)}
         out = {}
@@ -1193,6 +1444,8 @@ def summarize(q_key, mode, result, truth) -> dict:
         "n_data": n_data,
         "n_free_parameters": result["n_free"],
         "n_free_hyperparams": result["n_free"],
+        "n_hubbard_parameters_sampled": result.get("n_hubbard_sampled"),
+        "q_retained_rank": result.get("q_retained_rank"),
         "n_gp_latent_coefficients": sum(
             result["model"].fields[i].n_grid for i in result["model"].gp_indices
         ),
@@ -1216,6 +1469,9 @@ def summarize(q_key, mode, result, truth) -> dict:
         # and still be worthless because the chain never moved, and vice versa.
         "effective_sample_size": _finite_or_none(result["autocorr"]["ess"]),
         "phase_effective_sample_size": _finite_or_none(result["ess"]),
+        "sampling_quality": result.get(
+            "sampling_quality", {"passed": True, "warnings": []}
+        ),
         "sampler_diagnostics": result.get("sampler_diagnostics", {}),
         "tau_int_max": _finite_or_none(result["autocorr"]["tau_int_max"]),
         "slowest_param": result["autocorr"]["slowest"],

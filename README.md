@@ -49,6 +49,17 @@ Run with the PIXEL repo's venv -- this repo has none of its own, and it takes
 PYTHON=/Users/jkarpie-admin/work/building/pixel/venv/bin/python ./run_closure.sh --Q 2
 ```
 
+The isolated [`closure_small_q_integration/`](closure_small_q_integration)
+variant runs both small truth suites through PIXEL's explicit retained-field
+`run_q_mcmc` inference instead. Bilinear predictions are evaluated directly in
+physical q-space, so the sampled state contains no Hubbard--Stratonovich
+auxiliaries or complex phase weights:
+
+```bash
+../pixel/venv/bin/python -m closure_small_q_integration.run_closure \
+  --truth JAM --Q 2 --modes dy exp both --no-plots
+```
+
 Everything below is **measured**, on 2026-08-16, mostly on
 `closure_NNPDF_truth_small`. Re-measure before quoting; several of these numbers
 superseded earlier values that looked equally solid.
