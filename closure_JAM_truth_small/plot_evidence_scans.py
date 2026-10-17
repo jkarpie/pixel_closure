@@ -6,8 +6,12 @@ scans the same scalar HMC and NUTS integrate against, holding every unscanned
 coordinate at the MAP, so valleys, ridges and second minima are visible directly.
 
 **The parameter list is split deliberately, not arbitrarily.**
-``plot_evidence_scan`` refuses more than ``MAX_SCAN_PARAMETERS = 8`` at once --
-``N`` parameters is ``N**2`` panels, so the cost is the square of a list length.
+``N`` parameters is ``N**2`` panels, so the cost is the square of a list length,
+and eight per figure is the choice made here.  (``MAX_SCAN_PARAMETERS`` itself
+was raised from 8 to 100 on 2026-10-16 for the explicit-``q`` field-space scan in
+``closure_small_q_integration/plot_evidence_scans.py``, which needs 34 at once;
+it no longer refuses a ninth, so the chunking below is this module's policy
+rather than the library's.)
 In ``exp`` the free vector is exactly nineteen scalars: twelve
 Hubbard--Stratonovich auxiliaries (six per Drell--Yan table) and seven fitted
 normalization amplitudes (five DIS, two DY).  The chunks below each keep
