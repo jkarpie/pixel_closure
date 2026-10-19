@@ -63,26 +63,25 @@ def compile_lhapdf_dump() -> Path:
 def ensure_lhapdf_data() -> Path:
     """Return an LHAPDF data root containing the JAM grid set.
 
-    Prefers a set already present in the LHAPDF install; otherwise extracts the
-    repo-vendored tarball into :data:`config.JAM_LHAPDF_DATA_ROOT` once.
+    Uses the tracked grid first, then an extracted or installed copy.  An
+    optional tarball is extracted only if none of those is available.
 
     Returns:
         Path: Directory to use as ``LHAPDF_DATA_PATH``.
 
     Raises:
-        FileNotFoundError: If neither the installed set nor the tarball exists.
+        FileNotFoundError: If no grid or tarball exists.
     """
-    installed = cfg.LHAPDF_DATA_DIR / cfg.JAM_SET / f"{cfg.JAM_SET}.info"
-    if installed.exists():
-        return cfg.LHAPDF_DATA_DIR
-
-    set_dir = cfg.JAM_LHAPDF_DATA_ROOT / cfg.JAM_SET
-    info_path = set_dir / f"{cfg.JAM_SET}.info"
-    if info_path.exists():
-        return cfg.JAM_LHAPDF_DATA_ROOT
+    for root in (cfg.JAM_REPO_DATA_ROOT, cfg.JAM_LHAPDF_DATA_ROOT,
+                 cfg.LHAPDF_DATA_DIR):
+        if (root / cfg.JAM_SET / f"{cfg.JAM_SET}.info").is_file():
+            return root
 
     if not cfg.JAM_TARBALL.exists():
-        raise FileNotFoundError(f"JAM LHAPDF tarball not found: {cfg.JAM_TARBALL}")
+        raise FileNotFoundError(
+            f"JAM LHAPDF set {cfg.JAM_SET} not found in the tracked grid, "
+            f"extracted data, or LHAPDF install; no tarball at {cfg.JAM_TARBALL}"
+        )
 
     cfg.JAM_LHAPDF_DATA_ROOT.mkdir(parents=True, exist_ok=True)
     root = cfg.JAM_LHAPDF_DATA_ROOT.resolve()
@@ -93,7 +92,8 @@ def ensure_lhapdf_data() -> Path:
                 raise ValueError(f"unsafe LHAPDF archive member: {member.name}")
         tar.extractall(cfg.JAM_LHAPDF_DATA_ROOT)
 
-    if not info_path.exists():
+    info_path = cfg.JAM_LHAPDF_DATA_ROOT / cfg.JAM_SET / f"{cfg.JAM_SET}.info"
+    if not info_path.is_file():
         raise FileNotFoundError(
             f"JAM LHAPDF archive did not create expected info file: {info_path}"
         )

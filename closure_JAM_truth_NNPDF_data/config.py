@@ -120,10 +120,10 @@ LHAPDF_LIB_DIR = next(
     LHAPDF_PREFIX / "lib",
 )
 JAM_SET = "JAM24_PDF_proton_nlo"
-#: The LHAPDF grid tarball is vendored in the repo so a fresh checkout can
-#: rebuild the truth without a separate LHAPDF set download, and so rebuilding
-#: LHAPDF (which does not carry sets across) cannot silently disable the closure
-#: suite again.  Extracted on demand into :data:`JAM_LHAPDF_DATA_ROOT`.
+#: The full JAM grid is tracked here and shared by the full-scale JAM suites.
+#: A checkout can generate truth without copying or linking it into ``data``.
+JAM_REPO_DATA_ROOT = REPO_ROOT / "closure_JAM_truth" / "lhapdf"
+#: Optional tarball fallback for checkouts that provide one instead of the grid.
 JAM_TARBALL = ROOT / "lhapdf" / f"{JAM_SET}.tar.gz"
 JAM_LHAPDF_DATA_ROOT = DATA_ROOT / "lhapdf"
 JAM_MEMBER = 0            # 0 = central; used by pdf_guidance's standalone cache
@@ -159,10 +159,9 @@ def _parse_info(text: str) -> "dict[str, str]":
 def _read_set_info(set_name: str = None) -> "dict[str, str]":
     """Read a set's ``.info`` metadata, wherever the grid currently lives.
 
-    Prefer the installed LHAPDF data directory, then fall back to reading the
-    ``.info`` member straight out of the download tarball so the member count
-    stays correct even when the LHAPDF install has been rebuilt without its
-    sets (which is exactly how these constants went stale before).
+    Prefer the tracked grid, then an extracted or installed copy, and finally
+    the optional tarball.  The member count must not depend on the local
+    LHAPDF installation carrying a separate copy of the set.
 
     Args:
         set_name: LHAPDF set name; defaults to :data:`JAM_SET`.
@@ -172,7 +171,7 @@ def _read_set_info(set_name: str = None) -> "dict[str, str]":
     """
     name = JAM_SET if set_name is None else set_name
     leaf = f"{name}.info"
-    for root in (JAM_LHAPDF_DATA_ROOT, LHAPDF_DATA_DIR):
+    for root in (JAM_REPO_DATA_ROOT, JAM_LHAPDF_DATA_ROOT, LHAPDF_DATA_DIR):
         info_path = root / name / leaf
         if info_path.is_file():
             return _parse_info(info_path.read_text())
