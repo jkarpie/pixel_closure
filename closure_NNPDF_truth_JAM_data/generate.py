@@ -1058,7 +1058,7 @@ def _collider_dy_record(entry, spec, common):
     * ``y_edges`` / ``mass_edges`` -- where the bin edges come from (see
       :func:`_rapidity_edges` and :func:`_mass_edges`);
     * ``lepton_charge`` and ``fiducial_channel`` -- carried through to the builder;
-    * ``sqrts_gev`` -- only where the commondata omits ``sqrts``.
+    * ``sqrts_gev`` -- audited fallback for legacy commondata without ``sqrts``.
 
     **No kinematic cut is applied, and that is deliberate.**  Every row sits at
     ``Q >= 46 GeV``, far above the input scale, so the contract's ``selected_rows``
@@ -1088,7 +1088,15 @@ def _collider_dy_record(entry, spec, common):
     if "sqrts" in kin:
         sqrts = np.asarray(kin["sqrts"], dtype=float)[rows]
     else:
+        if "sqrts_gev" not in spec:
+            raise RuntimeError(
+                f"{label}: no collider SQRT(S) in commondata or audited spec"
+            )
         sqrts = np.full(rows.size, float(spec["sqrts_gev"]))
+    if not np.all(np.isfinite(sqrts) & (sqrts > 0)):
+        raise RuntimeError(f"{label}: collider SQRT(S) must be finite and positive")
+    if "sqrts_gev" in spec and not np.allclose(sqrts, spec["sqrts_gev"]):
+        raise RuntimeError(f"{label}: commondata SQRT(S) disagrees with audited spec")
     mass_key, squared = _mass_key(kin, label)
     mass = np.asarray(kin[mass_key], dtype=float)[rows]
     q2 = mass if squared else mass ** 2

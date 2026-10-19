@@ -64,6 +64,40 @@ from closure_NNPDF_truth_NNPDF_data import datasets as dsets
 from closure_NNPDF_truth_NNPDF_data import generate as gen
 
 
+def test_new_nnpdf_collider_energy_provenance():
+    """The 2026 commondata omits per-bin sqrt(s); closure recovers its source value."""
+    from pixel.data.closure_audit import read_nnpdf_source
+
+    cases = (
+        ("LHCB_Z0_8TEV_DIELECTRON_Y", 8000.0, "hepdata_rawdata_qualifier"),
+        ("ATLAS_DY_7TEV_46FB_CC", 7000.0, "legacy_commondata_pin_90d9edc63c8e"),
+        ("CMS_Z0_7TEV_DIMUON_2D", 7000.0, "legacy_commondata_pin_90d9edc63c8e"),
+    )
+    for name, energy, source in cases:
+        common = read_nnpdf_source(cfg.NNPDF_COMMONDATA, name)
+        assert np.all(np.asarray(common.kinematics["sqrts"]) == energy)
+        assert common.metadata["sqrts_source"] == source
+    assert "m_Z" in read_nnpdf_source(
+        cfg.NNPDF_COMMONDATA, "CMS_Z0_7TEV_DIMUON_2D"
+    ).kinematics
+
+
+def test_collider_energy_disagreement_is_refused():
+    from dataclasses import replace
+
+    spec = cfg.COLLIDER_DY_SPECS["z.atlas7_himass"]
+    common = gen.read_nnpdf_source(cfg.NNPDF_COMMONDATA, spec["commondata_name"])
+    wrong = replace(
+        common,
+        kinematics={**common.kinematics, "sqrts": np.full(common.n, 8000.0)},
+    )
+    entry = {
+        "id": "z.atlas7_himass", "selected_rows": common.n, "source_rows": common.n,
+    }
+    with pytest.raises(RuntimeError, match="SQRT\\(S\\) disagrees"):
+        gen._collider_dy_record(entry, spec, wrong)
+
+
 @pytest.fixture(scope="module")
 def layout():
     return gen.nnpdf_layout()
