@@ -1256,9 +1256,9 @@ MAP_METHOD = "L-BFGS-B"
 MAP_OPTIONS = {"maxiter": 200}
 MCMC_SAMPLES = 1000
 MCMC_SEED = 0
-# Closure inference uses NUTS throughout. Bilinear Drell-Yan modes dispatch to
-# contour NUTS, while linear modes use ordinary real-parameter NUTS. Both start
-# from a Hessian-derived diagonal inverse mass.
+# H-S parameter inference uses ordinary NUTS for linear modes and contour
+# NUTS for normalization-only bilinear modes; mixed ordinary/H-S modes use
+# joint HMC. All initialize from a dense inverse Hessian.
 NUTS_WARMUP = 100
 NUTS_INITIAL_STEP_SIZE = 0.1
 NUTS_INTEGRATOR = "leapfrog"
@@ -1266,6 +1266,8 @@ NUTS_MAX_TREE_DEPTH = 6
 # The Hessian metric is already tailored to the local target. Avoid rebuilding
 # NUTS steppers and repeating costly step-size searches at mass-window updates.
 NUTS_ADAPT_MASS = False
+# Shared by the H-S NUTS and joint-HMC paths.
+HS_HESSIAN_MASS_MODE = "dense"
 
 # Exact bilinear-ratio modes cannot use marginalized/H-S inference.  These
 # settings govern the explicit retained-(theta,q) NUTS path; physics promotion

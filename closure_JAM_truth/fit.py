@@ -374,6 +374,8 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
 
 def _closure_sampler(model) -> str:
     """Choose NUTS unless mixed ordinary/HS coordinates require joint HMC."""
+    if bool(getattr(cfg, "Q_INTEGRATION_ENABLED", False)):
+        return "q_nuts"
     if bool(getattr(model, "has_nonlinear", False)):
         return "direct_nuts"
     if model.has_bilinear and model.contour_partition().n_ordinary:
@@ -382,7 +384,7 @@ def _closure_sampler(model) -> str:
 
 
 def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
-            n_samples: int = cfg.MCMC_SAMPLES, seed: int = cfg.MCMC_SEED) -> dict:
+            n_samples: int | None = None, seed: int | None = None) -> dict:
     """Run inference and return posterior moments/coverage ingredients.
 
     Each stage is timed and the breakdown printed, because a full-scale fit runs
@@ -391,6 +393,8 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     assembled -- the later ``analysis.compile()`` reuses that cached model -- so
     its stage number is the kernel-assembly cost.
     """
+    n_samples = cfg.MCMC_SAMPLES if n_samples is None else int(n_samples)
+    seed = cfg.MCMC_SEED if seed is None else int(seed)
     watch = Stopwatch()
     reporter = ProgressReporter("closure")
     reporter.emit(
@@ -424,7 +428,18 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         reporter.emit("t0 analysis rebuild ready", lap=True)
     t_build = watch.lap()
     sampler = _closure_sampler(model)
-    if sampler == "direct_nuts":
+    if sampler == "q_nuts":
+        sampler_options = {
+            "n_warmup": cfg.Q_INTEGRATION_WARMUP,
+            "step_size": cfg.Q_INTEGRATION_INITIAL_STEP_SIZE,
+            "max_tree_depth": cfg.Q_INTEGRATION_MAX_TREE_DEPTH,
+            "adapt_mass": cfg.Q_INTEGRATION_ADAPT_MASS,
+            "target_accept": cfg.Q_INTEGRATION_TARGET_ACCEPT,
+            "prior_rcond": cfg.Q_INTEGRATION_PRIOR_RCOND,
+            "metric": cfg.Q_INTEGRATION_METRIC,
+        }
+        warmup = cfg.Q_INTEGRATION_WARMUP
+    elif sampler == "direct_nuts":
         sampler_options = {
             "n_warmup": cfg.DIRECT_NUTS_WARMUP,
             "step_size": cfg.DIRECT_NUTS_INITIAL_STEP_SIZE,
@@ -440,6 +455,7 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
             "n_leapfrog": cfg.HMC_N_LEAPFROG,
             "integrator": cfg.HMC_INTEGRATOR,
             "use_hessian_mass": True,
+            "hessian_mass_mode": cfg.HS_HESSIAN_MASS_MODE,
             "flow_time": cfg.CONTOUR_FLOW_TIME,
             "n_flow_steps": cfg.CONTOUR_N_FLOW_STEPS,
             "saddle_tol": cfg.CONTOUR_SADDLE_TOL,
@@ -453,6 +469,7 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
             "max_tree_depth": cfg.NUTS_MAX_TREE_DEPTH,
             "adapt_mass": cfg.NUTS_ADAPT_MASS,
             "use_hessian_mass": True,
+            "hessian_mass_mode": cfg.HS_HESSIAN_MASS_MODE,
         }
         warmup = cfg.NUTS_WARMUP
         if model.has_bilinear:
@@ -475,7 +492,13 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     reporter.emit(
         f"inference start sampler={sampler} n_warmup={int(warmup)}"
     )
-    if sampler == "direct_nuts":
+    if sampler == "q_nuts":
+        samples = pixel.run_q_mcmc(
+            model, sampler=cfg.Q_INTEGRATION_SAMPLER,
+            n_samples=n_samples, seed=seed,
+            **sampler_options,
+        )
+    elif sampler == "direct_nuts":
         samples = pixel.run_direct_mcmc(
             model, sampler="nuts", n_samples=n_samples, seed=seed,
             **sampler_options,
