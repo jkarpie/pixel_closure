@@ -55,6 +55,7 @@ from pixel.kernels import LATTICE_SYSTEMATICS
 from . import config as cfg
 from . import datasets as dsets
 from . import pdf_guidance
+from kernel_farm import assemble_datasets
 
 #: DIS observable kinds (real rel_stat diagonal error + jitter); everything else
 #: is lattice (full replica covariance + 1% diagonal inflation + systematics).
@@ -1354,7 +1355,7 @@ def generate_member(q_key: str, *, noise: bool = True, seed: int = 20260710,
                                      include_nnpdf=True,
                                      with_systematics=False,
                                      with_exp_nuisances=False)
-        operators = [(ds.name, assemble_operator(ds, fields)) for ds in built]
+        operators = assemble_datasets(built, fields, assemble_operator)
     paired = _pair_operators(records, operators)
     q_offset = list(cfg.TRUTH_Q_CHOICES).index(q_key)
     rng = np.random.default_rng(seed + q_offset)

@@ -30,12 +30,18 @@ Options:
                            is the NNPDF4.0 truth fitted to JAM24's dataset selection,
                            which is a different experiment from either analysis.
   -j, --cores N            Concurrency limit: the max number of simultaneous workers
-                           across every parallel layer (kernel assembly, inner
+                           across every parallel layer (dataset kernel farm, inner
                            assembly, posterior sweep).  Equivalent to NPROC=N, which
                            still works.  `auto` lets the kernel layer pick from CPUs,
                            task count and free memory after a 4 GiB reserve -- the
                            safer choice on a shared or memory-tight box.
                            Defaults to 12.
+                           Dataset workers are additionally capped by available
+                           memory (4 GiB/worker, 8 GiB reserve by default).
+                           Override with PIXEL_DATASET_WORKERS, or tune the
+                           estimate via PIXEL_DATASET_WORKER_GIB and
+                           PIXEL_DATASET_RESERVE_GIB. The log prints the actual
+                           farm size when dataset assembly begins.
                            This does NOT raise BLAS threads: see --blas-threads.
   --blas-threads N         Threads *inside* each BLAS call.  Default 1, and that is a
                            speed choice, not only a reproducibility one -- kernel
@@ -114,6 +120,7 @@ USAGE
 PIXEL_ASSEMBLY_WORKERS_SET="${PIXEL_ASSEMBLY_WORKERS+set}"
 PIXEL_KERNEL_WORKERS_SET="${PIXEL_KERNEL_WORKERS+set}"
 PIXEL_POSTERIOR_WORKERS_SET="${PIXEL_POSTERIOR_WORKERS+set}"
+PIXEL_DATASET_WORKERS_SET="${PIXEL_DATASET_WORKERS+set}"
 
 NPROC="${NPROC:-12}"
 #: Set by --cores/-j.  Applied in apply_concurrency() *after* argument parsing, because
@@ -123,6 +130,7 @@ CORES_FLAG=""
 export PIXEL_ASSEMBLY_WORKERS="${PIXEL_ASSEMBLY_WORKERS:-$NPROC}"
 export PIXEL_ASSEMBLY_BACKEND=thread
 export PIXEL_KERNEL_WORKERS="${PIXEL_KERNEL_WORKERS:-$NPROC}"
+export PIXEL_DATASET_WORKERS="${PIXEL_DATASET_WORKERS:-$NPROC}"
 # Never fork the multithreaded JAX runtime.  Spawned kernel workers import a
 # clean interpreter and cannot inherit JAX locks from the parent process.
 export PIXEL_KERNEL_PROCESS_START_METHOD="${PIXEL_KERNEL_PROCESS_START_METHOD:-spawn}"
@@ -226,6 +234,7 @@ apply_concurrency() {
         [[ -n "${PIXEL_ASSEMBLY_WORKERS_SET:-}" ]] || export PIXEL_ASSEMBLY_WORKERS="$NPROC"
         [[ -n "${PIXEL_KERNEL_WORKERS_SET:-}" ]]   || export PIXEL_KERNEL_WORKERS="$NPROC"
         [[ -n "${PIXEL_POSTERIOR_WORKERS_SET:-}" ]] || export PIXEL_POSTERIOR_WORKERS="$NPROC"
+        [[ -n "${PIXEL_DATASET_WORKERS_SET:-}" ]]   || export PIXEL_DATASET_WORKERS="$NPROC"
         # 'auto' is only meaningful to the kernel layer, which is the one that consults
         # free memory.  The thread pools take a number.
         if [[ "$NPROC" == auto || "$NPROC" == AUTO ]]; then
@@ -536,7 +545,8 @@ apply_concurrency
 # default, and PIXEL's own runtime banner appears only once Python is up -- after the
 # audit step has already gone by.
 report_concurrency() {
-    printf 'concurrency: kernel=%s assembly=%s posterior=%s | BLAS threads=%s\n' \
+    printf 'concurrency: dataset=%s kernel=%s assembly=%s posterior=%s | BLAS threads=%s\n' \
+        "$PIXEL_DATASET_WORKERS" \
         "$PIXEL_KERNEL_WORKERS" "$PIXEL_ASSEMBLY_WORKERS" \
         "$PIXEL_POSTERIOR_WORKERS" "$OMP_NUM_THREADS" >&2
     if [[ "${OMP_NUM_THREADS:-1}" != 1 ]]; then
