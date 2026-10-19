@@ -1,0 +1,43 @@
+# Full-scale stream and core scaling sweep
+
+Prepare each requested truth/data/Q/mode cell's data and kernel cache once,
+before launching streams. For example:
+
+```bash
+./run_closure.sh --truth JAM --data union --Q 2 --modes exp,dis \
+  --kernels-only --cores 16 --python ../pixel/venv/bin/python
+```
+
+Repeat preparation for each truth/data selection and requested Q. Here
+`--scales` means truth Q values (`mc,1,2,3,4,5`), while `--data` chooses the
+full-scale dataset collection (`union,JAM,NNPDF`).
+
+Then, on Linux, pin the *entire sweep* to the same 16 cores. The launcher runs
+each cell serially and runs its 1-, 2-, and 4-stream arms in sequence; streams
+within an arm run simultaneously. This makes the core budget identical across
+arms rather than accidentally running all cells at once.
+
+```bash
+taskset -c 0-15 ../pixel/venv/bin/python -m campaign.run_full_scale_stream_sweep sweep \
+  --out campaign/full_scale_core16 \
+  --parameterizations hs,q --truths JAM,NNPDF --data union,JAM,NNPDF \
+  --scales 2,3 --modes exp,dis --stream-counts 1,2,4 \
+  --samples 2500 --dry-run
+```
+
+Remove `--dry-run` to execute. For an SSH session, wrap the same command in
+`nohup ... > full_scale_core16.log 2>&1 &`, then record the PID with `echo $!`.
+The requested `--out` directory must be new or empty; every stream gets a
+private results directory, inference cache, `stream.json` timing/seed record,
+and `run.log`. The root `manifest.json` records the sweep status. A completed
+stream-count arm does not overwrite another arm. The first N seeds for a given
+cell are the same across the N-stream arms, so scaling comparisons use the same
+independent chains.
+
+Each worker pins BLAS and PIXEL's internal task pools to one thread. `taskset`
+is what fixes the *total* CPU affinity; `--cores` in `run_closure.sh` controls
+internal workers, not a process-wide CPU cap. Dense full-scale chains can use
+substantial memory, so start with a small single-cell pilot and check the peak
+RSS before launching many streams. The sweep has no resume mode: use a fresh
+output directory for each invocation. It does not generate data or prebuild
+kernels while streams are running.

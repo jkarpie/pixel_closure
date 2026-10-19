@@ -17,6 +17,11 @@ so its outputs do not replace Hubbard-Stratonovich results.
 `--truth` accepts `JAM` or `NNPDF`; `--data` accepts `union`, `JAM`, or
 `NNPDF`. The source runner's `--Q`, `--modes`, `--no-plots`, `--kernels-only`,
 and `--fail-fast` options are forwarded. Optional `--n-samples` and `--seed`
-override the source configuration for this invocation. Prepare the selected
+override the source configuration for this invocation. `--output-root` writes
+results and inference caches to a private directory, which is required when
+running independent streams concurrently. Prepare the selected
 source suite's pseudodata and kernels first with `run_closure.sh` if absent.
 No scan is launched by creating this variant.
+
+For a comma-list sweep of full-scale H-S and/or explicit-q streams, see
+[the full-scale stream sweep](../campaign/README_full_scale_stream_sweep.md).

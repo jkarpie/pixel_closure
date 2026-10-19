@@ -134,3 +134,12 @@ def test_full_q_cli_forwards_source_options_and_restores_config(monkeypatch):
         "metric": "legacy_hessian_dense", "target": 0.90,
     }
     assert (cfg.MCMC_SAMPLES, cfg.MCMC_SEED, tuple(sys.argv)) == original
+
+
+def test_full_q_variant_accepts_private_output_root(tmp_path):
+    cfg = importlib.import_module("closure_JAM_truth.config")
+    original = (cfg.RESULTS_ROOT, cfg.INFERENCE_CACHE_ROOT)
+    with activated("JAM", "union", output_root=tmp_path / "stream"):
+        assert cfg.RESULTS_ROOT == tmp_path / "stream" / "results"
+        assert cfg.INFERENCE_CACHE_ROOT == tmp_path / "stream" / "inference_cache"
+    assert (cfg.RESULTS_ROOT, cfg.INFERENCE_CACHE_ROOT) == original

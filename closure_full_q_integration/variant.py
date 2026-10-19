@@ -25,7 +25,7 @@ _LOCK = RLock()
 
 
 @contextmanager
-def activated(truth: str, data: str):
+def activated(truth: str, data: str, *, output_root: Path | None = None):
     """Reuse source data/kernels while keeping q results and caches separate."""
     key = (truth.upper(), "union" if data.lower() == "union" else data.upper())
     try:
@@ -36,7 +36,8 @@ def activated(truth: str, data: str):
         cfg = importlib.import_module(f"{package}.config")
         fit = importlib.import_module(f"{package}.fit")
         runner = importlib.import_module(f"{package}.run_closure")
-        output_root = ROOT / "outputs" / key[0].lower() / key[1].lower()
+        output_root = (Path(output_root) if output_root is not None else
+                       ROOT / "outputs" / key[0].lower() / key[1].lower())
         overrides = {
             "Q_INTEGRATION_ENABLED": True,
             "Q_INTEGRATION_SAMPLER": policy.Q_INTEGRATION_SAMPLER,
@@ -81,10 +82,14 @@ def main(argv=None) -> None:
     parser.add_argument("--data", choices=("union", "JAM", "NNPDF"), default="union")
     parser.add_argument("--n-samples", type=int, default=None)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--output-root", type=Path, default=None,
+                        help="private root for results and inference caches")
     args, forwarded = parser.parse_known_args(argv)
     if forwarded[:1] == ["--"]:
         forwarded = forwarded[1:]
-    with activated(args.truth, args.data) as (package, cfg, _fit, runner):
+    with activated(args.truth, args.data, output_root=args.output_root) as (
+        package, cfg, _fit, runner,
+    ):
         if args.n_samples is not None:
             if args.n_samples < 1:
                 parser.error("--n-samples must be positive")
