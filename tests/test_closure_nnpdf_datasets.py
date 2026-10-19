@@ -50,6 +50,7 @@ Three defects this file was written after, all of which it now guards:
 from __future__ import annotations
 
 import json
+import importlib
 
 from collections.abc import Mapping
 
@@ -96,6 +97,48 @@ def test_collider_energy_disagreement_is_refused():
     }
     with pytest.raises(RuntimeError, match="SQRT\\(S\\) disagrees"):
         gen._collider_dy_record(entry, spec, wrong)
+
+
+@pytest.mark.parametrize("suite", (
+    "closure_JAM_truth", "closure_JAM_truth_JAM_data",
+    "closure_JAM_truth_NNPDF_data", "closure_NNPDF_truth",
+    "closure_NNPDF_truth_JAM_data", "closure_NNPDF_truth_NNPDF_data",
+))
+def test_heavy_builder_reads_the_public_manifest_file(suite, tmp_path, monkeypatch):
+    """The manifest drops ``_leading``; heavy DIS must read its written .dat file."""
+    from pixel.data import HeavyNCSigmaRFONLL
+    from pixel.data.experimental._dis_common import read_sf_columns
+
+    path = tmp_path / "heavy.dat"
+    np.savetxt(path, [
+        [0.01, 100.0, 1.0, 0.2, 0.0],
+        [0.02, 200.0, 2.0, 0.0, 0.3],
+    ])
+    rec = {
+        "file": "datasets/heavy.dat", "y": [0.2, 0.3],
+        "heavy_flavour": "bottom", "heavy_mass": 4.5, "charge_sq": 1 / 9,
+    }
+    called = []
+    sentinel = object()
+
+    def fake_from_file(cls, source, **kwargs):
+        x, q2, mean, cov = read_sf_columns(source)
+        np.testing.assert_array_equal(x, [0.01, 0.02])
+        np.testing.assert_array_equal(q2, [100.0, 200.0])
+        np.testing.assert_array_equal(mean, [1.0, 2.0])
+        np.testing.assert_array_equal(cov, [[0.2, 0.0], [0.0, 0.3]])
+        assert kwargs["y"] == rec["y"]
+        called.append(source)
+        return sentinel
+
+    monkeypatch.setattr(HeavyNCSigmaRFONLL, "from_file", classmethod(fake_from_file))
+    module = importlib.import_module(f"{suite}.datasets")
+    fields = {"sigma": "sigma", "g": "gluon", "t15": "t15"}
+    result = module.build_sigma_r_heavy(
+        rec, path, fields, None, with_exp_nuisances=False,
+    )
+    assert result is sentinel
+    assert called == [path]
 
 
 @pytest.fixture(scope="module")

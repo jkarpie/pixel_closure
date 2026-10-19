@@ -689,10 +689,8 @@ def build_sigma_r_heavy(rec, path, fields, cache, *, with_systematics=True,
         kwargs["y"] = rec["y"]
     elif "sqrt_s" in rec:
         kwargs["sqrt_s"] = float(rec["sqrt_s"])
-    x, q2 = rec["_leading"]
-    return HeavyNCSigmaRFONLL.from_arrays(
-        x=np.asarray(x, dtype=float), Q2=np.asarray(q2, dtype=float),
-        mean=rec["mean"], cov=rec["cov"],
+    return HeavyNCSigmaRFONLL.from_file(
+        path,
         maps_to={"singlet": fields["sigma"], "gluon": fields["g"],
                  "heavy_nonsinglet": fields["t15"]},
         heavy_flavour=rec["heavy_flavour"], mass=float(rec["heavy_mass"]),
