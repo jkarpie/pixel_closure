@@ -111,6 +111,25 @@ def write_json(path: Path, value: dict) -> None:
     os.replace(temporary, path)
 
 
+def _json_safe(value):
+    """Keep every PIXEL summary field, including NumPy/complex diagnostics."""
+    import numpy as np
+
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, np.ndarray)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, np.generic):
+        return _json_safe(value.item())
+    if isinstance(value, complex):
+        return {"real": _json_safe(value.real), "imag": _json_safe(value.imag)}
+    if isinstance(value, float) and not np.isfinite(value):
+        return None
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
+
 @contextmanager
 def hs_activated(truth: str, data: str, output: Path, samples: int, seed: int):
     package = SOURCE_SUITES[(truth, data)]
@@ -142,6 +161,25 @@ def run_worker(args) -> int:
         "status": "running", "started_at": time.time(),
     }
     write_json(output / "stream.json", metadata)
+
+    def save_inference(result) -> None:
+        """Persist PIXEL's actual trajectory result for post-run diagnostics."""
+        from pixel.infer.samplers.hmc import HMCSamples
+        from pixel.infer.samplers.nuts import NUTSSamples
+
+        samples = result["samples"]
+        chain = getattr(samples, "chain", samples)
+        if not isinstance(chain, (HMCSamples, NUTSSamples)):
+            raise TypeError(
+                f"cannot save trajectory diagnostics from {type(chain).__name__}"
+            )
+        chain.save_npz(output / "chain.npz")
+        write_json(output / "inference_summary.json", _json_safe(samples.summary()))
+        metadata["chain_kind"] = "nuts" if isinstance(chain, NUTSSamples) else "hmc"
+        metadata["sampler_wall_seconds"] = float(
+            result["timing_seconds"]["inference"]
+        )
+
     try:
         if args.parameterization == "q":
             with activated(args.truth, args.data, output_root=output) as (
@@ -149,11 +187,15 @@ def run_worker(args) -> int:
             ):
                 cfg.MCMC_SAMPLES = args.samples
                 cfg.MCMC_SEED = args.seed
-                runner.run_one(args.scale, args.mode, make_plots=False)
+                runner.run_one(args.scale, args.mode, make_plots=False,
+                               artifact_hook=save_inference)
         else:
             with hs_activated(args.truth, args.data, output, args.samples,
                               args.seed) as runner:
-                runner.run_one(args.scale, args.mode, make_plots=False)
+                runner.run_one(args.scale, args.mode, make_plots=False,
+                               artifact_hook=save_inference)
+        if not (output / "chain.npz").is_file():
+            raise RuntimeError("source runner did not provide a PIXEL chain artifact")
     except Exception as exc:
         metadata.update(status="failed", error=f"{type(exc).__name__}: {exc}")
         raise
@@ -229,6 +271,17 @@ def run_sweep(args) -> int:
                         process.terminate()
                         process.wait()
                     log.close()
+            if all(stream.get("exit_code") == 0 for stream in cell["streams"]):
+                try:
+                    from .report_full_scale_stream_sweep import render_cell
+
+                    report_path, _report = render_cell(cell)
+                    cell["report"] = str(report_path)
+                    print(f"[report] {report_path}", flush=True)
+                except Exception as exc:
+                    cell["report_error"] = f"{type(exc).__name__}: {exc}"
+                    failures += 1
+                    print(f"[report FAILED] {cell['report_error']}", flush=True)
             write_json(output_root / "manifest.json", manifest)
         completed = True
     finally:

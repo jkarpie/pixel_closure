@@ -279,10 +279,13 @@ def build_kernels_only(q_key, mode):
     }
 
 
-def run_one(q_key, mode, *, make_plots=True, write_outputs=True, run_cache=None):
+def run_one(q_key, mode, *, make_plots=True, write_outputs=True, run_cache=None,
+            artifact_hook=None):
     watch = Stopwatch()
     truth = fitmod.load_truth(q_key)
     result = fitmod.run_fit(q_key, mode)
+    if artifact_hook is not None:
+        artifact_hook(result)
     t_fit = watch.lap()
     summary = fitmod.summarize(q_key, mode, result, truth)
     t_summary = watch.lap()

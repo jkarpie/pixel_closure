@@ -143,3 +143,24 @@ def test_full_q_variant_accepts_private_output_root(tmp_path):
         assert cfg.RESULTS_ROOT == tmp_path / "stream" / "results"
         assert cfg.INFERENCE_CACHE_ROOT == tmp_path / "stream" / "inference_cache"
     assert (cfg.RESULTS_ROOT, cfg.INFERENCE_CACHE_ROOT) == original
+
+
+@pytest.mark.parametrize("package", SOURCE_SUITES.values())
+def test_full_runner_exposes_pixel_inference_result_to_artifact_hook(
+    package, monkeypatch, tmp_path,
+):
+    cfg = importlib.import_module(f"{package}.config")
+    fit = importlib.import_module(f"{package}.fit")
+    runner = importlib.import_module(f"{package}.run_closure")
+    result = {"samples": object()}
+    seen = []
+    monkeypatch.setattr(cfg, "RESULTS_ROOT", tmp_path)
+    monkeypatch.setattr(fit, "load_truth", lambda _q: {})
+    monkeypatch.setattr(fit, "run_fit", lambda _q, _mode: result)
+    monkeypatch.setattr(fit, "summarize", lambda *_args: {"ok": True})
+    summary = runner.run_one(
+        "2", "exp", make_plots=False, write_outputs=False,
+        artifact_hook=seen.append,
+    )
+    assert summary == {"ok": True}
+    assert seen == [result]

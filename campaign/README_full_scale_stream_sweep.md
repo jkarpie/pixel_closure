@@ -29,10 +29,29 @@ Remove `--dry-run` to execute. For an SSH session, wrap the same command in
 `nohup ... > full_scale_core16.log 2>&1 &`, then record the PID with `echo $!`.
 The requested `--out` directory must be new or empty; every stream gets a
 private results directory, inference cache, `stream.json` timing/seed record,
-and `run.log`. The root `manifest.json` records the sweep status. A completed
-stream-count arm does not overwrite another arm. The first N seeds for a given
-cell are the same across the N-stream arms, so scaling comparisons use the same
-independent chains.
+PIXEL `chain.npz` and full `inference_summary.json`, and `run.log`. The root
+`manifest.json` records the sweep status. Every completed cell gets `REPORT.md`
+and `REPORT.json` from the saved
+PIXEL chain objects. A completed stream-count arm does not overwrite another
+arm. The first N seeds for a given cell are the same across the N-stream arms,
+so scaling comparisons use the same independent chains.
+
+The report gives PIXEL's Wolff τ_int and ESS, split R-hat across streams,
+trajectory acceptance statistics, energy error, step size, depth, divergences,
+steps per trajectory, and the *actual* metric/fallback metadata. HMC's binary
+acceptance rate and invalid transitions are distinguished from NUTS's mean
+acceptance statistic and divergence flag. Sampler and total wall times are
+recorded by the closure worker, not inferred from sampler logs. A one-stream
+arm has no between-stream R-hat. The report does not invent worst-dataset or
+worst-PDF statistics; the existing `summary_<mode>.json` retains the standard
+fit and pull summaries.
+
+To regenerate reports from completed streams without rerunning inference:
+
+```bash
+../pixel/venv/bin/python -m campaign.report_full_scale_stream_sweep \
+  --root campaign/full_scale_core16
+```
 
 Each worker pins BLAS and PIXEL's internal task pools to one thread. `taskset`
 is what fixes the *total* CPU affinity; `--cores` in `run_closure.sh` controls
