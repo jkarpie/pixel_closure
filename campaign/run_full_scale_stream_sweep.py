@@ -93,8 +93,9 @@ def plan(args) -> list[dict]:
     ]
 
 
-def worker_command(python: str, cell: dict, stream: dict, samples: int) -> list[str]:
-    return [
+def worker_command(python: str, cell: dict, stream: dict, samples: int,
+                   warmup: int | None = None) -> list[str]:
+    command = [
         python, "-m", "campaign.run_full_scale_stream_sweep", "worker",
         "--parameterization", cell["parameterization"],
         "--truth", cell["truth"], "--data", cell["data"],
@@ -102,6 +103,9 @@ def worker_command(python: str, cell: dict, stream: dict, samples: int) -> list[
         "--samples", str(samples), "--seed", str(stream["seed"]),
         "--output", stream["output"],
     ]
+    if warmup is not None:
+        command.extend(("--warmup", str(warmup)))
+    return command
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -152,12 +156,17 @@ def hs_activated(truth: str, data: str, output: Path, samples: int, seed: int):
 
 
 def run_worker(args) -> int:
+    if args.warmup is not None and args.warmup < 0:
+        raise ValueError("--warmup must be nonnegative")
+    if args.warmup is not None and args.parameterization != "q":
+        raise ValueError("--warmup is currently supported only for q-integration")
     output = args.output.resolve()
     (output / "inference_cache").mkdir(parents=True, exist_ok=True)
     metadata = {
         "parameterization": args.parameterization, "truth": args.truth,
         "data": args.data, "scale": args.scale, "mode": args.mode,
         "samples": args.samples, "seed": args.seed,
+        "warmup_requested": args.warmup,
         "status": "running", "started_at": time.time(),
     }
     write_json(output / "stream.json", metadata)
@@ -173,6 +182,11 @@ def run_worker(args) -> int:
             raise TypeError(
                 f"cannot save trajectory diagnostics from {type(chain).__name__}"
             )
+        if args.warmup is not None and chain.n_warmup != args.warmup:
+            raise RuntimeError(
+                f"requested {args.warmup} warmup trajectories but PIXEL saved "
+                f"{chain.n_warmup}"
+            )
         chain.save_npz(output / "chain.npz")
         write_json(output / "inference_summary.json", _json_safe(samples.summary()))
         metadata["chain_kind"] = "nuts" if isinstance(chain, NUTSSamples) else "hmc"
@@ -187,6 +201,8 @@ def run_worker(args) -> int:
             ):
                 cfg.MCMC_SAMPLES = args.samples
                 cfg.MCMC_SEED = args.seed
+                if args.warmup is not None:
+                    cfg.Q_INTEGRATION_WARMUP = args.warmup
                 runner.run_one(args.scale, args.mode, make_plots=False,
                                artifact_hook=save_inference)
         else:
@@ -210,8 +226,14 @@ def run_worker(args) -> int:
 def run_sweep(args) -> int:
     if args.samples < 1:
         raise ValueError("--samples must be positive")
+    if args.warmup is not None and args.warmup < 0:
+        raise ValueError("--warmup must be nonnegative")
     args.out = args.out.resolve()
     cells = plan(args)
+    if args.warmup is not None and any(
+        cell["parameterization"] != "q" for cell in cells
+    ):
+        raise ValueError("--warmup is currently supported only for q-integration")
     print(f"{len(cells)} cells; {sum(len(c['streams']) for c in cells)} streams")
     for cell in cells:
         label = (f"{cell['parameterization']} {cell['truth']}/{cell['data']} "
@@ -220,7 +242,7 @@ def run_sweep(args) -> int:
         if args.dry_run:
             for stream in cell["streams"]:
                 print("  " + " ".join(worker_command(
-                    args.python, cell, stream, args.samples
+                    args.python, cell, stream, args.samples, args.warmup
                 )))
     if args.dry_run:
         return 0
@@ -236,7 +258,8 @@ def run_sweep(args) -> int:
                     f"missing {source}; prepare data with run_closure.sh first"
                 )
     output_root.mkdir(parents=True, exist_ok=True)
-    manifest = {"samples_per_stream": args.samples, "cells": cells,
+    manifest = {"samples_per_stream": args.samples,
+                "warmup_per_stream_requested": args.warmup, "cells": cells,
                 "status": "running", "started_at": time.time()}
     write_json(output_root / "manifest.json", manifest)
     env = os.environ.copy()
@@ -252,7 +275,9 @@ def run_sweep(args) -> int:
                     output = Path(stream["output"])
                     output.mkdir(parents=True)
                     log = (output / "run.log").open("w")
-                    command = worker_command(args.python, cell, stream, args.samples)
+                    command = worker_command(
+                        args.python, cell, stream, args.samples, args.warmup
+                    )
                     process = subprocess.Popen(
                         command, cwd=REPO, env=env, stdout=log,
                         stderr=subprocess.STDOUT,
@@ -305,6 +330,8 @@ def main(argv=None) -> int:
     sweep.add_argument("--modes", default="exp")
     sweep.add_argument("--stream-counts", default="1,2,4")
     sweep.add_argument("--samples", type=int, default=1000)
+    sweep.add_argument("--warmup", type=int, default=None,
+                       help="q-integration warmup trajectories per stream")
     sweep.add_argument("--seed-base", type=int, default=20261018)
     sweep.add_argument("--python", default=sys.executable)
     sweep.add_argument("--dry-run", action="store_true")
@@ -315,6 +342,7 @@ def main(argv=None) -> int:
     worker.add_argument("--scale", choices=SCALES, required=True)
     worker.add_argument("--mode", choices=MODES, required=True)
     worker.add_argument("--samples", type=int, required=True)
+    worker.add_argument("--warmup", type=int, default=None)
     worker.add_argument("--seed", type=int, required=True)
     worker.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
