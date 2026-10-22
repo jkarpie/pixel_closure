@@ -12,14 +12,17 @@
 echo "Batch job finished"
 export PIXEL_PROGRESS=1 
 
-
+for Q in mc 2 3 
+do 
 #echo "Calling kernel maker"
-PIXEL_PROGRESS=1 ./run_closure.sh --truth JAM --data union --Q 2 \
+PIXEL_PROGRESS=1 ./run_closure.sh --truth JAM --data union --Q $Q \
   --modes both --kernels-only --cores 32 \
   --python ../pixel/venv/bin/python >& out.run_data_kernel_maker 
 
-PIXEL_PROGRESS=1 ./run_closure.sh --truth NNPDF --data union --Q 2 \
+PIXEL_PROGRESS=1 ./run_closure.sh --truth NNPDF --data union --Q $Q \
   --modes both --kernels-only --cores 32 \
   --python ../pixel/venv/bin/python >& out.run_data_kernel_maker 
 
+
+done
 echo "Batch job finished"
