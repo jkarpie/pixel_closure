@@ -25,3 +25,23 @@ No scan is launched by creating this variant.
 
 For a comma-list sweep of full-scale H-S and/or explicit-q streams, see
 [the full-scale stream sweep](../campaign/README_full_scale_stream_sweep.md).
+
+For one production q cell with independent streams, the top-level launcher
+prepares missing source data and checks/builds shared kernels once before
+using the same isolated stream worker:
+
+```bash
+./run_closure.sh --truth JAM --data union --Q 2 --modes exp \
+  --parameterization q --warmup 500 --samples 2500 --streams 4 \
+  --seed-base 20261018 --out campaign/jam_q2_exp_4streams --no-plots \
+  --python ../pixel/venv/bin/python
+```
+
+`--warmup` and `--samples` apply **to each stream**. Omit `--warmup` to use
+the selected source suite's q warmup (250 for JAM/union). The output root
+must be new or empty; the launcher never merges into or clears an existing q
+run. Each stream gets its own seed, results, cache, PIXEL chain and timing
+record; a completed cell gets `REPORT.json` and `REPORT.md`. This path always
+skips plots. `--cores` controls data/kernel preparation, whereas the q sweep
+pins each sampler worker's inner pools to one thread; use `taskset` to constrain
+the total CPU affinity on Linux.

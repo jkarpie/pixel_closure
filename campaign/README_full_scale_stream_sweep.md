@@ -60,3 +60,18 @@ substantial memory, so start with a small single-cell pilot and check the peak
 RSS before launching many streams. The sweep has no resume mode: use a fresh
 output directory for each invocation. It does not generate data or prebuild
 kernels while streams are running.
+
+For a single production q cell, `run_closure.sh` exposes the same isolated
+stream machinery directly, including explicit per-stream warmup:
+
+```bash
+./run_closure.sh --truth JAM --data union --Q 2 --modes exp \
+  --parameterization q --warmup 500 --samples 2500 --streams 4 \
+  --out campaign/jam_q2_exp_4streams --no-plots \
+  --python ../pixel/venv/bin/python
+```
+
+The q path prepares missing source data, preserves H-S result directories,
+and refuses a nonempty `--out`; it does not resume or overwrite a scan.
+`--warmup` on the lower-level sweep is also available for q cells only; omit
+it to retain each source suite's configured default.

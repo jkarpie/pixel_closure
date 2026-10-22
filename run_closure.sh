@@ -62,6 +62,15 @@ Options:
   --modes MODE[,MODE...]   Modes to fit: lattice (lattice only), dis (DIS only),
                            dy (Drell-Yan only), exp (all experiment = DIS+DY),
                            both (lattice+DIS+DY). Defaults to all configured modes.
+  --parameterization hs|q Sampling representation. Defaults to hs (the existing
+                           source-suite behavior). q uses dense-metric NUTS with
+                           the full-scale q-integration policy.
+  --samples N              Retained trajectories per q stream (default 1000).
+  --warmup N               Warmup trajectories per q stream (default: suite config).
+  --streams N              Independent concurrent q streams (default 1).
+  --seed-base N            Base for deterministic, distinct q stream seeds.
+  --out PATH               Required for q sampling: new, empty private output root.
+                           Each stream gets separate results and inference caches.
   --data-only              Run dis_audit/generate as needed, then stop before fitting.
                            Use with --remake-data to force rebuilding existing data.
   --kernels-only           Ensure selected data exist, build all selected kernel
@@ -96,6 +105,10 @@ Examples:
   ./run_closure.sh --Q 2 --remake-data --remake-kernels
   ./run_closure.sh --Q 2 --modes both --keep-results
   ./run_closure.sh --Q 2 --modes both --prior beta_envelope
+  ./run_closure.sh --truth JAM --data union --Q 2 --modes exp \
+    --parameterization q --warmup 500 --samples 2500 --streams 4 \
+    --out campaign/jam_q2_exp_4streams --no-plots \
+    --python ../pixel/venv/bin/python
 
   # The four dataset-variant suites (truth family x dataset selection):
   ./run_closure.sh --truth JAM   --scale JAM_data   --Q 2 --modes both
@@ -212,6 +225,13 @@ data_only=0
 kernels_only=0
 plots_only=0
 dry_run=0
+parameterization="hs"
+samples_flag=""
+warmup_flag=""
+streams_flag=""
+seed_base_flag=""
+out_flag=""
+fail_fast=0
 
 die() {
     echo "error: $*" >&2
@@ -468,6 +488,27 @@ while [[ $# -gt 0 ]]; do
             add_modes "$2"
             shift 2
             ;;
+        --parameterization)
+            [[ $# -ge 2 ]] || die "--parameterization requires hs or q"
+            case "$2" in hs|q) parameterization="$2" ;; *) die "unknown parameterization '$2' (expected hs or q)" ;; esac
+            shift 2
+            ;;
+        --samples|--warmup|--streams|--seed-base)
+            [[ $# -ge 2 ]] || die "$1 requires a value"
+            case "$2" in ''|*[!0-9]*) die "$1 expects a nonnegative integer" ;; esac
+            case "$1" in
+                --samples)  [[ "$2" != 0 ]] || die "--samples must be positive"; samples_flag="$2" ;;
+                --warmup)   warmup_flag="$2" ;;
+                --streams)  [[ "$2" != 0 ]] || die "--streams must be positive"; streams_flag="$2" ;;
+                --seed-base) seed_base_flag="$2" ;;
+            esac
+            shift 2
+            ;;
+        --out)
+            [[ $# -ge 2 && -n "$2" ]] || die "--out requires a path"
+            out_flag="$2"
+            shift 2
+            ;;
         --data-only|--generate-only|--make-data-only)
             data_only=1
             shift
@@ -507,6 +548,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --fail-fast)
+            fail_fast=1
             fit_args+=("--fail-fast")
             shift
             ;;
@@ -539,6 +581,25 @@ while [[ $# -gt 0 ]]; do
 done
 
 apply_concurrency
+
+if [[ "$parameterization" == hs ]]; then
+    [[ -z "$samples_flag$warmup_flag$streams_flag$seed_base_flag$out_flag" ]] || \
+        die "--samples, --warmup, --streams, --seed-base and --out require --parameterization q"
+elif [[ "$data_only" -eq 0 && "$kernels_only" -eq 0 ]]; then
+    [[ -n "$out_flag" ]] || die "q sampling requires --out with a new, private output directory"
+    if [[ "$dry_run" -eq 0 && ( -e "$out_flag" || -L "$out_flag" ) ]]; then
+        [[ -d "$out_flag" ]] || die "q output path exists and is not a directory: $out_flag"
+        [[ -z "$(ls -A -- "$out_flag")" ]] || die "q output directory is not empty: $out_flag"
+    fi
+    [[ "$scale" != small ]] || die "q stream sampling currently supports full-scale data, not --data mock"
+    [[ "$plots_only" -eq 0 ]] || die "q stream sampling does not support --plots-only"
+    [[ "$keep_results" -eq 0 ]] || die "q stream sampling does not support --keep-results; use a new --out"
+    [[ "$fail_fast" -eq 0 ]] || die "q stream sampling does not support --fail-fast"
+    [[ "$BLAS_THREADS" == 1 ]] || die "q stream workers pin BLAS to one thread; omit --blas-threads"
+    for mode in "${modes[@]}"; do
+        [[ "$mode" != synthetic_z_plumbing ]] || die "q stream sampling does not support synthetic_z_plumbing"
+    done
+fi
 
 # What this run will actually use, printed before any of it starts.  A multi-hour run
 # on a shared box is the wrong place to discover the concurrency was the 12-core
@@ -613,7 +674,7 @@ if [[ "$remake_data" -eq 1 ]]; then
     done
 fi
 
-if [[ "$data_only" -eq 0 && "$kernels_only" -eq 0 && "$keep_results" -eq 0 ]]; then
+if [[ "$parameterization" == hs && "$data_only" -eq 0 && "$kernels_only" -eq 0 && "$keep_results" -eq 0 ]]; then
     remove_path "$RESULTS_DIR/comparison"
     for key in "${q_keys[@]}"; do
         remove_path "$RESULTS_DIR/$(truth_label "$key")"
@@ -649,6 +710,45 @@ else
 fi
 
 if [[ "$data_only" -eq 1 ]]; then
+    exit 0
+fi
+
+if [[ "$parameterization" == q && "$kernels_only" -eq 0 ]]; then
+    # The sweep gives every concurrent stream its own results/cache tree and
+    # refuses a nonempty output root. The first N deterministic seeds are stable
+    # across stream counts, and its worker records the actual PIXEL warmup.
+    if [[ "${#modes[@]}" -eq 0 ]]; then
+        modes=(lattice dis dy exp both)
+    fi
+    # Build/check each selected kernel once before concurrent workers begin;
+    # no two streams should race to populate the same shared source cache.
+    for key in "${q_keys[@]}"; do
+        run "$PYTHON" -m "${CLOSURE_PACKAGE}.run_closure" \
+            --Q "$key" --modes "${modes[@]}" --kernels-only
+    done
+    declare -a q_sweep_cmd=(
+        "$PYTHON" -m campaign.run_full_scale_stream_sweep sweep
+        --out "$out_flag" --parameterizations q --truths "$truth_family"
+        --data union --samples "${samples_flag:-1000}"
+        --stream-counts "${streams_flag:-1}" --python "$PYTHON"
+    )
+    case "$scale" in
+        full) ;;
+        JAM_data) q_sweep_cmd+=(--data JAM) ;;
+        NNPDF_data) q_sweep_cmd+=(--data NNPDF) ;;
+    esac
+    q_sweep_cmd+=(--scales "$(IFS=,; echo "${q_keys[*]}")")
+    q_sweep_cmd+=(--modes "$(IFS=,; echo "${modes[*]}")")
+    if [[ -n "$warmup_flag" ]]; then q_sweep_cmd+=(--warmup "$warmup_flag"); fi
+    if [[ -n "$seed_base_flag" ]]; then q_sweep_cmd+=(--seed-base "$seed_base_flag"); fi
+    case "$kernel_cache_check" in
+        trust) export PIXEL_TRUST_KERNEL_CACHE=1 ;;
+        rows) export PIXEL_VERIFY_KERNEL_ROWS=1 ;;
+    esac
+    printf 'q streams: %s simultaneous; each worker pins BLAS and PIXEL inner pools to one thread\n' \
+        "${streams_flag:-1}" >&2
+    if [[ "$dry_run" -eq 1 ]]; then q_sweep_cmd+=(--dry-run); fi
+    run "${q_sweep_cmd[@]}"
     exit 0
 fi
 

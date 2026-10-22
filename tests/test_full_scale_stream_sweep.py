@@ -18,7 +18,7 @@ def _args(tmp_path, **overrides):
         out=tmp_path / "scan", parameterizations="hs,q", truths="JAM",
         data="union,JAM", scales="2", modes="dis,exp",
         stream_counts="1,2", samples=5, seed_base=42,
-        python="python", dry_run=True,
+        python="python", dry_run=True, warmup=None,
     )
     values.update(overrides)
     return Namespace(**values)
@@ -38,9 +38,19 @@ def test_plan_comma_lists_and_repeated_stream_seeds(tmp_path):
 
 def test_sweep_dry_run_does_not_write(tmp_path):
     args = _args(tmp_path, parameterizations="q", data="union",
-                 modes="exp", stream_counts="1,2")
+                 modes="exp", stream_counts="1,2", warmup=500)
     assert sweep.run_sweep(args) == 0
     assert not args.out.exists()
+    command = sweep.worker_command("python", sweep.plan(args)[0],
+                                   sweep.plan(args)[0]["streams"][0], 5, 500)
+    assert command[-2:] == ["--warmup", "500"]
+
+
+def test_warmup_override_rejects_hs_and_negative_values(tmp_path):
+    with pytest.raises(ValueError, match="only for q-integration"):
+        sweep.run_sweep(_args(tmp_path, warmup=5))
+    with pytest.raises(ValueError, match="nonnegative"):
+        sweep.run_sweep(_args(tmp_path, parameterizations="q", warmup=-1))
 
 
 @pytest.mark.parametrize("parameterization", ("hs", "q"))
@@ -52,7 +62,8 @@ def test_worker_isolates_outputs_and_restores_config(
     cfg = importlib.import_module("closure_JAM_truth.config")
     runner = importlib.import_module("closure_JAM_truth.run_closure")
     original = (cfg.RESULTS_ROOT, cfg.INFERENCE_CACHE_ROOT,
-                cfg.MCMC_SAMPLES, cfg.MCMC_SEED)
+                cfg.MCMC_SAMPLES, cfg.MCMC_SEED,
+                getattr(cfg, "Q_INTEGRATION_WARMUP", None))
     observed = {}
 
     def fake_run_one(scale, mode, **kwargs):
@@ -62,6 +73,7 @@ def test_worker_isolates_outputs_and_restores_config(
             results=cfg.RESULTS_ROOT, cache=cfg.INFERENCE_CACHE_ROOT,
             samples=cfg.MCMC_SAMPLES, seed=cfg.MCMC_SEED,
             q_enabled=getattr(cfg, "Q_INTEGRATION_ENABLED", False),
+            q_warmup=getattr(cfg, "Q_INTEGRATION_WARMUP", None),
         )
         draws = np.arange(17, dtype=float).reshape(-1, 1)
         chain = NUTSSamples(
@@ -81,7 +93,8 @@ def test_worker_isolates_outputs_and_restores_config(
     output = tmp_path / parameterization
     args = Namespace(parameterization=parameterization, truth="JAM",
                      data="union", scale="2", mode="exp", samples=17,
-                     seed=19, output=output)
+                     seed=19, output=output,
+                     warmup=5 if parameterization == "q" else None)
     assert sweep.run_worker(args) == 0
     assert observed == {
         "scale": "2", "mode": "exp", "kwargs": {"make_plots": False},
@@ -89,10 +102,13 @@ def test_worker_isolates_outputs_and_restores_config(
         "cache": output / "inference_cache",
         "samples": 17, "seed": 19,
         "q_enabled": parameterization == "q",
+        "q_warmup": 5 if parameterization == "q" else None,
     }
     assert (cfg.RESULTS_ROOT, cfg.INFERENCE_CACHE_ROOT,
-            cfg.MCMC_SAMPLES, cfg.MCMC_SEED) == original
+            cfg.MCMC_SAMPLES, cfg.MCMC_SEED,
+            getattr(cfg, "Q_INTEGRATION_WARMUP", None)) == original
     assert json.loads((output / "stream.json").read_text())["status"] == "complete"
+    assert json.loads((output / "stream.json").read_text())["warmup_requested"] == args.warmup
     assert (output / "chain.npz").is_file()
     assert (output / "inference_summary.json").is_file()
     assert (output / "inference_cache").is_dir()
