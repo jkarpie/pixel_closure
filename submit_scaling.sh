@@ -19,15 +19,22 @@ export PIXEL_PROGRESS=1
 #  --python ../pixel/venv/bin/python >& out.run_data_kernel_maker 
 
 
+#echo "Calling taskset"
+#nohup taskset -c 0-63 ../pixel/venv/bin/python \
+#  -m campaign.run_full_scale_stream_sweep sweep \
+#  --out campaign/full_scale_core64 \
+#  --parameterizations q --truths JAM --data union \
+#  --scales 2 --modes exp --stream-counts 1,2,4,8 \
+#  --samples 500 > campaign/full_scale_core64.log
+#echo $!
+
 echo "Calling taskset"
 nohup taskset -c 0-63 ../pixel/venv/bin/python \
   -m campaign.run_full_scale_stream_sweep sweep \
-  --out campaign/full_scale_core64 \
+  --out campaign/full_scale_core64_big \
   --parameterizations q --truths JAM --data union \
-  --scales 2 --modes exp --stream-counts 1,2,4,8 \
-  --samples 500 > campaign/full_scale_core64.log
+  --scales 2 --modes exp --stream-counts 16,32,64 \
+  --samples 500 > campaign/full_scale_core64_big.log
 echo $!
-
-
 
 echo "Batch job finished"
