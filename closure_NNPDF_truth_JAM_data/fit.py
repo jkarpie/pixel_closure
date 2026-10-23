@@ -493,6 +493,30 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         f"inference start sampler={sampler} n_warmup={int(warmup)}"
     )
     if sampler == "q_nuts":
+        if bool(getattr(cfg, "Q_INTEGRATION_MAP_START", True)):
+            from closure_full_q_integration.map_start import prepare_q_map_start
+
+            reporter.emit("finding or loading explicit-q MAP start")
+            coordinates, center, map_info = prepare_q_map_start(
+                model,
+                prior_rcond=sampler_options["prior_rcond"],
+                cache_root=getattr(
+                    cfg, "Q_INTEGRATION_MAP_CACHE_ROOT",
+                    cfg.INFERENCE_CACHE_ROOT / "_q_map_cache",
+                ),
+            )
+            sampler_options.update(
+                coordinates=coordinates,
+                initial=center,
+                metadata={"closure_q_map_start": map_info},
+            )
+            reporter.emit(
+                "explicit-q MAP ready "
+                f"action={map_info['action']:.6g} "
+                f"gradient={map_info['gradient_norm']:.3g} "
+                f"cache={map_info['cache_status']}",
+                lap=True,
+            )
         samples = pixel.run_q_mcmc(
             model, sampler=cfg.Q_INTEGRATION_SAMPLER,
             n_samples=n_samples, seed=seed,

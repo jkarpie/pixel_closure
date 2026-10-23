@@ -75,8 +75,22 @@ def test_hs_metric_is_dense_and_nuts_uses_library_acceptance_default(
 def test_full_q_variant_routes_dense_nuts_with_ninety_percent_target(
     truth, data, package, monkeypatch,
 ):
+    import closure_full_q_integration.map_start as map_start
+
     cfg = importlib.import_module(f"{package}.config")
     fit = importlib.import_module(f"{package}.fit")
+    map_calls = []
+    coordinates = object()
+    center = np.array([0.25, -0.5, 0.75])
+
+    def fake_map_start(model, *, prior_rcond, cache_root):
+        map_calls.append((model, prior_rcond, cache_root))
+        return coordinates, center, {
+            "action": 1.0, "gradient_norm": 1.0e-7,
+            "cache_status": "miss", "fingerprint": "test-map",
+        }
+
+    monkeypatch.setattr(map_start, "prepare_q_map_start", fake_map_start)
     previous_results = cfg.RESULTS_ROOT
     previous_cache = cfg.INFERENCE_CACHE_ROOT
     assert not hasattr(cfg, "Q_INTEGRATION_ENABLED")
@@ -95,6 +109,12 @@ def test_full_q_variant_routes_dense_nuts_with_ninety_percent_target(
         assert options["target_accept"] == pytest.approx(0.90)
         assert options["adapt_mass"] is False
         assert options["prior_rcond"] == cfg.DIRECT_PRIOR_RCOND == 0.0
+        assert options["coordinates"] is coordinates
+        np.testing.assert_array_equal(options["initial"], center)
+        assert options["metadata"]["closure_q_map_start"]["fingerprint"] == "test-map"
+        assert len(map_calls) == 1
+        assert map_calls[0][1] == 0.0
+        assert map_calls[0][2] == cfg.Q_INTEGRATION_MAP_CACHE_ROOT
         cfg.MCMC_SAMPLES = 17
         cfg.MCMC_SEED = 19
         defaults = _capture_call(
@@ -103,6 +123,7 @@ def test_full_q_variant_routes_dense_nuts_with_ninety_percent_target(
         )
         assert defaults["n_samples"] == 17
         assert defaults["seed"] == 19
+        assert len(map_calls) == 2
     assert not hasattr(cfg, "Q_INTEGRATION_ENABLED")
     assert cfg.RESULTS_ROOT == previous_results
     assert cfg.INFERENCE_CACHE_ROOT == previous_cache
@@ -142,6 +163,7 @@ def test_full_q_variant_accepts_private_output_root(tmp_path):
     with activated("JAM", "union", output_root=tmp_path / "stream"):
         assert cfg.RESULTS_ROOT == tmp_path / "stream" / "results"
         assert cfg.INFERENCE_CACHE_ROOT == tmp_path / "stream" / "inference_cache"
+        assert cfg.Q_INTEGRATION_MAP_CACHE_ROOT == tmp_path / "_map_cache"
     assert (cfg.RESULTS_ROOT, cfg.INFERENCE_CACHE_ROOT) == original
 
 

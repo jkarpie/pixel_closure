@@ -44,6 +44,9 @@ def test_sweep_dry_run_does_not_write(tmp_path):
     command = sweep.worker_command("python", sweep.plan(args)[0],
                                    sweep.plan(args)[0]["streams"][0], 5, 500)
     assert command[-2:] == ["--warmup", "500"]
+    assert command[command.index("--map-cache-root") + 1] == str(
+        args.out / "_q_map_cache"
+    )
 
 
 def test_warmup_override_rejects_hs_and_negative_values(tmp_path):
@@ -94,7 +97,8 @@ def test_worker_isolates_outputs_and_restores_config(
     args = Namespace(parameterization=parameterization, truth="JAM",
                      data="union", scale="2", mode="exp", samples=17,
                      seed=19, output=output,
-                     warmup=5 if parameterization == "q" else None)
+                     warmup=5 if parameterization == "q" else None,
+                     map_cache_root=tmp_path / "shared_q_map_cache")
     assert sweep.run_worker(args) == 0
     assert observed == {
         "scale": "2", "mode": "exp", "kwargs": {"make_plots": False},

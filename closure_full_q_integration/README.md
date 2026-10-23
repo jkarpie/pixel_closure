@@ -3,7 +3,14 @@
 This variant samples the retained physical `q` coefficients explicitly with
 NUTS, a full dense inverse-Hessian mass metric, and target acceptance 0.90.
 Its other initial sampler settings follow the selected full-scale source suite.
-Warmup adapts the step size while keeping the dense mass fixed.
+For every full-scale truth/data suite and mode, the explicit-q action is first
+optimized from the prior-mean origin to a local MAP. All streams for the same
+target start at that MAP, and the dense inverse-Hessian metric is computed
+there, not at the origin. The MAP is fingerprinted against the numerical fit
+target and cached under a shared directory; concurrent streams wait for one
+optimization rather than doing it separately. A nonconverged MAP stops the
+run instead of silently reverting to the origin. Warmup then adapts the step
+size while keeping the dense mass fixed.
 
 The source suites own generated truth, pseudodata, and kernel caches. This
 variant writes results and inference caches under `outputs/<truth>/<data>/`,
@@ -41,7 +48,8 @@ using the same isolated stream worker:
 the selected source suite's q warmup (250 for JAM/union). The output root
 must be new or empty; the launcher never merges into or clears an existing q
 run. Each stream gets its own seed, results, cache, PIXEL chain and timing
-record; a completed cell gets `REPORT.json` and `REPORT.md`. This path always
+record; the MAP cache is shared across streams and stream-count arms. A
+completed cell gets `REPORT.json` and `REPORT.md`. This path always
 skips plots. `--cores` controls data/kernel preparation, whereas the q sweep
 pins each sampler worker's inner pools to one thread; use `taskset` to constrain
 the total CPU affinity on Linux.

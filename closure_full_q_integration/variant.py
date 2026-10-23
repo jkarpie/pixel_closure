@@ -25,7 +25,8 @@ _LOCK = RLock()
 
 
 @contextmanager
-def activated(truth: str, data: str, *, output_root: Path | None = None):
+def activated(truth: str, data: str, *, output_root: Path | None = None,
+              map_cache_root: Path | None = None):
     """Reuse source data/kernels while keeping q results and caches separate."""
     key = (truth.upper(), "union" if data.lower() == "union" else data.upper())
     try:
@@ -38,6 +39,8 @@ def activated(truth: str, data: str, *, output_root: Path | None = None):
         runner = importlib.import_module(f"{package}.run_closure")
         output_root = (Path(output_root) if output_root is not None else
                        ROOT / "outputs" / key[0].lower() / key[1].lower())
+        map_cache_root = (Path(map_cache_root) if map_cache_root is not None else
+                          output_root.parent / "_map_cache")
         overrides = {
             "Q_INTEGRATION_ENABLED": True,
             "Q_INTEGRATION_SAMPLER": policy.Q_INTEGRATION_SAMPLER,
@@ -48,6 +51,8 @@ def activated(truth: str, data: str, *, output_root: Path | None = None):
             "Q_INTEGRATION_METRIC": policy.Q_INTEGRATION_METRIC,
             "Q_INTEGRATION_TARGET_ACCEPT": policy.Q_INTEGRATION_TARGET_ACCEPT,
             "Q_INTEGRATION_ADAPT_MASS": policy.Q_INTEGRATION_ADAPT_MASS,
+            "Q_INTEGRATION_MAP_START": True,
+            "Q_INTEGRATION_MAP_CACHE_ROOT": map_cache_root,
             "MCMC_SAMPLES": int(cfg.MCMC_SAMPLES),
             "MCMC_SEED": int(cfg.MCMC_SEED),
             "RESULTS_ROOT": output_root / "results",

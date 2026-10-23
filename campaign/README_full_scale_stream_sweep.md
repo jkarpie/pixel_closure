@@ -35,6 +35,11 @@ and `REPORT.json` from the saved
 PIXEL chain objects. A completed stream-count arm does not overwrite another
 arm. The first N seeds for a given cell are the same across the N-stream arms,
 so scaling comparisons use the same independent chains.
+For explicit-q cells, the launcher also shares a fingerprinted MAP cache across
+all streams and stream-count arms. Each stream starts at that fitted center,
+and its fixed dense Hessian metric is evaluated there. A MAP optimization that
+does not converge stops the affected cell rather than starting at the prior
+mean.
 
 The report gives PIXEL's Wolff τ_int and ESS, split R-hat across streams,
 trajectory acceptance statistics, energy error, step size, depth, divergences,

@@ -74,6 +74,7 @@ def plan(args) -> list[dict]:
         {
             "parameterization": cell[0], "truth": cell[1], "data": cell[2],
             "scale": cell[3], "mode": cell[4], "stream_count": count,
+            "map_cache_root": str(args.out / "_q_map_cache"),
             "streams": [
                 {
                     "number": number,
@@ -103,6 +104,8 @@ def worker_command(python: str, cell: dict, stream: dict, samples: int,
         "--samples", str(samples), "--seed", str(stream["seed"]),
         "--output", stream["output"],
     ]
+    if cell["parameterization"] == "q":
+        command.extend(("--map-cache-root", cell["map_cache_root"]))
     if warmup is not None:
         command.extend(("--warmup", str(warmup)))
     return command
@@ -196,7 +199,10 @@ def run_worker(args) -> int:
 
     try:
         if args.parameterization == "q":
-            with activated(args.truth, args.data, output_root=output) as (
+            with activated(
+                args.truth, args.data, output_root=output,
+                map_cache_root=getattr(args, "map_cache_root", None),
+            ) as (
                 _package, cfg, _fit, runner,
             ):
                 cfg.MCMC_SAMPLES = args.samples
@@ -345,6 +351,7 @@ def main(argv=None) -> int:
     worker.add_argument("--warmup", type=int, default=None)
     worker.add_argument("--seed", type=int, required=True)
     worker.add_argument("--output", type=Path, required=True)
+    worker.add_argument("--map-cache-root", type=Path, default=None)
     args = parser.parse_args(argv)
     try:
         return run_sweep(args) if args.command == "sweep" else run_worker(args)
