@@ -22,8 +22,10 @@ PIXEL_PROGRESS=1 ./run_closure.sh --truth $truth --data union --Q $Q \
   --modes $dataset --kernels-only --cores 32 \
   --python ../pixel/venv/bin/python >&  campaign/${truth}_Q${Q}_${dataset}_prod.kern_data_gen.log 
 
+rm -rf campaign/${truth}_Q${Q}_${dataset}_prod
+
 ./run_closure.sh \
-  --truth $NNPDF --data union --Q $Q --modes $dataset \
+  --truth $truth --data union --Q $Q --modes $dataset \
   --parameterization q --warmup 1000 --samples 25000 --streams 16 \
   --out campaign/${truth}_Q${Q}_${dataset}_prod --no-plots \
   --python ../pixel/venv/bin/python \

@@ -28,13 +28,20 @@ export PIXEL_PROGRESS=1
 #  --samples 500 > campaign/full_scale_core64.log
 #echo $!
 
-echo "Calling taskset"
+
+for N in 16 32 64
+do
+
+rm -rf campaign/full_scale_core64_$N
+echo "Calling taskset $N"
 nohup taskset -c 0-63 ../pixel/venv/bin/python \
   -m campaign.run_full_scale_stream_sweep sweep \
-  --out campaign/full_scale_core64_big \
+  --out campaign/full_scale_core64_$N \
   --parameterizations q --truths JAM --data union \
-  --scales 2 --modes exp --stream-counts 16,32,64 \
-  --samples 500 > campaign/full_scale_core64_big.log
+  --scales 2 --modes exp --stream-counts $N \
+  --samples 500 > campaign/full_scale_core64_${N}.log
 echo $!
+
+done
 
 echo "Batch job finished"
