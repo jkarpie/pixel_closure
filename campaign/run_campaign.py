@@ -221,6 +221,17 @@ def main() -> int:
                          "the difference is not cosmetic: it moves the realized "
                          "endpoint residual by ~3 orders, i.e. across the 1e-4 bar. "
                          "Recorded per row, so the axis is never invisible again.")
+    ap.add_argument("--n-samples", type=int, default=None,
+                    help="override the retained draws per cell; intended for bounded "
+                         "smoke campaigns, while omission keeps the suite default")
+    ap.add_argument("--nuts-warmup", type=int, default=None,
+                    help="override NUTS warmup steps per cell")
+    ap.add_argument("--nuts-max-tree-depth", type=int, default=None,
+                    help="override the maximum NUTS tree depth per cell")
+    ap.add_argument("--contour-reference-budget-bytes", type=int, default=None,
+                    help="explicitly override the normalization-reference contour "
+                         "admission ceiling; recorded per row for auditable large-grid "
+                         "flow smoke tests")
     ap.add_argument("--no-plots", action="store_true")
     ap.add_argument("--no-posteriors", action="store_true",
                     help="skip the per-cell posterior .npz.  They are ~30 KB each "
@@ -230,6 +241,13 @@ def main() -> int:
     ap.add_argument("--skip-existing", action="store_true",
                     help="leave cells whose row JSON already exists (resume a run)")
     args = ap.parse_args()
+    for name in (
+        "n_samples", "nuts_warmup", "nuts_max_tree_depth",
+        "contour_reference_budget_bytes",
+    ):
+        value = getattr(args, name)
+        if value is not None and value <= 0:
+            ap.error(f"--{name.replace('_', '-')} must be positive")
 
     cfg = importlib.import_module(f"{args.suite}.config")
     runner = importlib.import_module(f"{args.suite}.run_closure")
@@ -244,9 +262,20 @@ def main() -> int:
     original_results_root = cfg.RESULTS_ROOT
     original_prior = cfg.PRIOR_FORM
     original_rcond = cfg.RCOND
+    original_nuts_warmup = cfg.NUTS_WARMUP
+    original_nuts_max_tree_depth = cfg.NUTS_MAX_TREE_DEPTH
+    original_contour_reference_budget = cfg.CONTOUR_NUTS_REFERENCE_BUDGET_BYTES
     if args.rcond is not None:
         cfg.RCOND = args.rcond
         print(f"[campaign] RCOND override: {original_rcond:g} -> {cfg.RCOND:g}", flush=True)
+    if args.nuts_warmup is not None:
+        cfg.NUTS_WARMUP = args.nuts_warmup
+    if args.nuts_max_tree_depth is not None:
+        cfg.NUTS_MAX_TREE_DEPTH = args.nuts_max_tree_depth
+    if args.contour_reference_budget_bytes is not None:
+        cfg.CONTOUR_NUTS_REFERENCE_BUDGET_BYTES = (
+            args.contour_reference_budget_bytes
+        )
 
     (base / "config_snapshot.json").write_text(json.dumps({
         "suite": args.suite,
@@ -254,6 +283,12 @@ def main() -> int:
         "q_keys": q_keys,
         "modes": modes,
         "rcond_override": args.rcond,
+        "n_samples_override": args.n_samples,
+        "nuts_warmup_override": args.nuts_warmup,
+        "nuts_max_tree_depth_override": args.nuts_max_tree_depth,
+        "contour_reference_budget_bytes_override": (
+            args.contour_reference_budget_bytes
+        ),
         # PRIOR_FORM is swept per cell, so the snapshot records the module default
         # rather than implying a single value held for the whole run.
         "config": config_snapshot(cfg),
@@ -300,6 +335,12 @@ def main() -> int:
                            else cfg.GP_JITTER),
                 "rcond": cfg.RCOND,
                 "constraint_sigma": cfg.CONSTRAINT_ENDPOINT_SIGMA,
+                "n_samples": args.n_samples or cfg.MCMC_SAMPLES,
+                "nuts_warmup": cfg.NUTS_WARMUP,
+                "nuts_max_tree_depth": cfg.NUTS_MAX_TREE_DEPTH,
+                "contour_reference_budget_bytes": (
+                    cfg.CONTOUR_NUTS_REFERENCE_BUDGET_BYTES
+                ),
             }
             try:
                 # run_one is reused verbatim for the fit/summary/plots, but it does
@@ -310,6 +351,8 @@ def main() -> int:
                 original_run_fit = runner.fitmod.run_fit
 
                 def _capture(*a, __fn=original_run_fit, **kw):
+                    if args.n_samples is not None:
+                        kw["n_samples"] = args.n_samples
                     captured["result"] = __fn(*a, **kw)
                     return captured["result"]
 
@@ -374,6 +417,11 @@ def main() -> int:
         cfg.PRIOR_FORM = original_prior
         cfg.RESULTS_ROOT = original_results_root
         cfg.RCOND = original_rcond
+        cfg.NUTS_WARMUP = original_nuts_warmup
+        cfg.NUTS_MAX_TREE_DEPTH = original_nuts_max_tree_depth
+        cfg.CONTOUR_NUTS_REFERENCE_BUDGET_BYTES = (
+            original_contour_reference_budget
+        )
 
     elapsed = time.perf_counter() - started
     print(f"\n[campaign] {args.suite}: {n_ok} ok, {n_fail} failed, {n_skip} skipped "
