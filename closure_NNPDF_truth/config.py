@@ -1290,9 +1290,9 @@ NUTS_ADAPT_MASS = False
 HS_HESSIAN_MASS_MODE = "dense"
 
 # Exact bilinear-ratio modes cannot use marginalized/H-S inference.  These
-# settings govern the explicit retained-(theta,q) NUTS path; physics promotion
-# additionally requires the cutoff sweep and four-chain feasibility report.
-DIRECT_PRIOR_RCOND = 1.0e-10
+# settings govern the explicit (theta,q) NUTS path. Every positive prior
+# mode is sampled; prior_rcond remains zero for compatibility with older configs.
+DIRECT_PRIOR_RCOND = 0.0
 DIRECT_NUTS_WARMUP = 250
 DIRECT_NUTS_INITIAL_STEP_SIZE = 0.03
 DIRECT_NUTS_MAX_TREE_DEPTH = 8

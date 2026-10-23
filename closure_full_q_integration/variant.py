@@ -44,7 +44,7 @@ def activated(truth: str, data: str, *, output_root: Path | None = None):
             "Q_INTEGRATION_WARMUP": int(cfg.DIRECT_NUTS_WARMUP),
             "Q_INTEGRATION_INITIAL_STEP_SIZE": float(cfg.DIRECT_NUTS_INITIAL_STEP_SIZE),
             "Q_INTEGRATION_MAX_TREE_DEPTH": int(cfg.DIRECT_NUTS_MAX_TREE_DEPTH),
-            "Q_INTEGRATION_PRIOR_RCOND": float(cfg.DIRECT_PRIOR_RCOND),
+            "Q_INTEGRATION_PRIOR_RCOND": 0.0,
             "Q_INTEGRATION_METRIC": policy.Q_INTEGRATION_METRIC,
             "Q_INTEGRATION_TARGET_ACCEPT": policy.Q_INTEGRATION_TARGET_ACCEPT,
             "Q_INTEGRATION_ADAPT_MASS": policy.Q_INTEGRATION_ADAPT_MASS,

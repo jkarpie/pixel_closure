@@ -94,7 +94,7 @@ def test_full_q_variant_routes_dense_nuts_with_ninety_percent_target(
         assert options["metric"] == "legacy_hessian_dense"
         assert options["target_accept"] == pytest.approx(0.90)
         assert options["adapt_mass"] is False
-        assert options["prior_rcond"] == cfg.DIRECT_PRIOR_RCOND
+        assert options["prior_rcond"] == cfg.DIRECT_PRIOR_RCOND == 0.0
         cfg.MCMC_SAMPLES = 17
         cfg.MCMC_SEED = 19
         defaults = _capture_call(

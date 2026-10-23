@@ -132,20 +132,16 @@ def test_exact_ratio_closures_use_explicit_direct_nuts(suite):
     ``has_nonlinear``, ``_closure_sampler`` would raise ``AttributeError``
     (``SimpleNamespace`` has no such method) rather than silently returning
     the wrong string -- this fixture proves the nonlinear check runs first
-    and alone. ``DIRECT_PRIOR_RCOND`` is pinned exactly rather than bounded:
-    the previous ``<= 1.0e-10`` sat *on* the value it bounded, so it could
-    catch only a loosening and not drift to a different tight value -- and the
-    cutoff is load-bearing (``config.py``: "physics promotion additionally
-    requires the cutoff sweep"), because the near-hard closure constraints are
-    very precise pseudo-data that a larger rcond would truncate out of the
-    prior. The ``"run_direct_mcmc" in source`` line is a
+    and alone. ``DIRECT_PRIOR_RCOND`` is pinned to zero because truncating
+    positive GP modes is no longer supported. The ``"run_direct_mcmc" in source``
+    line is a
     text-substring pin on ``run_fit`` (oracle F2): it catches the call being
     deleted or renamed, not a wrong argument to it -- for the arguments see
     ``test_full_run_fit_routes_each_model_to_its_own_sampler_options``.
     """
     model = SimpleNamespace(has_nonlinear=True, has_bilinear=True)
     assert suite._closure_sampler(model) == "direct_nuts"
-    assert suite.cfg.DIRECT_PRIOR_RCOND == pytest.approx(1.0e-10, rel=1e-12, abs=0.0)
+    assert suite.cfg.DIRECT_PRIOR_RCOND == 0.0
     source = inspect.getsource(suite.run_fit)
     assert "run_direct_mcmc" in source
 
