@@ -1,0 +1,37 @@
+{
+  "approximate_subspace": true,
+  "divergence_fraction": 0.0,
+  "ess_fraction_min": 0.008823579880338042,
+  "ess_min": 4.411789940169021,
+  "max_abs_energy_error": 1.4648448909920262,
+  "max_n_leapfrog": 31,
+  "max_tree_depth": 5,
+  "mean_accept_prob": 0.9040043048943568,
+  "mean_n_leapfrog": 31.0,
+  "median_n_leapfrog": 31.0,
+  "median_tree_depth": 5.0,
+  "min_evidence": -20313.281943607086,
+  "n_divergent": 0,
+  "n_max_depth": 0,
+  "n_params": 1020,
+  "n_samples": 500,
+  "n_theta": 6,
+  "n_warmup": 250,
+  "q_full_dimension": 1314,
+  "retained_rank": 1014,
+  "sampler": "q_nuts",
+  "slowest_param": "slac_p_f2 normalization / amp",
+  "step_size": 0.1910362103683974,
+  "subspace_diagnostics": {
+    "current_ranks": [
+      1014
+    ],
+    "max_support_alignment_residual": 3.259075389853804e-15,
+    "max_variance_leakage": 3.0078730996901703e-10,
+    "min_restricted_precision": 0.0007980179805971787,
+    "n_evaluated": 32
+  },
+  "target": "joint_theta_q",
+  "tau_int_max": 56.66634254812735,
+  "tau_reliable": false
+}

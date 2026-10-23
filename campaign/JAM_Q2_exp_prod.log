@@ -1,0 +1,8 @@
++ ../pixel/venv/bin/python -m closure_JAM_truth.run_closure --Q 2 --modes exp --kernels-only
+== kernels  Q=2.0 (truthQ_2)  mode=exp ==
+   kernels ready: fields=9 datasets=30 data=3628 in 2.45s
+
+Done. 1 kernel case(s) in 2.45s. No fits were run.
++ ../pixel/venv/bin/python -m campaign.run_full_scale_stream_sweep sweep --out campaign/JAM_Q2_exp_prod --parameterizations q --truths JAM --data union --samples 25000 --stream-counts 16 --python ../pixel/venv/bin/python --scales 2 --modes exp --warmup 1000
+1 cells; 16 streams
+q JAM/union Q=2 exp streams=16
