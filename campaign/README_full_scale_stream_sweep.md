@@ -53,6 +53,51 @@ To regenerate reports from completed streams without rerunning inference:
   --root campaign/full_scale_core16
 ```
 
+For a combined **terminal report**, including fit quality and pooled PDF pulls,
+run the following on the machine holding the completed chains, posterior
+moments and source pseudodata/kernel caches:
+
+```bash
+../pixel/venv/bin/python -m campaign.report_full_scale_closure \
+  --root campaign/JAM_Q2_exp_prod \
+  --out campaign/JAM_Q2_exp_prod/CLOSURE_REPORT
+```
+
+The command prints the report and optionally saves `CLOSURE_REPORT.md` and
+`CLOSURE_REPORT.json`. It does not launch sampling or modify launch records.
+It resolves stream paths relative to `--root`, so copied manifests containing
+absolute paths from another machine work. It reads chains one at a time for
+PIXEL's Wolff autocorrelation/ESS diagnostics and keeps only split-chain
+statistics for R-hat, rather than holding every full-scale chain in memory.
+
+For explicit-q streams, it pools the saved `posterior_moments_<mode>.npz`
+artifacts by retained draw count, including the variance between stream means.
+It uses their matched-draw predictive means for pooled chi2; averaging per-stream
+chi2 or pulls would be incorrect. It rebuilds the source datasets and their
+deterministic DIS t0 references, and refuses pooled chi2 if they do not reproduce
+**each stream's saved chi2**. Source preparation can read/populate kernel caches;
+it never calls the MCMC runner. The report includes mean and maximum PDF pulls,
+fractions below 1 and 2, per-PDF signed pulls, chi2 components, and the worst
+physical datasets by chi2 and chi2/npt. Chi2 totals include constraint rows;
+dataset rankings exclude them. Pulls use finite nodes in `0.01 <= x <= 0.9`,
+as in the small-scale Q-dense report; these nodes are correlated.
+
+For a **small JSON-only transfer**, copy the updated root `manifest.json`, each
+stream's `stream.json`, `inference_summary.json` and
+`results/truthQ_<Q>/summary_<mode>.json`, and the existing cell `REPORT.json`.
+Then add `--summary-only` to print saved statistics without reading chains or
+rebuilding source data. A saved cell report is reused only if its cell identity,
+inference summaries, draw counts and timings match the transferred stream
+records. This mode reports per-stream fit/pull summaries; full pooled physics
+requires the moments and source data on the original machine. The generated
+`CLOSURE_REPORT.json` itself is small and contains the full pooled results when
+the command succeeds, so that is the preferred file to bring back for analysis.
+
+Exit status is `0` for a complete report and `2` when inputs are missing,
+inconsistent or explicitly omitted with `--summary-only`. A `running` launch
+record is only a saved snapshot, not evidence that the remote job is still
+running. Requested sample counts are never treated as completed trajectories.
+
 Each worker pins BLAS and PIXEL's internal task pools to one thread. `taskset`
 is what fixes the *total* CPU affinity; `--cores` in `run_closure.sh` controls
 internal workers, not a process-wide CPU cap. Dense full-scale chains can use
