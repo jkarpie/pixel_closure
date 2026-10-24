@@ -174,8 +174,8 @@ def _summary_markdown(summary: dict, *, map_info: dict, chain_info: dict | None)
         "direction; a low ΔS or strong pair interaction suggests flatness/ridges.",
         "A conditional slice alone cannot rule out a curved ridge involving q.",
         "",
-        "| amplitude | MAP A | ΔS(−1) | ΔS(+1) | exact MAP S'' | conditional σ | lowest ΔS |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| amplitude | MAP A | ΔS(−1) | ΔS(+1) | exact MAP S'' | conditional σ | ‖H(q,A)‖ | lowest ΔS |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for index, item in enumerate(summary["axes"]):
         exact_curvature = summary["local_geometry"]["hessian"][index][index]
@@ -188,6 +188,7 @@ def _summary_markdown(summary: dict, *, map_info: dict, chain_info: dict | None)
                 for value in (
                     item["map_coordinate"], item["delta_minus_one"],
                     item["delta_plus_one"], exact_curvature, exact_sigma,
+                    summary["local_geometry"]["q_coupling"][index]["norm"],
                     item["lowest_grid_delta"],
                 )
             ) + " |"
@@ -257,10 +258,23 @@ def _local_geometry(target, center, indices, labels, center_action) -> dict:
     hvp = jax.jit(lambda direction: jax.jvp(gradient, (point,), (direction,))[1])
     action = jax.jit(target.action)
     hessian = np.empty((len(indices), len(indices)), dtype=float)
+    q_coupling = []
+    all_labels = target.free_labels()
+    q_start = target.coordinates.n_theta
     for col, index in enumerate(indices):
         direction = np.zeros_like(center)
         direction[index] = 1.0
-        hessian[:, col] = np.asarray(hvp(jnp.asarray(direction)))[list(indices)]
+        column = np.asarray(hvp(jnp.asarray(direction)), dtype=float)
+        hessian[:, col] = column[list(indices)]
+        coupling = column[q_start:]
+        strongest = np.argsort(np.abs(coupling))[-3:][::-1]
+        q_coupling.append({
+            "norm": float(np.linalg.norm(coupling)),
+            "largest_components": [
+                {"label": all_labels[q_start + int(i)], "value": float(coupling[i])}
+                for i in strongest
+            ],
+        })
     hessian = 0.5 * (hessian + hessian.T)
     eigvals = np.linalg.eigvalsh(hessian)
     fine_slices = []
@@ -283,6 +297,7 @@ def _local_geometry(target, center, indices, labels, center_action) -> dict:
     return {
         "hessian": hessian.tolist(),
         "eigenvalues": eigvals.tolist(),
+        "q_coupling": q_coupling,
         "fine_slices": fine_slices,
         "note": "normalization conditional block only; q coordinates fixed",
     }
