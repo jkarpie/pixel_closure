@@ -299,6 +299,7 @@ def run(args) -> None:
 def _run_active(args, cfg, fit) -> None:
     import jax
     import jax.numpy as jnp
+    from pixel.infer.q_integration._legacy import DirectCoordinates
     from pixel.infer.q_integration.target import QTarget
     from pixel.plotting.evidence_scan import plot_evidence_scan, scan_evidence
 
@@ -320,6 +321,13 @@ def _run_active(args, cfg, fit) -> None:
             args.q, args.mode, use_kernel_cache=True, t0=t0
         )
         model = analysis.compile()
+    # Reject a target/version mismatch before the potentially long MAP solve.
+    chain_info = None
+    if args.chain:
+        reference_coordinates = DirectCoordinates.from_model(
+            model, prior_rcond=cfg.Q_INTEGRATION_PRIOR_RCOND
+        )
+        chain_info = _check_chain(Path(args.chain), model, reference_coordinates)
     coordinates, center, map_info = prepare_q_map_start(
         model,
         prior_rcond=cfg.Q_INTEGRATION_PRIOR_RCOND,
@@ -332,7 +340,6 @@ def _run_active(args, cfg, fit) -> None:
     )
     if len(labels) != 6:
         raise ValueError(f"expected six exp normalizations; found {labels}")
-    chain_info = _check_chain(Path(args.chain), model, coordinates) if args.chain else None
     if chain_info is not None and list(labels) != chain_info["normalization_labels"]:
         raise ValueError("reference chain normalization labels do not match")
     indices = tuple(target.free_labels().index(label) for label in labels)
