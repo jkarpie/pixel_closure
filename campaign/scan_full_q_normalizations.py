@@ -1,7 +1,9 @@
 """MAP-centred numerical evidence scan of full JAM q-fit normalizations.
 
-Run on a machine with the already-built closure kernel cache.  This does not
-generate truth, run NUTS, or run posterior marginalization.  It rebuilds the
+Run on a machine with the already-built closure kernel cache. This does not
+generate truth, run NUTS, or run posterior marginalization. Cache misses inside
+PIXEL can still build missing kernels, so a minimal cache-size guard prevents
+accidental execution against an empty or barely started cache. It rebuilds the
 compiled target, finds/loads its MAP, and reuses PIXEL's evidence-scan evaluator.
 """
 
@@ -308,7 +310,16 @@ def _run_active(args, cfg, fit) -> None:
     if not cfg.KERNEL_CACHE_ROOT.is_dir():
         raise FileNotFoundError(
             f"{cfg.KERNEL_CACHE_ROOT} is absent. Run on the production machine "
-            "with its existing kernel cache; this diagnostic does not generate it."
+            "with its existing kernel cache."
+        )
+    cached_matrices = sum(1 for _ in cfg.KERNEL_CACHE_ROOT.rglob("*.npz"))
+    if cached_matrices < args.min_cached_matrices:
+        raise RuntimeError(
+            f"only {cached_matrices} kernel cache matrices found under "
+            f"{cfg.KERNEL_CACHE_ROOT}; at least {args.min_cached_matrices} "
+            "are required by this safety check. PIXEL can generate missing "
+            "kernels on a cache miss, so verify the production cache before "
+            "lowering --min-cached-matrices."
         )
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -410,9 +421,12 @@ def main() -> None:
     parser.add_argument("--chain", type=Path, help="reference chain for target-fingerprint check")
     parser.add_argument("--points", type=int, default=9)
     parser.add_argument("--chunk-size", type=int, default=2)
+    parser.add_argument("--min-cached-matrices", type=int, default=100)
     args = parser.parse_args()
     if args.points < 3 or args.points % 2 != 1:
         parser.error("--points must be an odd integer >= 3")
+    if args.chunk_size < 1 or args.min_cached_matrices < 0:
+        parser.error("--chunk-size must be positive and --min-cached-matrices nonnegative")
     run(args)
 
 
