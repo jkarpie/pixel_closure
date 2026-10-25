@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import time
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -25,12 +26,20 @@ class MapOptions:
     newton_maxiter: int = _NEWTON_MAXITER
     lbfgs_maxfun: int = 400000
     checkpoint_every: int = 50
+    adam_steps: tuple[int, ...] = (2000, 2000, 2000)
+    adam_learning_rates: tuple[float, ...] = (0.01, 0.003, 0.001)
 
     def __post_init__(self):
         if min(self.lbfgs_maxiter, self.newton_maxiter) < 0:
             raise ValueError("MAP iteration limits must be nonnegative")
         if self.lbfgs_maxfun < 1 or self.checkpoint_every < 1:
             raise ValueError("MAP maxfun and checkpoint interval must be positive")
+        if self.adam_steps and len(self.adam_steps) != len(self.adam_learning_rates):
+            raise ValueError("Adam steps and learning rates need the same number of passes")
+        if any(steps < 1 for steps in self.adam_steps):
+            raise ValueError("Adam steps must be positive; use an empty schedule to disable")
+        if any(not np.isfinite(rate) or rate <= 0 for rate in self.adam_learning_rates):
+            raise ValueError("Adam learning rates must be finite and positive")
 
 
 def default_map_cache_root() -> Path:
@@ -113,10 +122,11 @@ class MapConvergenceError(RuntimeError):
 
 
 def _optimize_center(target, initial, *, options=None, progress=None):
-    """L-BFGS then exact-HVP Newton refinement; preserve failure diagnostics."""
+    """Adam passes, L-BFGS and exact-HVP Newton; preserve failure diagnostics."""
     import jax
     import jax.numpy as jnp
     from scipy.optimize import minimize
+    from pixel.infer.optimize.adam import adam_minimize
 
     options = options or MapOptions(
         lbfgs_maxiter=_LBFGS_MAXITER, newton_maxiter=_NEWTON_MAXITER,
@@ -145,7 +155,9 @@ def _optimize_center(target, initial, *, options=None, progress=None):
     best = (initial_action, origin.copy(), float(np.linalg.norm(initial_gradient)))
     started = time.monotonic()
     info = {
-        "method": "lbfgs_then_trust_ncg", "options": asdict(options),
+        "method": ("adam_then_lbfgs_then_trust_ncg" if options.adam_steps
+                   else "lbfgs_then_trust_ncg"),
+        "options": asdict(options),
         "start_action": initial_action,
         "start_gradient_norm": best[2], "stages": {},
     }
@@ -164,6 +176,44 @@ def _optimize_center(target, initial, *, options=None, progress=None):
 
     record(origin, "initial", 0)
     point = origin
+    # Reuse PIXEL's bias-corrected Adam on the same explicit-q action/gradient.
+    # Q coordinates already encode physical support, so no extra box clipping
+    # or posterior approximation is introduced here.
+    adam_target = SimpleNamespace(value_and_grad=value_and_grad, bounds=lambda: None)
+    for number, (steps, rate) in enumerate(zip(
+        options.adam_steps, options.adam_learning_rates,
+    ), 1):
+        stage = f"adam_{number}"
+        start_action, start_gradient = objective(point)
+        stage_info = {
+            "method": "adam", "learning_rate": rate, "maxiter": steps,
+            "beta1": 0.9, "beta2": 0.999, "eps": 1e-8,
+            "start_action": start_action,
+            "start_gradient_norm": float(np.linalg.norm(start_gradient)),
+        }
+        info["stages"][stage] = stage_info
+        record(point, stage, 0)
+
+        def adam_callback(iteration, x, _action, _norm):
+            if iteration and iteration % options.checkpoint_every == 0:
+                record(x, stage, iteration)
+
+        result = adam_minimize(
+            adam_target, point, learning_rate=rate, max_iter=steps,
+            beta1=0.9, beta2=0.999, eps=1e-8,
+            gtol=1e-6, ftol=0.0, callback=adam_callback, verbose=False,
+        )
+        norm = float(np.linalg.norm(result.jac))
+        stage_info.update(
+            nit=int(result.nit), nfev=int(result.nfev),
+            success=bool(result.success), message=str(result.message),
+            action=float(result.fun) if np.isfinite(result.fun) else None,
+            gradient_norm=norm if np.isfinite(norm) else None,
+        )
+        record(result.x, stage, int(result.nit))
+        # Reset moments for the next learning rate; always retain the lowest
+        # finite action seen so an overshoot cannot worsen the SciPy start.
+        point = best[1]
     for stage, method, limit, extra in (
         ("lbfgs", "L-BFGS-B", options.lbfgs_maxiter, {
             # Action cancellation can stop this fit well before stationarity.
@@ -176,6 +226,12 @@ def _optimize_center(target, initial, *, options=None, progress=None):
             info["stages"][stage] = {"nit": 0, "message": "disabled", "success": False}
             continue
         iteration = 0
+        start_action, start_gradient = objective(point)
+        info["stages"][stage] = {
+            "method": method, "maxiter": limit, "start_action": start_action,
+            "start_gradient_norm": float(np.linalg.norm(start_gradient)),
+        }
+        record(point, stage, 0)
 
         def callback(x):
             nonlocal iteration
@@ -188,10 +244,10 @@ def _optimize_center(target, initial, *, options=None, progress=None):
             **({"hessp": hessp} if stage == "newton" else {}),
             options={"maxiter": limit, **extra},
         )
-        info["stages"][stage] = {
+        info["stages"][stage].update({
             name: int(result[name]) for name in ("nit", "nfev", "njev", "nhev", "status")
             if name in result
-        }
+        })
         end_action, end_gradient = objective(result.x)
         info["stages"][stage].update(
             success=bool(result.success), message=str(result.message),

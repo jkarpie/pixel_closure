@@ -59,14 +59,28 @@ def test_cli_passes_large_custom_budgets_and_multiple_cells(monkeypatch, tmp_pat
         "--truth", "NNPDF", "--data", "JAM", "--Q", "2,3", "--modes", "dis,exp",
         "--cache-root", str(tmp_path), "--lbfgs-maxiter", "80000",
         "--newton-maxiter", "8000", "--lbfgs-maxfun", "900000", "--resume",
+        "--adam-steps", "100,200", "--adam-learning-rates", "0.02,0.005",
     ]) == 0
     assert [call[0][2:] for call in calls] == [("2", "dis"), ("2", "exp"), ("3", "dis"), ("3", "exp")]
     for _, kwargs in calls:
         assert kwargs["options"].lbfgs_maxiter == 80000
         assert kwargs["options"].newton_maxiter == 8000
         assert kwargs["options"].lbfgs_maxfun == 900000
+        assert kwargs["options"].adam_steps == (100, 200)
+        assert kwargs["options"].adam_learning_rates == (0.02, 0.005)
         assert kwargs["resume"]
     assert prepare_map.main(["--newton-maxiter", "-1"]) == 2
+
+
+def test_cli_can_disable_adam_and_rejects_bad_schedules(monkeypatch):
+    calls = []
+    monkeypatch.setattr(prepare_map, "prepare_cell", lambda *a, **k: calls.append(k))
+    assert prepare_map.main(["--adam-steps", "0"]) == 0
+    assert calls[0]["options"].adam_steps == ()
+    calls.clear()
+    assert prepare_map.main(["--adam-steps", "1,2"]) == 2
+    assert prepare_map.main(["--adam-steps", "bad"]) == 2
+    assert not calls
 
 
 def test_map_cache_environment_is_shared_by_preparation_and_old_runners(monkeypatch, tmp_path):
@@ -136,6 +150,8 @@ def test_submit_orders_preparation_and_production_and_propagates_failure(tmp_pat
         assert "closure_full_q_integration.prepare_map" in commands[1]
         assert "--lbfgs-maxiter 40000" in commands[1]
         assert "--newton-maxiter 2000" in commands[1]
+        assert "--adam-steps 2000,2000,2000" in commands[1]
+        assert "--adam-learning-rates 0.01,0.003,0.001" in commands[1]
         if failure == "map":
             assert result.returncode == 8
             assert len(commands) == 2

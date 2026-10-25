@@ -1,7 +1,6 @@
 """Prepare a saved full-scale explicit-q MAP without launching any sampling.
 
-Example: python -m closure_full_q_integration.prepare_map --truth JAM \
-    --data union --Q 2 --modes exp --lbfgs-maxiter 40000 --newton-maxiter 2000
+Uses Adam passes, then L-BFGS-B, then Newton trust-region refinement.
 """
 
 from __future__ import annotations
@@ -22,6 +21,15 @@ def _choices(raw, choices, label):
     return values
 
 
+def _adam_schedule(steps_raw, rates_raw):
+    try:
+        steps = tuple(int(part.strip()) for part in steps_raw.split(","))
+        rates = tuple(float(part.strip()) for part in rates_raw.split(","))
+    except ValueError as exc:
+        raise ValueError("Adam steps/rates must be comma-separated integers/numbers") from exc
+    return (() if steps == (0,) else steps), rates
+
+
 def prepare_cell(truth, data, q_key, mode, *, cache_root=None, options=None,
                  resume=False, check_only=False):
     """Build exactly the source runner's final t0 target, without run_fit/MCMC."""
@@ -33,6 +41,7 @@ def prepare_cell(truth, data, q_key, mode, *, cache_root=None, options=None,
         print(f"MAP target: {package} Q={q_key} mode={mode} cache={cache_root}", flush=True)
         analysis, _fields = fit.build_analysis(q_key, mode, use_kernel_cache=True)
         model = analysis.compile()
+        print("MAP covariance preparation: preliminary DIS t0 fits", flush=True)
         t0, iterations = fit._iterate_t0(q_key, mode, model, use_kernel_cache=True)
         if t0:
             analysis, _fields = fit.build_analysis(
@@ -40,6 +49,18 @@ def prepare_cell(truth, data, q_key, mode, *, cache_root=None, options=None,
             )
             model = analysis.compile()
         print(f"MAP target ready: DIS t0 iterations={iterations}", flush=True)
+        if not check_only:
+            from .map_start import MapOptions
+
+            selected = options or MapOptions()
+            schedule = ", ".join(
+                f"{steps} steps at lr={rate:g}" for steps, rate in zip(
+                    selected.adam_steps, selected.adam_learning_rates,
+                )
+            ) or "disabled"
+            print(f"MAP schedule: Adam [{schedule}] -> "
+                  f"L-BFGS-B ({selected.lbfgs_maxiter}) -> "
+                  f"Newton ({selected.newton_maxiter})", flush=True)
 
         def progress(_point, info):
             print(
@@ -48,6 +69,9 @@ def prepare_cell(truth, data, q_key, mode, *, cache_root=None, options=None,
                 f"elapsed={info['elapsed_seconds']:.1f}s status={info['status']}\n"
                 f"  checkpoint: {info['checkpoint_path']}", flush=True,
             )
+            result = info["stages"].get(info["stage"], {})
+            if "message" in result:
+                print(f"  {info['stage']}: {result['message']}", flush=True)
 
         kwargs = dict(prior_rcond=cfg.Q_INTEGRATION_PRIOR_RCOND, cache_root=cache_root)
         if check_only:
@@ -78,6 +102,10 @@ def main(argv=None):
     parser.add_argument("--lbfgs-maxfun", type=int, default=400000)
     parser.add_argument("--newton-maxiter", type=int, default=2000)
     parser.add_argument("--checkpoint-every", type=int, default=50)
+    parser.add_argument("--adam-steps", default="2000,2000,2000",
+                        help="steps per Adam pass; comma list, or 0 to disable")
+    parser.add_argument("--adam-learning-rates", default="0.01,0.003,0.001",
+                        help="one positive learning rate per Adam pass")
     parser.add_argument("--resume", action="store_true",
                         help="restart optimization from a matching saved candidate")
     parser.add_argument("--check-only", action="store_true",
@@ -99,8 +127,12 @@ def main(argv=None):
         os.environ.setdefault("XLA_FLAGS", "--xla_cpu_multi_thread_eigen=false")
         from .map_start import MapOptions
 
-        options = MapOptions(args.lbfgs_maxiter, args.newton_maxiter,
-                             args.lbfgs_maxfun, args.checkpoint_every)
+        adam_steps, adam_rates = _adam_schedule(args.adam_steps, args.adam_learning_rates)
+        options = MapOptions(
+            lbfgs_maxiter=args.lbfgs_maxiter, newton_maxiter=args.newton_maxiter,
+            lbfgs_maxfun=args.lbfgs_maxfun, checkpoint_every=args.checkpoint_every,
+            adam_steps=adam_steps, adam_learning_rates=adam_rates,
+        )
         for q_key in scales:
             for mode in modes:
                 prepare_cell(args.truth, args.data, q_key, mode,
