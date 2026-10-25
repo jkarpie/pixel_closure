@@ -1,6 +1,6 @@
 """Prepare a saved full-scale explicit-q MAP without launching any sampling.
 
-Uses Adam passes, then L-BFGS-B, then Newton trust-region refinement.
+Uses L-BFGS-B, then Adam passes, then Newton trust-region refinement.
 """
 
 from __future__ import annotations
@@ -58,8 +58,8 @@ def prepare_cell(truth, data, q_key, mode, *, cache_root=None, options=None,
                     selected.adam_steps, selected.adam_learning_rates,
                 )
             ) or "disabled"
-            print(f"MAP schedule: Adam [{schedule}] -> "
-                  f"L-BFGS-B ({selected.lbfgs_maxiter}) -> "
+            print(f"MAP schedule: L-BFGS-B ({selected.lbfgs_maxiter}) -> "
+                  f"Adam [{schedule}] -> "
                   f"Newton ({selected.newton_maxiter})", flush=True)
 
         def progress(_point, info):

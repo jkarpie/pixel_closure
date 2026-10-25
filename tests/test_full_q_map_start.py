@@ -141,8 +141,9 @@ def test_real_qtarget_map_roundtrip_and_changed_target_rejection(tmp_path, monke
                                      adam_steps=(50, 30), adam_learning_rates=(0.03, 0.01)),
     )
     np.testing.assert_allclose(point, [2 / 3], atol=1e-7)
-    assert tuple(info["stages"]) == ("adam_1", "adam_2", "lbfgs", "newton")
-    assert info["stages"]["lbfgs"]["start_action"] <= info["stages"]["adam_2"]["action"]
+    assert tuple(info["stages"]) == ("lbfgs", "adam_1", "adam_2", "newton")
+    assert info["stages"]["adam_1"]["start_action"] <= info["stages"]["lbfgs"]["action"]
+    assert info["stages"]["newton"]["start_action"] <= info["stages"]["adam_2"]["action"]
     monkeypatch.setattr(map_start, "_optimize_center", lambda *a, **k: pytest.fail(
         "cached/stream calls must never repeat optimization"
     ))
@@ -176,7 +177,7 @@ def test_newton_budget_is_used_after_short_bfgs():
     assert info["gradient_norm"] <= 1e-3
 
 
-def test_adam_schedule_refines_high_dimensional_target_and_hands_off_best_point():
+def test_lbfgs_adam_newton_schedule_refines_high_dimensional_target():
     class ScaledTarget:
         def action_and_grad(self, x):
             center = jnp.linspace(-1.5, 1.5, 128)
@@ -194,23 +195,24 @@ def test_adam_schedule_refines_high_dimensional_target_and_hands_off_best_point(
     )
     np.testing.assert_allclose(point, np.linspace(-1.5, 1.5, 128), atol=1e-3)
     assert info["gradient_norm"] <= 1e-3
-    assert tuple(info["stages"]) == ("adam_1", "adam_2", "adam_3", "lbfgs", "newton")
-    assert info["stages"]["adam_3"]["action"] < info["start_action"] * 0.01
-    assert info["stages"]["lbfgs"]["start_action"] < info["start_action"] * 0.01
+    assert tuple(info["stages"]) == ("lbfgs", "adam_1", "adam_2", "adam_3", "newton")
+    assert info["stages"]["lbfgs"]["action"] < info["start_action"] * 0.01
+    assert info["stages"]["adam_1"]["start_action"] <= info["stages"]["lbfgs"]["action"]
+    assert info["stages"]["newton"]["start_action"] <= info["stages"]["adam_3"]["action"]
     actions = [row["action"] for _, row in events]
     assert all(after <= before for before, after in zip(actions, actions[1:]))
     assert any(row["stage"] == "adam_1" and row["iteration"] == 25 for _, row in events)
 
 
-def test_adam_overshoot_cannot_worsen_lbfgs_start():
+def test_adam_overshoot_cannot_worsen_newton_start():
     point, info = map_start._optimize_center(
         QuadraticTarget(), np.zeros(2),
         options=map_start.MapOptions(
             adam_steps=(3,), adam_learning_rates=(1e6,),
-            lbfgs_maxiter=50, newton_maxiter=20,
+            lbfgs_maxiter=1, newton_maxiter=20,
         ),
     )
-    assert info["stages"]["lbfgs"]["start_action"] == info["start_action"]
+    assert info["stages"]["newton"]["start_action"] <= info["stages"]["lbfgs"]["action"]
     np.testing.assert_allclose(point, [1.5, -2], atol=1e-6)
 
 
@@ -224,10 +226,10 @@ def test_nonfinite_adam_step_falls_back_to_finite_candidate():
     point, info = map_start._optimize_center(
         FiniteRegion(), np.zeros(2),
         options=map_start.MapOptions(adam_steps=(10,), adam_learning_rates=(100,),
-                                     lbfgs_maxiter=50, newton_maxiter=20),
+                                     lbfgs_maxiter=0, newton_maxiter=20),
     )
     assert "Non-finite" in info["stages"]["adam_1"]["message"]
-    assert info["stages"]["lbfgs"]["start_action"] == info["start_action"]
+    assert info["stages"]["newton"]["start_action"] == info["start_action"]
     np.testing.assert_allclose(point, np.ones(2), atol=1e-6)
 
 

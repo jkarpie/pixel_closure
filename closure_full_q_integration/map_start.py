@@ -122,7 +122,7 @@ class MapConvergenceError(RuntimeError):
 
 
 def _optimize_center(target, initial, *, options=None, progress=None):
-    """Adam passes, L-BFGS and exact-HVP Newton; preserve failure diagnostics."""
+    """L-BFGS, Adam passes, and exact-HVP Newton; preserve failure diagnostics."""
     import jax
     import jax.numpy as jnp
     from scipy.optimize import minimize
@@ -155,7 +155,7 @@ def _optimize_center(target, initial, *, options=None, progress=None):
     best = (initial_action, origin.copy(), float(np.linalg.norm(initial_gradient)))
     started = time.monotonic()
     info = {
-        "method": ("adam_then_lbfgs_then_trust_ncg" if options.adam_steps
+        "method": ("lbfgs_then_adam_then_trust_ncg" if options.adam_steps
                    else "lbfgs_then_trust_ncg"),
         "options": asdict(options),
         "start_action": initial_action,
@@ -176,6 +176,52 @@ def _optimize_center(target, initial, *, options=None, progress=None):
 
     record(origin, "initial", 0)
     point = origin
+
+    def run_scipy_stage(stage, method, limit, extra):
+        nonlocal point
+        if limit == 0:
+            info["stages"][stage] = {"nit": 0, "message": "disabled", "success": False}
+            return
+        iteration = 0
+        start_action, start_gradient = objective(point)
+        info["stages"][stage] = {
+            "method": method, "maxiter": limit, "start_action": start_action,
+            "start_gradient_norm": float(np.linalg.norm(start_gradient)),
+        }
+        record(point, stage, 0)
+
+        def callback(x):
+            nonlocal iteration
+            iteration += 1
+            if iteration % options.checkpoint_every == 0:
+                record(x, stage, iteration)
+
+        result = minimize(
+            objective, point, jac=True, method=method, callback=callback,
+            **({"hessp": hessp} if stage == "newton" else {}),
+            options={"maxiter": limit, **extra},
+        )
+        info["stages"][stage].update({
+            name: int(result[name]) for name in ("nit", "nfev", "njev", "nhev", "status")
+            if name in result
+        })
+        end_action, end_gradient = objective(result.x)
+        info["stages"][stage].update(
+            success=bool(result.success), message=str(result.message),
+            action=end_action if np.isfinite(end_action) else None,
+            gradient_norm=(float(np.linalg.norm(end_gradient))
+                           if np.all(np.isfinite(end_gradient)) else None),
+        )
+        record(result.x, stage, int(result.nit))
+        # Pass the lowest finite action to the next optimizer even if the last
+        # step was uphill or non-finite.
+        point = best[1]
+
+    run_scipy_stage("lbfgs", "L-BFGS-B", options.lbfgs_maxiter, {
+        # Action cancellation can stop this fit well before stationarity.
+        "gtol": 1.0e-8, "ftol": 0.0, "maxls": 100, "maxcor": 50,
+        "maxfun": options.lbfgs_maxfun,
+    })
     # Reuse PIXEL's bias-corrected Adam on the same explicit-q action/gradient.
     # Q coordinates already encode physical support, so no extra box clipping
     # or posterior approximation is introduced here.
@@ -211,53 +257,12 @@ def _optimize_center(target, initial, *, options=None, progress=None):
             gradient_norm=norm if np.isfinite(norm) else None,
         )
         record(result.x, stage, int(result.nit))
-        # Reset moments for the next learning rate; always retain the lowest
-        # finite action seen so an overshoot cannot worsen the SciPy start.
+        # Reset moments for the next learning rate; retain the lowest finite
+        # action so an overshoot cannot worsen the Newton start.
         point = best[1]
-    for stage, method, limit, extra in (
-        ("lbfgs", "L-BFGS-B", options.lbfgs_maxiter, {
-            # Action cancellation can stop this fit well before stationarity.
-            "gtol": 1.0e-8, "ftol": 0.0, "maxls": 100, "maxcor": 50,
-            "maxfun": options.lbfgs_maxfun,
-        }),
-        ("newton", "trust-ncg", options.newton_maxiter, {"gtol": 1.0e-6}),
-    ):
-        if limit == 0:
-            info["stages"][stage] = {"nit": 0, "message": "disabled", "success": False}
-            continue
-        iteration = 0
-        start_action, start_gradient = objective(point)
-        info["stages"][stage] = {
-            "method": method, "maxiter": limit, "start_action": start_action,
-            "start_gradient_norm": float(np.linalg.norm(start_gradient)),
-        }
-        record(point, stage, 0)
 
-        def callback(x):
-            nonlocal iteration
-            iteration += 1
-            if iteration % options.checkpoint_every == 0:
-                record(x, stage, iteration)
-
-        result = minimize(
-            objective, point, jac=True, method=method, callback=callback,
-            **({"hessp": hessp} if stage == "newton" else {}),
-            options={"maxiter": limit, **extra},
-        )
-        info["stages"][stage].update({
-            name: int(result[name]) for name in ("nit", "nfev", "njev", "nhev", "status")
-            if name in result
-        })
-        end_action, end_gradient = objective(result.x)
-        info["stages"][stage].update(
-            success=bool(result.success), message=str(result.message),
-            action=end_action if np.isfinite(end_action) else None,
-            gradient_norm=(float(np.linalg.norm(end_gradient))
-                           if np.all(np.isfinite(end_gradient)) else None),
-        )
-        record(result.x, stage, int(result.nit))
-        # Refine the best finite candidate even after an uphill last point.
-        point = best[1]
+    run_scipy_stage("newton", "trust-ncg", options.newton_maxiter,
+                    {"gtol": 1.0e-6})
     converged = best[2] <= _MAX_GRADIENT_NORM
     record(best[1], "finished", 0, "complete" if converged else "failed")
     if not converged:

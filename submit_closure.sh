@@ -34,13 +34,13 @@ PIXEL_PROGRESS=1 ./run_closure.sh --truth $truth --data union --Q $Q \
 
 # This command can also be run independently before submitting this job.
 # A matching converged saved MAP is reused without another optimization.
-echo "Preparing explicit-q MAP: Adam -> L-BFGS -> Newton (or loading validated MAP)"
+echo "Preparing explicit-q MAP: L-BFGS -> Adam -> Newton (or loading validated MAP)"
 "$python_bin" -m closure_full_q_integration.prepare_map \
   --truth "$truth" --data union --Q "$Q" --modes "$dataset" \
-  --adam-steps "${PIXEL_MAP_ADAM_STEPS:-2000,2000,2000}" \
-  --adam-learning-rates "${PIXEL_MAP_ADAM_LEARNING_RATES:-0.01,0.003,0.001}" \
   --lbfgs-maxiter "${PIXEL_MAP_LBFGS_MAXITER:-40000}" \
   --lbfgs-maxfun "${PIXEL_MAP_LBFGS_MAXFUN:-400000}" \
+  --adam-steps "${PIXEL_MAP_ADAM_STEPS:-2000,2000,2000}" \
+  --adam-learning-rates "${PIXEL_MAP_ADAM_LEARNING_RATES:-0.01,0.003,0.001}" \
   --newton-maxiter "${PIXEL_MAP_NEWTON_MAXITER:-2000}" \
   > "${production_root}.map.log" 2>&1
 

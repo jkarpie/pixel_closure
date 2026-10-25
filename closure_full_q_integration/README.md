@@ -15,18 +15,20 @@ Prepare source pseudodata and kernels first, then run:
 ```bash
 ../pixel/venv/bin/python -m closure_full_q_integration.prepare_map \
   --truth JAM --data union --Q 2 --modes exp \
+  --lbfgs-maxiter 40000 --lbfgs-maxfun 400000 \
   --adam-steps 2000,2000,2000 --adam-learning-rates 0.01,0.003,0.001 \
-  --lbfgs-maxiter 40000 --newton-maxiter 2000 \
-  --lbfgs-maxfun 400000
+  --newton-maxiter 2000
 ```
 
-The default search is three Adam passes (2,000 steps each, at learning rates
-0.01, 0.003, and 0.001), then up to 40,000 L-BFGS-B iterations, then up to
+The default search is up to 40,000 L-BFGS-B iterations, then three Adam passes
+(2,000 steps each, at learning rates 0.01, 0.003, and 0.001), then up to
 2,000 Newton trust-region iterations with exact Hessian-vector products.
+L-BFGS-B first locates a promising region, Adam can continue along narrow
+valleys, and Newton refines the resulting point toward stationarity.
 Adam uses PIXEL's bias-corrected implementation on the same explicit-q action
 and analytic gradient, with beta1=0.9, beta2=0.999, and epsilon=1e-8. Each pass
 starts from the best finite candidate so far and resets its moment estimates.
-An overshoot cannot worsen the starting point handed to L-BFGS. Reaching an
+An overshoot cannot worsen the starting point handed to Newton. Reaching an
 Adam step budget is expected; it does not certify convergence. The schedule
 is configurable and has not been benchmarked on a completed full JAM search.
 
@@ -53,7 +55,7 @@ Checkpoints are saved every 50 iterations and at stage boundaries; change
 this with `--checkpoint-every`. On interruption, the last saved checkpoint
 survives. To restart optimization from that point with fresh optimizer state,
 repeat the preparation command with `--resume` and optionally larger budgets.
-This restarts the selected Adam/L-BFGS/Newton sequence with fresh optimizer
+This restarts the selected L-BFGS/Adam/Newton sequence with fresh optimizer
 state. Use `--resume --adam-steps 0` to go straight to L-BFGS/Newton from the
 saved candidate. A matching converged MAP is always reused. Use `--check-only` to
 validate without optimization.
@@ -64,7 +66,7 @@ and gradient. Changing the target requires fresh preparation. Adding Adam does
 not change the fingerprint: existing validated MAPs and matching candidate
 checkpoints from the L-BFGS/Newton driver remain usable.
 
-Logs label the full search as `adam_1`, `adam_2`, `adam_3`, `lbfgs`, and
+Logs label the full search as `lbfgs`, `adam_1`, `adam_2`, `adam_3`, and
 `newton`, and record each stage's starting action and gradient. Adam is added
 to the full explicit-q search; the preliminary DIS t0 covariance fits retain
 their existing policy.
