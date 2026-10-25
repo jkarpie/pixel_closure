@@ -16,6 +16,8 @@ For each q target, also prepare the MAP independently before sampling:
   --out campaign/full_scale_core16 \
   --lbfgs-maxiter 40000 \
   --adam-steps 2000,2000,2000 --adam-learning-rates 0.01,0.003,0.001 \
+  --refine-lbfgs-maxiter 10000 --refine-lbfgs-gtol 1e-10 \
+  --map-gradient-tol 1e-3 \
   --newton-maxiter 2000
 ```
 

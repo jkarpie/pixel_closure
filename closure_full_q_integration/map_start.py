@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import time
 from types import SimpleNamespace
+import warnings
 
 import numpy as np
 
@@ -23,18 +24,39 @@ _MAX_GRADIENT_NORM = 1.0e-3
 @dataclass(frozen=True)
 class MapOptions:
     lbfgs_maxiter: int = _LBFGS_MAXITER
+    refine_lbfgs_maxiter: int = 10000
     newton_maxiter: int = _NEWTON_MAXITER
     lbfgs_maxfun: int = 400000
+    lbfgs_gtol: float = 1.0e-8
+    lbfgs_maxls: int = 100
+    lbfgs_maxcor: int = 50
+    refine_lbfgs_maxfun: int = 100000
+    refine_lbfgs_gtol: float = 1.0e-10
+    refine_lbfgs_maxls: int = 100
+    refine_lbfgs_maxcor: int = 100
+    map_gradient_tol: float = _MAX_GRADIENT_NORM
+    newton_gtol: float = 1.0e-6
     checkpoint_every: int = 50
     report_every: int = 100
     adam_steps: tuple[int, ...] = (2000, 2000, 2000)
     adam_learning_rates: tuple[float, ...] = (0.01, 0.003, 0.001)
 
     def __post_init__(self):
-        if min(self.lbfgs_maxiter, self.newton_maxiter) < 0:
+        if min(self.lbfgs_maxiter, self.refine_lbfgs_maxiter, self.newton_maxiter) < 0:
             raise ValueError("MAP iteration limits must be nonnegative")
-        if self.lbfgs_maxfun < 1 or self.checkpoint_every < 1 or self.report_every < 1:
-            raise ValueError("MAP maxfun, checkpoint and report intervals must be positive")
+        if (min(self.lbfgs_maxfun, self.lbfgs_maxls, self.lbfgs_maxcor,
+                self.refine_lbfgs_maxfun,
+                self.refine_lbfgs_maxls, self.refine_lbfgs_maxcor,
+                self.checkpoint_every, self.report_every) < 1):
+            raise ValueError("MAP function limits, solver sizes and report intervals must be positive")
+        if not np.isfinite(self.lbfgs_gtol) or self.lbfgs_gtol < 0:
+            raise ValueError("MAP initial L-BFGS gradient tolerance must be finite and nonnegative")
+        if not np.isfinite(self.refine_lbfgs_gtol) or self.refine_lbfgs_gtol < 0:
+            raise ValueError("MAP refinement L-BFGS gradient tolerance must be finite and nonnegative")
+        if not np.isfinite(self.map_gradient_tol) or self.map_gradient_tol <= 0:
+            raise ValueError("MAP gradient tolerance must be finite and positive")
+        if not np.isfinite(self.newton_gtol) or self.newton_gtol <= 0:
+            raise ValueError("Newton gradient tolerance must be finite and positive")
         if self.report_every % self.checkpoint_every:
             raise ValueError("MAP report interval must be a multiple of checkpoint interval")
         if self.adam_steps and len(self.adam_steps) != len(self.adam_learning_rates):
@@ -90,9 +112,25 @@ def _load_point(path: Path, fingerprint: str, dimension: int):
         return None
 
 
-def _load_center(path: Path, fingerprint: str, dimension: int):
+def _gradient_tolerance(info: dict, override: float | None = None) -> float | None:
+    settings = info.get("options") or {}
+    if not isinstance(settings, dict):
+        return None
+    raw = (override if override is not None else
+           settings.get("map_gradient_tol", _MAX_GRADIENT_NORM))
+    try:
+        tolerance = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return tolerance if np.isfinite(tolerance) and tolerance > 0 else None
+
+
+def _load_center(path: Path, fingerprint: str, dimension: int,
+                 gradient_tol: float | None = None):
     cached = _load_point(path, fingerprint, dimension)
-    if cached is None or float(cached[1]["gradient_norm"]) > _MAX_GRADIENT_NORM:
+    if cached is None:
+        return None
+    if _gradient_tolerance(cached[1], gradient_tol) is None:
         return None
     return cached[0], {**cached[1], "cache_status": "hit"}
 
@@ -119,18 +157,8 @@ def _save_json(path: Path, info: dict) -> None:
         temporary.unlink(missing_ok=True)
 
 
-class MapConvergenceError(RuntimeError):
-    def __init__(self, info):
-        self.info = info
-        super().__init__(
-            "full-scale q MAP did not converge: "
-            f"|gradient|={info['gradient_norm']:.6g} > {_MAX_GRADIENT_NORM:g}; "
-            "sampling is refused. See the saved MAP attempt diagnostics."
-        )
-
-
 def _optimize_center(target, initial, *, options=None, progress=None):
-    """L-BFGS, Adam passes, and exact-HVP Newton; preserve failure diagnostics."""
+    """L-BFGS, Adam, L-BFGS refinement, and exact-HVP Newton."""
     import jax
     import jax.numpy as jnp
     from scipy.optimize import minimize
@@ -163,9 +191,10 @@ def _optimize_center(target, initial, *, options=None, progress=None):
     best = (initial_action, origin.copy(), float(np.linalg.norm(initial_gradient)),
             float(np.max(np.abs(initial_gradient))) if initial_gradient.size else 0.0)
     started = time.monotonic()
+    stages = (["lbfgs"] + (["adam"] if options.adam_steps else []) +
+              (["lbfgs"] if options.refine_lbfgs_maxiter else []) + ["trust_ncg"])
     info = {
-        "method": ("lbfgs_then_adam_then_trust_ncg" if options.adam_steps
-                   else "lbfgs_then_trust_ncg"),
+        "method": "_then_".join(stages),
         "options": asdict(options),
         "start_action": initial_action,
         "start_gradient_norm": best[2],
@@ -199,6 +228,7 @@ def _optimize_center(target, initial, *, options=None, progress=None):
         info["stages"][stage] = {
             "method": method, "maxiter": limit, "start_action": start_action,
             "start_gradient_norm": float(np.linalg.norm(start_gradient)),
+            "solver_options": dict(extra),
         }
         record(point, stage, 0)
 
@@ -231,7 +261,8 @@ def _optimize_center(target, initial, *, options=None, progress=None):
 
     run_scipy_stage("lbfgs", "L-BFGS-B", options.lbfgs_maxiter, {
         # Action cancellation can stop this fit well before stationarity.
-        "gtol": 1.0e-8, "ftol": 0.0, "maxls": 100, "maxcor": 50,
+        "gtol": options.lbfgs_gtol, "ftol": 0.0,
+        "maxls": options.lbfgs_maxls, "maxcor": options.lbfgs_maxcor,
         "maxfun": options.lbfgs_maxfun,
     })
     # Reuse PIXEL's bias-corrected Adam on the same explicit-q action/gradient.
@@ -273,12 +304,17 @@ def _optimize_center(target, initial, *, options=None, progress=None):
         # action so an overshoot cannot worsen the Newton start.
         point = best[1]
 
+    run_scipy_stage("lbfgs_refine", "L-BFGS-B", options.refine_lbfgs_maxiter, {
+        "gtol": options.refine_lbfgs_gtol, "ftol": 0.0,
+        "maxls": options.refine_lbfgs_maxls,
+        "maxcor": options.refine_lbfgs_maxcor,
+        "maxfun": options.refine_lbfgs_maxfun,
+    })
     run_scipy_stage("newton", "trust-ncg", options.newton_maxiter,
-                    {"gtol": 1.0e-6})
-    converged = best[2] <= _MAX_GRADIENT_NORM
-    record(best[1], "finished", 0, "complete" if converged else "failed")
-    if not converged:
-        raise MapConvergenceError(info)
+                    {"gtol": min(options.newton_gtol, options.map_gradient_tol)})
+    converged = best[2] <= options.map_gradient_tol
+    info["map_gradient_warning"] = not converged
+    record(best[1], "finished", 0, "complete" if converged else "warning")
     return best[1], info
 
 
@@ -291,33 +327,43 @@ def _target(model, prior_rcond):
     return coordinates, target, _cache_key(model, coordinates, target)
 
 
-def _validated_center(path, fingerprint, coordinates, target):
-    cached = _load_center(path, fingerprint, coordinates.dimension)
+def _validated_center(path, fingerprint, coordinates, target, *, gradient_tol=None):
+    cached = _load_center(path, fingerprint, coordinates.dimension, gradient_tol)
     if cached is None:
         return None
     center, info = cached
+    tolerance = _gradient_tolerance(info, gradient_tol)
     action, gradient = target.action_and_grad(center)
     action, norm = float(action), float(np.linalg.norm(np.asarray(gradient)))
     if (not np.isfinite(action) or not np.isfinite(norm)
-            or norm > _MAX_GRADIENT_NORM
             or not np.isclose(action, info["action"], rtol=1e-9, atol=1e-8)):
         return None
     inf_norm = float(np.max(np.abs(np.asarray(gradient)))) if coordinates.dimension else 0.0
     return center, {**info, "action": action, "gradient_norm": norm,
                     "gradient_inf_norm": inf_norm,
+                    "map_gradient_tol": tolerance,
+                    "map_gradient_warning": norm > tolerance,
                     "cache_path": str(path)}
 
 
-def load_q_map_start(model, *, prior_rcond: float, cache_root: Path):
+def load_q_map_start(model, *, prior_rcond: float, cache_root: Path,
+                     gradient_tol: float | None = None):
     """Load and re-evaluate a stationary MAP; never optimize in a stream."""
     coordinates, target, fingerprint = _target(model, prior_rcond)
     path = Path(cache_root) / f"q_map_{fingerprint}.npz"
-    cached = _validated_center(path, fingerprint, coordinates, target)
+    cached = _validated_center(path, fingerprint, coordinates, target,
+                               gradient_tol=gradient_tol)
     if cached is None:
         raise FileNotFoundError(
             f"no validated full-scale q MAP for this target: {path}. "
             "Run python -m closure_full_q_integration.prepare_map with the same "
             "--truth, --data, --Q and --modes first (and the same MAP cache root)."
+        )
+    if cached[1]["map_gradient_warning"]:
+        warnings.warn(
+            f"loading finite q MAP with |gradient|={cached[1]['gradient_norm']:.6g} "
+            f"above requested tolerance {cached[1]['map_gradient_tol']:g}",
+            RuntimeWarning, stacklevel=2,
         )
     return coordinates, *cached
 
@@ -334,20 +380,30 @@ def prepare_q_map_start(model, *, prior_rcond: float, cache_root: Path,
     attempt_path = stem.with_suffix(".attempt.json")
     with stem.with_suffix(".lock").open("a+b") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        cached = _validated_center(path, fingerprint, coordinates, target)
-        if cached is not None:
+        selected = options or MapOptions()
+        cached = _validated_center(path, fingerprint, coordinates, target,
+                                   gradient_tol=selected.map_gradient_tol)
+        if cached is not None and (not resume or not cached[1]["map_gradient_warning"]):
+            if cached[1]["map_gradient_warning"]:
+                warnings.warn(
+                    f"reusing finite q MAP with |gradient|={cached[1]['gradient_norm']:.6g} "
+                    f"above requested tolerance {selected.map_gradient_tol:g}; "
+                    "use --resume to refine it",
+                    RuntimeWarning, stacklevel=2,
+                )
             return coordinates, *cached
-        initial = coordinates.x0
+        initial = cached[0] if cached is not None else coordinates.x0
         if resume:
             saved = _load_point(checkpoint, fingerprint, coordinates.dimension)
             if saved is None:
                 raise FileNotFoundError(f"no matching finite MAP checkpoint: {checkpoint}")
-            initial = saved[0]
+            if cached is None or float(saved[1]["action"]) <= float(cached[1]["action"]):
+                initial = saved[0]
         attempt_id = time.time_ns()
         latest = {
             "fingerprint": fingerprint, "attempt_id": attempt_id,
             "status": "starting", "resumed": bool(resume),
-            "options": asdict(options or MapOptions()), "updated_at": time.time(),
+            "options": asdict(selected), "updated_at": time.time(),
         }
         _save_json(attempt_path, latest)
 
@@ -365,7 +421,7 @@ def prepare_q_map_start(model, *, prior_rcond: float, cache_root: Path,
 
         try:
             center, info = _optimize_center(
-                target, initial, options=options, progress=persist,
+                target, initial, options=selected, progress=persist,
             )
         except BaseException as exc:
             if latest:
@@ -377,4 +433,11 @@ def prepare_q_map_start(model, *, prior_rcond: float, cache_root: Path,
             raise
         info = {**latest, **info, "fingerprint": fingerprint, "cache_status": "miss"}
         _save_center(path, center, info)
+        if info["map_gradient_warning"]:
+            warnings.warn(
+                f"saved finite q MAP with |gradient|={info['gradient_norm']:.6g} "
+                f"above requested tolerance {selected.map_gradient_tol:g}; "
+                "sampling remains enabled",
+                RuntimeWarning, stacklevel=2,
+            )
     return coordinates, center, {**info, "cache_path": str(path)}

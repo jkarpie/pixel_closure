@@ -59,6 +59,12 @@ def test_cli_passes_large_custom_budgets_and_multiple_cells(monkeypatch, tmp_pat
     assert prepare_map.main([
         "--truth", "NNPDF", "--data", "JAM", "--Q", "2,3", "--modes", "dis,exp",
         "--cache-root", str(tmp_path), "--lbfgs-maxiter", "80000",
+        "--lbfgs-gtol", "1e-7", "--lbfgs-maxls", "60",
+        "--lbfgs-maxcor", "40",
+        "--refine-lbfgs-maxiter", "9000", "--refine-lbfgs-maxfun", "120000",
+        "--refine-lbfgs-gtol", "1e-11", "--refine-lbfgs-maxls", "80",
+        "--refine-lbfgs-maxcor", "70",
+        "--map-gradient-tol", "0.05", "--newton-gtol", "1e-7",
         "--newton-maxiter", "8000", "--lbfgs-maxfun", "900000", "--resume",
         "--report-every", "150",
         "--adam-steps", "100,200", "--adam-learning-rates", "0.02,0.005",
@@ -66,6 +72,16 @@ def test_cli_passes_large_custom_budgets_and_multiple_cells(monkeypatch, tmp_pat
     assert [call[0][2:] for call in calls] == [("2", "dis"), ("2", "exp"), ("3", "dis"), ("3", "exp")]
     for _, kwargs in calls:
         assert kwargs["options"].lbfgs_maxiter == 80000
+        assert kwargs["options"].lbfgs_gtol == 1e-7
+        assert kwargs["options"].lbfgs_maxls == 60
+        assert kwargs["options"].lbfgs_maxcor == 40
+        assert kwargs["options"].refine_lbfgs_maxiter == 9000
+        assert kwargs["options"].refine_lbfgs_maxfun == 120000
+        assert kwargs["options"].refine_lbfgs_gtol == 1e-11
+        assert kwargs["options"].refine_lbfgs_maxls == 80
+        assert kwargs["options"].refine_lbfgs_maxcor == 70
+        assert kwargs["options"].map_gradient_tol == 0.05
+        assert kwargs["options"].newton_gtol == 1e-7
         assert kwargs["options"].newton_maxiter == 8000
         assert kwargs["options"].lbfgs_maxfun == 900000
         assert kwargs["options"].report_every == 150
@@ -73,6 +89,9 @@ def test_cli_passes_large_custom_budgets_and_multiple_cells(monkeypatch, tmp_pat
         assert kwargs["options"].adam_learning_rates == (0.02, 0.005)
         assert kwargs["resume"]
     assert prepare_map.main(["--newton-maxiter", "-1"]) == 2
+    assert prepare_map.main(["--refine-lbfgs-maxiter", "-1"]) == 2
+    assert prepare_map.main(["--refine-lbfgs-gtol", "nan"]) == 2
+    assert prepare_map.main(["--map-gradient-tol", "0"]) == 2
     assert prepare_map.main(["--report-every", "0"]) == 2
     assert prepare_map.main(["--report-every", "125"]) == 2
 
@@ -210,6 +229,13 @@ def test_submit_orders_preparation_and_production_and_propagates_failure(tmp_pat
         assert "closure_full_q_integration.prepare_map" in commands[1]
         assert "--out campaign/JAM_Q2_exp_prod" in commands[1]
         assert "--lbfgs-maxiter 10000" in commands[1]
+        assert "--lbfgs-gtol 1e-8" in commands[1]
+        assert "--lbfgs-maxcor 50" in commands[1]
+        assert "--refine-lbfgs-maxiter 5000" in commands[1]
+        assert "--refine-lbfgs-maxfun 50000" in commands[1]
+        assert "--refine-lbfgs-gtol 1e-10" in commands[1]
+        assert "--map-gradient-tol 1e-3" in commands[1]
+        assert "--newton-gtol 1e-6" in commands[1]
         assert "--newton-maxiter 2000" in commands[1]
         assert "--adam-steps 4000,4000,4000" in commands[1]
         assert "--adam-learning-rates 0.01,0.003,0.001" in commands[1]

@@ -1,6 +1,6 @@
 """Prepare a saved full-scale explicit-q MAP without launching any sampling.
 
-Uses L-BFGS-B, then Adam passes, then Newton trust-region refinement.
+Uses L-BFGS-B, then Adam passes, then L-BFGS-B refinement and Newton.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ def _progress_reporter(report_every):
 
 
 def prepare_cell(truth, data, q_key, mode, *, cache_root=None, options=None,
-                 resume=False, check_only=False):
+                 resume=False, check_only=False, gradient_tol=None):
     """Build exactly the source runner's final t0 target, without run_fit/MCMC."""
     from .map_start import default_map_cache_root, load_q_map_start, prepare_q_map_start
     from .variant import activated
@@ -110,11 +110,15 @@ def prepare_cell(truth, data, q_key, mode, *, cache_root=None, options=None,
             ) or "disabled"
             print(f"MAP schedule: L-BFGS-B ({selected.lbfgs_maxiter}) -> "
                   f"Adam [{schedule}] -> "
+                  f"L-BFGS-B refinement ({selected.refine_lbfgs_maxiter}, "
+                  f"gtol={selected.refine_lbfgs_gtol:g}) -> "
                   f"Newton ({selected.newton_maxiter})", flush=True)
 
         kwargs = dict(prior_rcond=cfg.Q_INTEGRATION_PRIOR_RCOND, cache_root=cache_root)
         if check_only:
-            _coordinates, _center, info = load_q_map_start(model, **kwargs)
+            _coordinates, _center, info = load_q_map_start(
+                model, **kwargs, gradient_tol=gradient_tol,
+            )
         else:
             _coordinates, _center, info = prepare_q_map_start(
                 model, **kwargs, options=options, resume=resume,
@@ -126,6 +130,7 @@ def prepare_cell(truth, data, q_key, mode, *, cache_root=None, options=None,
             f"MAP ready: action={info['action']:.12g} "
             f"|gradient|={info['gradient_norm']:.6g} "
             f"|gradient|_inf={info['gradient_inf_norm']:.6g} "
+            f"warning={info.get('map_gradient_warning', False)} "
             f"cache={info['cache_status']}\n"
             f"  saved MAP: {info['cache_path']}", flush=True,
         )
@@ -145,6 +150,19 @@ def main(argv=None):
                                 help="exact MAP directory; defaults to PIXEL_Q_MAP_CACHE_ROOT")
     parser.add_argument("--lbfgs-maxiter", type=int, default=40000)
     parser.add_argument("--lbfgs-maxfun", type=int, default=400000)
+    parser.add_argument("--lbfgs-gtol", type=float, default=1.0e-8)
+    parser.add_argument("--lbfgs-maxls", type=int, default=100)
+    parser.add_argument("--lbfgs-maxcor", type=int, default=50)
+    parser.add_argument("--refine-lbfgs-maxiter", type=int, default=10000,
+                        help="post-Adam L-BFGS iterations; 0 disables this stage")
+    parser.add_argument("--refine-lbfgs-maxfun", type=int, default=100000)
+    parser.add_argument("--refine-lbfgs-gtol", type=float, default=1.0e-10)
+    parser.add_argument("--refine-lbfgs-maxls", type=int, default=100)
+    parser.add_argument("--refine-lbfgs-maxcor", type=int, default=100)
+    parser.add_argument("--map-gradient-tol", type=float, default=None,
+                        help="Euclidean MAP gradient warning threshold (default 1e-3)")
+    parser.add_argument("--newton-gtol", type=float, default=1.0e-6,
+                        help="Newton solver's gradient tolerance (default 1e-6)")
     parser.add_argument("--newton-maxiter", type=int, default=2000)
     parser.add_argument("--checkpoint-every", type=int, default=50)
     parser.add_argument("--report-every", type=int, default=100,
@@ -179,7 +197,19 @@ def main(argv=None):
                       else args.cache_root)
         options = MapOptions(
             lbfgs_maxiter=args.lbfgs_maxiter, newton_maxiter=args.newton_maxiter,
-            lbfgs_maxfun=args.lbfgs_maxfun, checkpoint_every=args.checkpoint_every,
+            lbfgs_maxfun=args.lbfgs_maxfun,
+            lbfgs_gtol=args.lbfgs_gtol,
+            lbfgs_maxls=args.lbfgs_maxls,
+            lbfgs_maxcor=args.lbfgs_maxcor,
+            refine_lbfgs_maxiter=args.refine_lbfgs_maxiter,
+            refine_lbfgs_maxfun=args.refine_lbfgs_maxfun,
+            refine_lbfgs_gtol=args.refine_lbfgs_gtol,
+            refine_lbfgs_maxls=args.refine_lbfgs_maxls,
+            refine_lbfgs_maxcor=args.refine_lbfgs_maxcor,
+            map_gradient_tol=(args.map_gradient_tol if args.map_gradient_tol is not None
+                              else MapOptions.map_gradient_tol),
+            newton_gtol=args.newton_gtol,
+            checkpoint_every=args.checkpoint_every,
             report_every=args.report_every,
             adam_steps=adam_steps, adam_learning_rates=adam_rates,
         )
@@ -187,7 +217,8 @@ def main(argv=None):
             for mode in modes:
                 prepare_cell(args.truth, args.data, q_key, mode,
                              cache_root=cache_root, options=options,
-                             resume=args.resume, check_only=args.check_only)
+                             resume=args.resume, check_only=args.check_only,
+                             gradient_tol=args.map_gradient_tol)
     except (ValueError, RuntimeError, FileNotFoundError) as exc:
         print(f"MAP preparation failed: {exc}", file=sys.stderr, flush=True)
         return 2

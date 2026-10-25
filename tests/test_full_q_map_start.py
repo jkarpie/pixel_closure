@@ -35,7 +35,7 @@ def test_optimizer_finds_map_not_origin():
     assert info["start_action"] > info["action"]
 
 
-def test_map_cache_rejects_stale_and_nonstationary_entries(tmp_path):
+def test_map_cache_rejects_stale_and_nonfinite_entries_but_loads_finite_candidate(tmp_path):
     path = tmp_path / "center.npz"
     info = {
         "fingerprint": "current", "action": 2.0,
@@ -50,43 +50,87 @@ def test_map_cache_rejects_stale_and_nonstationary_entries(tmp_path):
     map_start._save_center(
         path, np.array([1.0, 2.0]), {**info, "gradient_norm": 1.0},
     )
-    assert map_start._load_center(path, "current", 2) is None
+    assert map_start._load_center(path, "current", 2)[1]["gradient_norm"] == 1.0
     map_start._save_center(
         path, np.array([1.0, 2.0]), {**info, "gradient_norm": float("nan")},
     )
     assert map_start._load_center(path, "current", 2) is None
 
 
-def test_nonconverged_map_refuses_sampling():
-    with pytest.raises(RuntimeError, match="MAP did not converge"):
-        map_start._optimize_center(QuadraticTarget(), np.zeros(2), options=map_start.MapOptions(
-            lbfgs_maxiter=0, newton_maxiter=0, adam_steps=(),
-        ))
+def test_nonconverged_map_returns_finite_candidate_with_warning():
+    center, info = map_start._optimize_center(
+        QuadraticTarget(), np.zeros(2), options=map_start.MapOptions(
+            lbfgs_maxiter=0, refine_lbfgs_maxiter=0, newton_maxiter=0, adam_steps=(),
+        ),
+    )
+    np.testing.assert_array_equal(center, np.zeros(2))
+    assert info["status"] == "warning"
+    assert info["map_gradient_warning"]
 
 
-def test_failure_diagnostics_and_resume_preserve_candidate(tmp_path, monkeypatch):
+def test_gradient_tolerance_is_warning_only_and_saved_for_streams(tmp_path, monkeypatch):
+    coordinates = SimpleNamespace(x0=np.zeros(2), dimension=2)
+    monkeypatch.setattr(map_start, "_target", lambda *_a: (
+        coordinates, QuadraticTarget(), "tolerance-warning",
+    ))
+    no_search = dict(lbfgs_maxiter=0, refine_lbfgs_maxiter=0,
+                     newton_maxiter=0, adam_steps=())
+    with pytest.warns(RuntimeWarning, match="sampling remains enabled"):
+        _, center, info = map_start.prepare_q_map_start(
+            object(), prior_rcond=0, cache_root=tmp_path,
+            options=map_start.MapOptions(**no_search, map_gradient_tol=0.1),
+        )
+    assert info["map_gradient_warning"]
+    assert info["options"]["map_gradient_tol"] == 0.1
+    np.testing.assert_array_equal(center, np.zeros(2))
+    with pytest.warns(RuntimeWarning, match="loading finite q MAP"):
+        _, loaded, warning = map_start.load_q_map_start(
+            object(), prior_rcond=0, cache_root=tmp_path,
+        )
+    np.testing.assert_array_equal(loaded, center)
+    assert warning["map_gradient_tol"] == 0.1
+    with pytest.warns(RuntimeWarning, match="use --resume to refine it"):
+        _, _, cached = map_start.prepare_q_map_start(
+            object(), prior_rcond=0, cache_root=tmp_path,
+            options=map_start.MapOptions(**no_search, map_gradient_tol=0.01),
+        )
+    assert cached["cache_status"] == "hit"
+    assert cached["map_gradient_tol"] == 0.01
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"map_gradient_tol": 0}, {"map_gradient_tol": float("nan")},
+    {"newton_gtol": -1}, {"newton_gtol": float("inf")},
+])
+def test_invalid_map_gradient_tolerances_are_rejected(kwargs):
+    with pytest.raises(ValueError, match="tolerance"):
+        map_start.MapOptions(**kwargs)
+
+
+def test_warning_diagnostics_and_resume_preserve_candidate(tmp_path, monkeypatch):
     coordinates = SimpleNamespace(x0=np.zeros(2), dimension=2)
     monkeypatch.setattr(map_start, "_target", lambda *_a: (
         coordinates, QuadraticTarget(), "quadratic",
     ))
-    with pytest.raises(map_start.MapConvergenceError):
+    with pytest.warns(RuntimeWarning, match="sampling remains enabled"):
         map_start.prepare_q_map_start(
             object(), prior_rcond=0, cache_root=tmp_path,
-            options=map_start.MapOptions(lbfgs_maxiter=1, newton_maxiter=0, adam_steps=()),
+            options=map_start.MapOptions(lbfgs_maxiter=1, refine_lbfgs_maxiter=0,
+                                         newton_maxiter=0, adam_steps=()),
         )
     stem = tmp_path / "q_map_quadratic"
     attempt = json.loads(stem.with_suffix(".attempt.json").read_text())
-    assert attempt["status"] == "failed"
+    assert attempt["status"] == "warning"
     assert attempt["stages"]["lbfgs"]["nit"] == 1
     assert "LIMIT" in attempt["stages"]["lbfgs"]["message"].upper()
     assert attempt["stages"]["lbfgs"]["nfev"] > 0
     assert attempt["action"] < attempt["start_action"]
-    assert not stem.with_suffix(".npz").exists()
+    assert stem.with_suffix(".npz").exists()
     saved_point, saved_info = map_start._load_point(
         stem.with_suffix(".checkpoint.npz"), "quadratic", 2,
     )
     assert saved_info["gradient_norm"] > 1e-3
-    with pytest.raises(FileNotFoundError, match="prepare_map"):
+    with pytest.warns(RuntimeWarning, match="loading finite q MAP"):
         map_start.load_q_map_start(object(), prior_rcond=0, cache_root=tmp_path)
     _, point, info = map_start.prepare_q_map_start(
         object(), prior_rcond=0, cache_root=tmp_path, resume=True,
@@ -144,9 +188,10 @@ def test_real_qtarget_map_roundtrip_and_changed_target_rejection(tmp_path, monke
                                      adam_steps=(50, 30), adam_learning_rates=(0.03, 0.01)),
     )
     np.testing.assert_allclose(point, [2 / 3], atol=1e-7)
-    assert tuple(info["stages"]) == ("lbfgs", "adam_1", "adam_2", "newton")
+    assert tuple(info["stages"]) == ("lbfgs", "adam_1", "adam_2", "lbfgs_refine", "newton")
     assert info["stages"]["adam_1"]["start_action"] <= info["stages"]["lbfgs"]["action"]
-    assert info["stages"]["newton"]["start_action"] <= info["stages"]["adam_2"]["action"]
+    assert info["stages"]["lbfgs_refine"]["start_action"] <= info["stages"]["adam_2"]["action"]
+    assert info["stages"]["newton"]["start_action"] <= info["stages"]["lbfgs_refine"]["action"]
     monkeypatch.setattr(map_start, "_optimize_center", lambda *a, **k: pytest.fail(
         "cached/stream calls must never repeat optimization"
     ))
@@ -171,7 +216,8 @@ def test_real_qtarget_map_roundtrip_and_changed_target_rejection(tmp_path, monke
 def test_newton_budget_is_used_after_short_bfgs():
     _, info = map_start._optimize_center(
         QuadraticTarget(), np.zeros(2),
-        options=map_start.MapOptions(lbfgs_maxiter=1, newton_maxiter=20,
+        options=map_start.MapOptions(lbfgs_maxiter=1, refine_lbfgs_maxiter=0,
+                                     newton_maxiter=20,
                                      checkpoint_every=1, adam_steps=()),
     )
     assert info["stages"]["lbfgs"]["nit"] == 1
@@ -180,7 +226,19 @@ def test_newton_budget_is_used_after_short_bfgs():
     assert info["gradient_norm"] <= 1e-3
 
 
-def test_lbfgs_adam_newton_schedule_refines_high_dimensional_target():
+def test_map_gradient_tolerance_reaches_newton_solver():
+    _, info = map_start._optimize_center(
+        QuadraticTarget(), np.zeros(2),
+        options=map_start.MapOptions(
+            lbfgs_maxiter=0, refine_lbfgs_maxiter=0,
+            adam_steps=(), newton_maxiter=5,
+            map_gradient_tol=1e-8, newton_gtol=1e-4,
+        ),
+    )
+    assert info["stages"]["newton"]["solver_options"]["gtol"] == 1e-8
+
+
+def test_lbfgs_adam_lbfgs_newton_schedule_refines_high_dimensional_target():
     class ScaledTarget:
         def action_and_grad(self, x):
             center = jnp.linspace(-1.5, 1.5, 128)
@@ -198,10 +256,19 @@ def test_lbfgs_adam_newton_schedule_refines_high_dimensional_target():
     )
     np.testing.assert_allclose(point, np.linspace(-1.5, 1.5, 128), atol=1e-3)
     assert info["gradient_norm"] <= 1e-3
-    assert tuple(info["stages"]) == ("lbfgs", "adam_1", "adam_2", "adam_3", "newton")
+    assert tuple(info["stages"]) == ("lbfgs", "adam_1", "adam_2", "adam_3", "lbfgs_refine", "newton")
     assert info["stages"]["lbfgs"]["action"] < info["start_action"] * 0.01
     assert info["stages"]["adam_1"]["start_action"] <= info["stages"]["lbfgs"]["action"]
-    assert info["stages"]["newton"]["start_action"] <= info["stages"]["adam_3"]["action"]
+    assert info["stages"]["lbfgs_refine"]["start_action"] <= info["stages"]["adam_3"]["action"]
+    assert info["stages"]["newton"]["start_action"] <= info["stages"]["lbfgs_refine"]["action"]
+    assert info["stages"]["lbfgs_refine"]["solver_options"] == {
+        "gtol": 1e-10, "ftol": 0.0, "maxls": 100,
+        "maxcor": 100, "maxfun": 100000,
+    }
+    assert info["stages"]["lbfgs"]["solver_options"] == {
+        "gtol": 1e-8, "ftol": 0.0, "maxls": 100,
+        "maxcor": 50, "maxfun": 400000,
+    }
     actions = [row["action"] for _, row in events]
     assert all(after <= before for before, after in zip(actions, actions[1:]))
     assert any(row["stage"] == "adam_1" and row["iteration"] == 25 for _, row in events)
@@ -212,7 +279,7 @@ def test_adam_overshoot_cannot_worsen_newton_start():
         QuadraticTarget(), np.zeros(2),
         options=map_start.MapOptions(
             adam_steps=(3,), adam_learning_rates=(1e6,),
-            lbfgs_maxiter=1, newton_maxiter=20,
+            lbfgs_maxiter=1, refine_lbfgs_maxiter=0, newton_maxiter=20,
         ),
     )
     assert info["stages"]["newton"]["start_action"] <= info["stages"]["lbfgs"]["action"]
@@ -229,27 +296,29 @@ def test_nonfinite_adam_step_falls_back_to_finite_candidate():
     point, info = map_start._optimize_center(
         FiniteRegion(), np.zeros(2),
         options=map_start.MapOptions(adam_steps=(10,), adam_learning_rates=(100,),
-                                     lbfgs_maxiter=0, newton_maxiter=20),
+                                     lbfgs_maxiter=0, refine_lbfgs_maxiter=0,
+                                     newton_maxiter=20),
     )
     assert "Non-finite" in info["stages"]["adam_1"]["message"]
     assert info["stages"]["newton"]["start_action"] == info["start_action"]
     np.testing.assert_allclose(point, np.ones(2), atol=1e-6)
 
 
-def test_adam_failure_checkpoint_can_restart_through_full_pipeline(tmp_path, monkeypatch):
+def test_adam_warning_checkpoint_can_restart_through_full_pipeline(tmp_path, monkeypatch):
     coordinates = SimpleNamespace(x0=np.zeros(2), dimension=2)
     monkeypatch.setattr(map_start, "_target", lambda *_a: (
         coordinates, QuadraticTarget(), "adam-restart",
     ))
-    with pytest.raises(map_start.MapConvergenceError):
+    with pytest.warns(RuntimeWarning, match="sampling remains enabled"):
         map_start.prepare_q_map_start(
             object(), prior_rcond=0, cache_root=tmp_path,
             options=map_start.MapOptions(adam_steps=(10,), adam_learning_rates=(0.01,),
-                                         lbfgs_maxiter=0, newton_maxiter=0, checkpoint_every=2),
+                                         lbfgs_maxiter=0, refine_lbfgs_maxiter=0,
+                                         newton_maxiter=0, checkpoint_every=2),
         )
     stem = tmp_path / "q_map_adam-restart"
     attempt = json.loads(stem.with_suffix(".attempt.json").read_text())
-    assert attempt["status"] == "failed"
+    assert attempt["status"] == "warning"
     assert attempt["stages"]["adam_1"]["nit"] == 10
     assert attempt["action"] < attempt["start_action"]
     _, point, info = map_start.prepare_q_map_start(
@@ -270,4 +339,13 @@ def test_adam_failure_checkpoint_can_restart_through_full_pipeline(tmp_path, mon
 ])
 def test_invalid_adam_schedules_are_rejected(kwargs):
     with pytest.raises(ValueError, match="Adam"):
+        map_start.MapOptions(**kwargs)
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"lbfgs_gtol": float("nan")}, {"lbfgs_maxls": 0},
+    {"refine_lbfgs_gtol": -1}, {"refine_lbfgs_maxcor": 0},
+])
+def test_invalid_lbfgs_settings_are_rejected(kwargs):
+    with pytest.raises(ValueError, match="MAP"):
         map_start.MapOptions(**kwargs)
