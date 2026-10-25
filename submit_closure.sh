@@ -24,6 +24,11 @@ PIXEL_PROGRESS=1 ./run_closure.sh --truth $truth --data union --Q $Q \
 
 rm -rf campaign/${truth}_Q${Q}_${dataset}_prod
 
+../pixel/venv/bin/python -m closure_full_q_integration.prepare_map \
+  --truth $truth --data union --Q $Q --modes $dataset \
+  --lbfgs-maxiter 50000 --newton-maxiter 5000 \
+  --lbfgs-maxfun 1000000
+
 ./run_closure.sh \
   --truth $truth --data union --Q $Q --modes $dataset \
   --parameterization q --warmup 1000 --samples 25000 --streams 16 \

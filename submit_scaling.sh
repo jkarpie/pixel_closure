@@ -19,16 +19,16 @@ export PIXEL_PROGRESS=1
 #  --python ../pixel/venv/bin/python >& out.run_data_kernel_maker 
 
 
-rm -rf campaign/full_scale_core64
+#rm -rf campaign/full_scale_core64
 
-echo "Calling taskset"
-nohup taskset -c 0-63 ../pixel/venv/bin/python \
-  -m campaign.run_full_scale_stream_sweep sweep \
-  --out campaign/full_scale_core64 \
-  --parameterizations q --truths JAM --data union \
-  --scales 2 --modes exp --stream-counts 1,2,4,8 \
-  --samples 500 > campaign/full_scale_core64.log
-echo $!
+#echo "Calling taskset"
+#nohup taskset -c 0-63 ../pixel/venv/bin/python \
+#  -m campaign.run_full_scale_stream_sweep sweep \
+#  --out campaign/full_scale_core64 \
+#  --parameterizations q --truths JAM --data union \
+#  --scales 2 --modes exp --stream-counts 1,2,4,8 \
+#  --samples 500 > campaign/full_scale_core64.log
+#echo $!
 
 
 for N in 16 32 64
