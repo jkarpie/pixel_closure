@@ -8,6 +8,14 @@ before launching streams. For example:
   --kernels-only --cores 16 --python ../pixel/venv/bin/python
 ```
 
+For each q target, also prepare the MAP independently before sampling:
+
+```bash
+../pixel/venv/bin/python -m closure_full_q_integration.prepare_map \
+  --truth JAM --data union --Q 2 --modes exp,dis \
+  --lbfgs-maxiter 40000 --newton-maxiter 2000
+```
+
 Repeat preparation for each truth/data selection and requested Q. Here
 `--scales` means truth Q values (`mc,1,2,3,4,5`), while `--data` chooses the
 full-scale dataset collection (`union,JAM,NNPDF`).
@@ -35,11 +43,15 @@ and `REPORT.json` from the saved
 PIXEL chain objects. A completed stream-count arm does not overwrite another
 arm. The first N seeds for a given cell are the same across the N-stream arms,
 so scaling comparisons use the same independent chains.
-For explicit-q cells, the launcher also shares a fingerprinted MAP cache across
-all streams and stream-count arms. Each stream starts at that fitted center,
-and its fixed dense Hessian metric is evaluated there. A MAP optimization that
-does not converge stops the affected cell rather than starting at the prior
-mean.
+For explicit-q cells, the launcher validates the independently prepared MAPs
+before creating output or starting any workers. Each stream loads that fitted
+center, and its fixed dense Hessian metric is evaluated there. Sampling never
+repeats optimization. The default shared cache is `campaign/_q_map_cache`;
+export `PIXEL_Q_MAP_CACHE_ROOT` for both stages, or pass `--cache-root` to MAP
+preparation and the same `--map-cache-root` to the sweep. MAP preparation saves
+optimizer stopping messages, counts, progress and a candidate checkpoint even
+on failure. See [MAP preparation](../closure_full_q_integration/README.md) for
+budget controls and `--resume`.
 
 The report gives PIXEL's Wolff τ_int and ESS, split R-hat across streams,
 trajectory acceptance statistics, energy error, step size, depth, divergences,

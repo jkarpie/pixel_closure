@@ -494,15 +494,17 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     )
     if sampler == "q_nuts":
         if bool(getattr(cfg, "Q_INTEGRATION_MAP_START", True)):
-            from closure_full_q_integration.map_start import prepare_q_map_start
+            from closure_full_q_integration.map_start import (
+                default_map_cache_root, load_q_map_start,
+            )
 
-            reporter.emit("finding or loading explicit-q MAP start")
-            coordinates, center, map_info = prepare_q_map_start(
+            reporter.emit("loading independently prepared explicit-q MAP start")
+            coordinates, center, map_info = load_q_map_start(
                 model,
                 prior_rcond=sampler_options["prior_rcond"],
                 cache_root=getattr(
                     cfg, "Q_INTEGRATION_MAP_CACHE_ROOT",
-                    cfg.INFERENCE_CACHE_ROOT / "_q_map_cache",
+                    default_map_cache_root(),
                 ),
             )
             sampler_options.update(
