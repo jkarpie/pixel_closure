@@ -69,7 +69,8 @@ Options:
   --warmup N               Warmup trajectories per q stream (default: suite config).
   --streams N              Independent concurrent q streams (default 1).
   --seed-base N            Base for deterministic, distinct q stream seeds.
-  --out PATH               Required for q sampling: new, empty private output root.
+  --out PATH               Required for q sampling: new private output root.
+                           Only a prepared _q_map_cache may already be present.
                            Each stream gets separate results and inference caches.
   --data-only              Run dis_audit/generate as needed, then stop before fitting.
                            Use with --remake-data to force rebuilding existing data.
@@ -588,8 +589,13 @@ if [[ "$parameterization" == hs ]]; then
 elif [[ "$data_only" -eq 0 && "$kernels_only" -eq 0 ]]; then
     [[ -n "$out_flag" ]] || die "q sampling requires --out with a new, private output directory"
     if [[ "$dry_run" -eq 0 && ( -e "$out_flag" || -L "$out_flag" ) ]]; then
-        [[ -d "$out_flag" ]] || die "q output path exists and is not a directory: $out_flag"
-        [[ -z "$(ls -A -- "$out_flag")" ]] || die "q output directory is not empty: $out_flag"
+        [[ -d "$out_flag" && ! -L "$out_flag" ]] || die "q output path exists and is not a directory: $out_flag"
+        if [[ -e "$out_flag/_q_map_cache" || -L "$out_flag/_q_map_cache" ]]; then
+            [[ -d "$out_flag/_q_map_cache" && ! -L "$out_flag/_q_map_cache" ]] || \
+                die "q MAP cache path is not a directory: $out_flag/_q_map_cache"
+        fi
+        [[ -z "$(find "$out_flag" -mindepth 1 -maxdepth 1 ! -name _q_map_cache -print -quit)" ]] || \
+            die "q output directory already contains production artifacts: $out_flag"
     fi
     [[ "$scale" != small ]] || die "q stream sampling currently supports full-scale data, not --data mock"
     [[ "$plots_only" -eq 0 ]] || die "q stream sampling does not support --plots-only"
@@ -715,8 +721,9 @@ fi
 
 if [[ "$parameterization" == q && "$kernels_only" -eq 0 ]]; then
     # The sweep gives every concurrent stream its own results/cache tree and
-    # refuses a nonempty output root. The first N deterministic seeds are stable
-    # across stream counts, and its worker records the actual PIXEL warmup.
+    # allows only the prepared MAP cache in the output root. The first N
+    # deterministic seeds are stable across stream counts, and its worker
+    # records the actual PIXEL warmup.
     if [[ "${#modes[@]}" -eq 0 ]]; then
         modes=(lattice dis dy exp both)
     fi

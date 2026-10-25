@@ -16,11 +16,16 @@ truth=JAM
 Q=2
 production_root="campaign/${truth}_Q${Q}_${dataset}_prod"
 python_bin=../pixel/venv/bin/python
-export PIXEL_Q_MAP_CACHE_ROOT="${PIXEL_Q_MAP_CACHE_ROOT:-$PWD/campaign/_q_map_cache}"
+export PIXEL_Q_MAP_CACHE_ROOT="$PWD/$production_root/_q_map_cache"
 
-if [[ -e "$production_root" ]] && [[ ! -d "$production_root" || -n "$(ls -A "$production_root")" ]]; then
-  echo "Production output already exists: $production_root; choose a fresh path or archive it first." >&2
-  exit 2
+if [[ -e "$production_root" || -L "$production_root" ]]; then
+  if [[ ! -d "$production_root" || -L "$production_root" || \
+        ( -e "$production_root/_q_map_cache" && ! -d "$production_root/_q_map_cache" ) || \
+        -L "$production_root/_q_map_cache" || \
+        -n "$(find "$production_root" -mindepth 1 -maxdepth 1 ! -name _q_map_cache -print -quit)" ]]; then
+    echo "Production output already exists: $production_root; choose a fresh path or archive it first." >&2
+    exit 2
+  fi
 fi
 
 echo "Batch job started"
@@ -37,6 +42,7 @@ PIXEL_PROGRESS=1 ./run_closure.sh --truth $truth --data union --Q $Q \
 echo "Preparing explicit-q MAP: L-BFGS -> Adam -> Newton (or loading validated MAP)"
 "$python_bin" -m closure_full_q_integration.prepare_map \
   --truth "$truth" --data union --Q "$Q" --modes "$dataset" \
+  --out "$production_root" \
   --lbfgs-maxiter "${PIXEL_MAP_LBFGS_MAXITER:-10000}" \
   --lbfgs-maxfun "${PIXEL_MAP_LBFGS_MAXFUN:-100000}" \
   --adam-steps "${PIXEL_MAP_ADAM_STEPS:-4000,4000,4000}" \

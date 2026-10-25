@@ -77,6 +77,16 @@ def test_cli_passes_large_custom_budgets_and_multiple_cells(monkeypatch, tmp_pat
     assert prepare_map.main(["--report-every", "125"]) == 2
 
 
+def test_cli_out_places_map_cache_inside_campaign(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(prepare_map, "prepare_cell", lambda *a, **k: calls.append(k))
+    output = tmp_path / "study"
+    assert prepare_map.main(["--out", str(output)]) == 0
+    assert calls[0]["cache_root"] == output / "_q_map_cache"
+    with pytest.raises(SystemExit):
+        prepare_map.main(["--out", str(output), "--cache-root", str(tmp_path)])
+
+
 def test_map_progress_reports_recent_stage_rate_and_inf_norm(capsys):
     report = prepare_map._progress_reporter(100)
     base = {
@@ -133,6 +143,7 @@ def test_map_cache_environment_is_shared_by_preparation_and_old_runners(monkeypa
 
 
 def test_sweep_map_failure_stops_before_any_stream_or_output(monkeypatch, tmp_path):
+    monkeypatch.delenv("PIXEL_Q_MAP_CACHE_ROOT", raising=False)
     source = tmp_path / "closure_JAM_truth" / "data" / "truthQ_2" / "truth.json"
     source.parent.mkdir(parents=True)
     source.write_text("{}")
@@ -148,12 +159,16 @@ def test_sweep_map_failure_stops_before_any_stream_or_output(monkeypatch, tmp_pa
     args = SimpleNamespace(out=tmp_path / "new", parameterizations="q", truths="JAM",
                            data="union", scales="2", modes="exp", stream_counts="1,2",
                            seed_base=1, samples=5, warmup=1, python="python", dry_run=False)
+    prepared_cache = args.out / "_q_map_cache"
+    prepared_cache.mkdir(parents=True)
+    (prepared_cache / "candidate.npz").write_bytes(b"saved")
     with pytest.raises(ValueError, match="MAP preflight failed"):
         sweep.run_sweep(args)
     assert len(commands) == 1
     assert "closure_full_q_integration.prepare_map" in commands[0]
     assert "--check-only" in commands[0]
-    assert not args.out.exists()
+    assert (prepared_cache / "candidate.npz").read_bytes() == b"saved"
+    assert not (args.out / "manifest.json").exists()
 
 
 @pytest.mark.parametrize("failure", ("none", "kernel", "map"))
@@ -164,29 +179,36 @@ def test_submit_orders_preparation_and_production_and_propagates_failure(tmp_pat
     shutil.copyfile(Path(__file__).parents[1] / "submit_closure.sh", script)
     launcher = repo / "run_closure.sh"
     launcher.write_text(
-        '#!/bin/bash\nprintf "launcher %s\\n" "$*" >> "$CALL_LOG"\n'
+        '#!/bin/bash\nprintf "launcher %s map=%s\\n" "$*" "$PIXEL_Q_MAP_CACHE_ROOT" >> "$CALL_LOG"\n'
         'if [[ "$*" == *--kernels-only* && "$TEST_FAIL" == kernel ]]; then exit 7; fi\n'
     )
     launcher.chmod(0o755)
     python = tmp_path / "pixel" / "venv" / "bin" / "python"
     python.parent.mkdir(parents=True)
     python.write_text(
-        '#!/bin/bash\nprintf "python %s\\n" "$*" >> "$CALL_LOG"\n'
+        '#!/bin/bash\nprintf "python %s map=%s\\n" "$*" "$PIXEL_Q_MAP_CACHE_ROOT" >> "$CALL_LOG"\n'
         'if [[ "$TEST_FAIL" == map ]]; then exit 8; fi\n'
     )
     python.chmod(0o755)
     log = tmp_path / "calls.txt"
     env = {**os.environ, "CALL_LOG": str(log), "TEST_FAIL": failure,
            "SLURM_SUBMIT_DIR": str(repo)}
+    occupied = repo / "campaign" / "JAM_Q2_exp_prod"
+    prepared_cache = occupied / "_q_map_cache"
+    prepared_cache.mkdir(parents=True)
+    (prepared_cache / "candidate.npz").write_bytes(b"saved")
     result = subprocess.run(["bash", str(script)], cwd=tmp_path, env=env,
                             capture_output=True, text=True)
     commands = log.read_text().splitlines()
+    expected_cache = str(prepared_cache)
+    assert all(f"map={expected_cache}" in command for command in commands)
     assert "--kernels-only" in commands[0]
     if failure == "kernel":
         assert result.returncode == 7
         assert len(commands) == 1
     else:
         assert "closure_full_q_integration.prepare_map" in commands[1]
+        assert "--out campaign/JAM_Q2_exp_prod" in commands[1]
         assert "--lbfgs-maxiter 10000" in commands[1]
         assert "--newton-maxiter 2000" in commands[1]
         assert "--adam-steps 4000,4000,4000" in commands[1]
@@ -200,10 +222,36 @@ def test_submit_orders_preparation_and_production_and_propagates_failure(tmp_pat
             assert len(commands) == 3
             assert "--parameterization q --warmup 1000 --samples 25000 --streams 16" in commands[2]
     assert ("Batch job finished" in result.stdout) == (failure == "none")
-    occupied = repo / "campaign" / "JAM_Q2_exp_prod"
-    occupied.mkdir()
     (occupied / "keep").write_text("existing data")
     blocked = subprocess.run(["bash", str(script)], cwd=tmp_path, env=env, capture_output=True)
     assert blocked.returncode == 2
     assert (occupied / "keep").read_text() == "existing data"
     assert log.read_text().splitlines() == commands
+
+
+def test_top_level_q_launcher_allows_only_prepared_campaign_map(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    script = repo / "run_closure.sh"
+    shutil.copyfile(Path(__file__).parents[1] / "run_closure.sh", script)
+    source = repo / "closure_JAM_truth" / "data"
+    (source / "truthQ_2").mkdir(parents=True)
+    (source / "truthQ_2" / "truth.json").write_text("{}")
+    (source / "dis_manifest.json").write_text("{}")
+    python = repo / "fake_python"
+    python.write_text("#!/bin/bash\nexit 0\n")
+    python.chmod(0o755)
+    output = repo / "campaign" / "study"
+    cache = output / "_q_map_cache"
+    cache.mkdir(parents=True)
+    (cache / "candidate.npz").write_bytes(b"saved")
+    command = ["bash", str(script), "--truth", "JAM", "--data", "union",
+               "--Q", "2", "--modes", "exp", "--parameterization", "q",
+               "--out", str(output), "--python", str(python), "--no-plots"]
+    result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert (cache / "candidate.npz").read_bytes() == b"saved"
+    (output / "manifest.json").write_text("{}")
+    blocked = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True)
+    assert blocked.returncode == 2
+    assert "production artifacts" in blocked.stderr

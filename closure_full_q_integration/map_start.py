@@ -53,6 +53,11 @@ def default_map_cache_root() -> Path:
     )).expanduser().resolve()
 
 
+def campaign_map_cache_root(output_root: Path) -> Path:
+    """Keep a campaign's prepared MAPs with its stream artifacts."""
+    return Path(output_root).expanduser().resolve() / "_q_map_cache"
+
+
 def _cache_key(model, coordinates, target) -> str:
     """Identify the numerical target, independently of optimization budgets."""
     from pixel.infer.q_integration._legacy import _direct_model_fingerprint

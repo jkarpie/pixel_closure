@@ -138,8 +138,11 @@ def main(argv=None):
     parser.add_argument("--data", choices=("union", "JAM", "NNPDF"), default="union")
     parser.add_argument("--Q", default="2", help="comma list of truth Q values")
     parser.add_argument("--modes", default="exp", help="comma list of fit modes")
-    parser.add_argument("--cache-root", type=Path, default=None,
-                        help="default: PIXEL_Q_MAP_CACHE_ROOT or campaign/_q_map_cache")
+    cache_location = parser.add_mutually_exclusive_group()
+    cache_location.add_argument("--out", type=Path, default=None,
+                                help="campaign output root; save MAPs in OUT/_q_map_cache")
+    cache_location.add_argument("--cache-root", type=Path, default=None,
+                                help="exact MAP directory; defaults to PIXEL_Q_MAP_CACHE_ROOT")
     parser.add_argument("--lbfgs-maxiter", type=int, default=40000)
     parser.add_argument("--lbfgs-maxfun", type=int, default=400000)
     parser.add_argument("--newton-maxiter", type=int, default=2000)
@@ -169,9 +172,11 @@ def main(argv=None):
         ):
             os.environ[name] = "1"
         os.environ.setdefault("XLA_FLAGS", "--xla_cpu_multi_thread_eigen=false")
-        from .map_start import MapOptions
+        from .map_start import MapOptions, campaign_map_cache_root
 
         adam_steps, adam_rates = _adam_schedule(args.adam_steps, args.adam_learning_rates)
+        cache_root = (campaign_map_cache_root(args.out) if args.out is not None
+                      else args.cache_root)
         options = MapOptions(
             lbfgs_maxiter=args.lbfgs_maxiter, newton_maxiter=args.newton_maxiter,
             lbfgs_maxfun=args.lbfgs_maxfun, checkpoint_every=args.checkpoint_every,
@@ -181,7 +186,7 @@ def main(argv=None):
         for q_key in scales:
             for mode in modes:
                 prepare_cell(args.truth, args.data, q_key, mode,
-                             cache_root=args.cache_root, options=options,
+                             cache_root=cache_root, options=options,
                              resume=args.resume, check_only=args.check_only)
     except (ValueError, RuntimeError, FileNotFoundError) as exc:
         print(f"MAP preparation failed: {exc}", file=sys.stderr, flush=True)

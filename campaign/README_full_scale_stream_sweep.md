@@ -13,7 +13,10 @@ For each q target, also prepare the MAP independently before sampling:
 ```bash
 ../pixel/venv/bin/python -m closure_full_q_integration.prepare_map \
   --truth JAM --data union --Q 2 --modes exp,dis \
-  --lbfgs-maxiter 40000 --newton-maxiter 2000
+  --out campaign/full_scale_core16 \
+  --lbfgs-maxiter 40000 \
+  --adam-steps 2000,2000,2000 --adam-learning-rates 0.01,0.003,0.001 \
+  --newton-maxiter 2000
 ```
 
 Repeat preparation for each truth/data selection and requested Q. Here
@@ -35,7 +38,8 @@ taskset -c 0-15 ../pixel/venv/bin/python -m campaign.run_full_scale_stream_sweep
 
 Remove `--dry-run` to execute. For an SSH session, wrap the same command in
 `nohup ... > full_scale_core16.log 2>&1 &`, then record the PID with `echo $!`.
-The requested `--out` directory must be new or empty; every stream gets a
+The requested `--out` directory must be new or contain only the prepared
+`_q_map_cache`; every stream gets a
 private results directory, inference cache, `stream.json` timing/seed record,
 PIXEL `chain.npz` and full `inference_summary.json`, and `run.log`. The root
 `manifest.json` records the sweep status. Every completed cell gets `REPORT.md`
@@ -46,9 +50,11 @@ so scaling comparisons use the same independent chains.
 For explicit-q cells, the launcher validates the independently prepared MAPs
 before creating output or starting any workers. Each stream loads that fitted
 center, and its fixed dense Hessian metric is evaluated there. Sampling never
-repeats optimization. The default shared cache is `campaign/_q_map_cache`;
-export `PIXEL_Q_MAP_CACHE_ROOT` for both stages, or pass `--cache-root` to MAP
-preparation and the same `--map-cache-root` to the sweep. MAP preparation saves
+repeats optimization. By default the sweep reads `OUT/_q_map_cache`, so MAP
+preparation with the same `--out` needs no separate cache argument. For an
+external cache, export `PIXEL_Q_MAP_CACHE_ROOT` for both stages, or pass
+`--cache-root` to MAP preparation and the same `--map-cache-root` to the sweep.
+MAP preparation saves
 optimizer stopping messages, counts, progress and a candidate checkpoint even
 on failure. See [MAP preparation](../closure_full_q_integration/README.md) for
 budget controls and `--resume`.
@@ -134,6 +140,7 @@ stream machinery directly, including explicit per-stream warmup:
 ```
 
 The q path prepares missing source data, preserves H-S result directories,
-and refuses a nonempty `--out`; it does not resume or overwrite a scan.
+and refuses prior production artifacts in `--out`; it does not resume or
+overwrite a scan. A prepared `_q_map_cache` is allowed.
 `--warmup` on the lower-level sweep is also available for q cells only; omit
 it to retain each source suite's configured default.

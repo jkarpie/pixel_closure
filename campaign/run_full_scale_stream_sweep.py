@@ -19,7 +19,7 @@ import sys
 import time
 
 from closure_full_q_integration.variant import SOURCE_SUITES, activated
-from closure_full_q_integration.map_start import default_map_cache_root
+from closure_full_q_integration.map_start import campaign_map_cache_root
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -60,6 +60,10 @@ def stream_seed(base: int, cell: tuple[str, ...], stream: int) -> int:
 
 
 def plan(args) -> list[dict]:
+    selected_cache_root = (getattr(args, "map_cache_root", None)
+                           or os.environ.get("PIXEL_Q_MAP_CACHE_ROOT"))
+    map_cache_root = (Path(selected_cache_root).expanduser().resolve()
+                      if selected_cache_root else campaign_map_cache_root(args.out))
     cells = (
         (parameterization, truth, data, scale, mode)
         for parameterization in csv_choices(
@@ -75,9 +79,7 @@ def plan(args) -> list[dict]:
         {
             "parameterization": cell[0], "truth": cell[1], "data": cell[2],
             "scale": cell[3], "mode": cell[4], "stream_count": count,
-            "map_cache_root": str(
-                Path(getattr(args, "map_cache_root", None) or default_map_cache_root()).resolve()
-            ),
+            "map_cache_root": str(map_cache_root),
             "streams": [
                 {
                     "number": number,
@@ -237,6 +239,8 @@ def run_sweep(args) -> int:
         raise ValueError("--samples must be positive")
     if args.warmup is not None and args.warmup < 0:
         raise ValueError("--warmup must be nonnegative")
+    if args.out.is_symlink():
+        raise ValueError(f"output directory is a symlink: {args.out}")
     args.out = args.out.resolve()
     cells = plan(args)
     if args.warmup is not None and any(
@@ -256,8 +260,21 @@ def run_sweep(args) -> int:
     if args.dry_run:
         return 0
     output_root = args.out
-    if output_root.exists() and any(output_root.iterdir()):
-        raise ValueError(f"output directory is not empty: {output_root}")
+    if output_root.exists():
+        if not output_root.is_dir():
+            raise ValueError(f"output path is not a directory: {output_root}")
+        internal_cache = output_root / "_q_map_cache"
+        uses_internal_cache = any(
+            cell["parameterization"] == "q"
+            and Path(cell["map_cache_root"]) == internal_cache
+            for cell in cells
+        )
+        if any(
+            entry != internal_cache or not uses_internal_cache
+            or not entry.is_dir() or entry.is_symlink()
+            for entry in output_root.iterdir()
+        ):
+            raise ValueError(f"output directory already contains production artifacts: {output_root}")
     for cell in cells:
         for stream in cell["streams"]:
             source = (REPO / SOURCE_SUITES[(cell["truth"], cell["data"])] /
@@ -362,7 +379,7 @@ def main(argv=None) -> int:
     sweep.add_argument("--python", default=sys.executable)
     sweep.add_argument("--dry-run", action="store_true")
     sweep.add_argument("--map-cache-root", type=Path, default=None,
-                       help="prepared MAP directory; defaults to PIXEL_Q_MAP_CACHE_ROOT or campaign/_q_map_cache")
+                       help="prepared MAP directory; defaults to PIXEL_Q_MAP_CACHE_ROOT or OUT/_q_map_cache")
     worker = subparsers.add_parser("worker", help=argparse.SUPPRESS)
     worker.add_argument("--parameterization", choices=PARAMETERIZATIONS, required=True)
     worker.add_argument("--truth", choices=TRUTHS, required=True)

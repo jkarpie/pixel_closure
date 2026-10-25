@@ -36,7 +36,8 @@ def test_plan_comma_lists_and_repeated_stream_seeds(tmp_path):
     assert cells[8]["stream_count"] == 2
 
 
-def test_sweep_dry_run_does_not_write(tmp_path):
+def test_sweep_dry_run_does_not_write(tmp_path, monkeypatch):
+    monkeypatch.delenv("PIXEL_Q_MAP_CACHE_ROOT", raising=False)
     args = _args(tmp_path, parameterizations="q", data="union",
                  modes="exp", stream_counts="1,2", warmup=500)
     assert sweep.run_sweep(args) == 0
@@ -45,7 +46,7 @@ def test_sweep_dry_run_does_not_write(tmp_path):
                                    sweep.plan(args)[0]["streams"][0], 5, 500)
     assert command[-2:] == ["--warmup", "500"]
     assert command[command.index("--map-cache-root") + 1] == str(
-        sweep.default_map_cache_root()
+        args.out / "_q_map_cache"
     )
 
 

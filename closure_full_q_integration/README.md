@@ -15,6 +15,7 @@ Prepare source pseudodata and kernels first, then run:
 ```bash
 ../pixel/venv/bin/python -m closure_full_q_integration.prepare_map \
   --truth JAM --data union --Q 2 --modes exp \
+  --out campaign/JAM_Q2_exp_prod \
   --lbfgs-maxiter 40000 --lbfgs-maxfun 400000 \
   --adam-steps 2000,2000,2000 --adam-learning-rates 0.01,0.003,0.001 \
   --newton-maxiter 2000
@@ -41,8 +42,11 @@ gradient norm at most `1e-3` remain mandatory; larger budgets cannot guarantee
 convergence or a global optimum. The final DIS t0 target is built exactly as
 in the sampling runners. This command does not sample or reconstruct PDFs.
 
-By default files live in `campaign/_q_map_cache`, independent of production
-output directories. For each numerical target fingerprint:
+With `--out campaign/RUN`, MAP files live in
+`campaign/RUN/_q_map_cache` alongside that campaign's stream outputs. This
+is the batch submission default, and the stream sweep reads the same path.
+Without `--out`, the standalone preparation command retains its default
+`campaign/_q_map_cache`. For each numerical target fingerprint:
 
 - `q_map_<hash>.npz` contains the converged MAP and provenance used by streams.
 - `q_map_<hash>.attempt.json` records status, action, gradient norm, budgets,
@@ -79,9 +83,13 @@ Logs label the full search as `lbfgs`, `adam_1`, `adam_2`, `adam_3`, and
 to the full explicit-q search; the preliminary DIS t0 covariance fits retain
 their existing policy.
 
-To choose another shared location, export `PIXEL_Q_MAP_CACHE_ROOT` before both
-commands. The preparation command also accepts `--cache-root`; the variant
-runner and sweep accept `--map-cache-root`. Keep these paths consistent.
+To prepare a campaign independently, pass `--out campaign/RUN` to MAP
+preparation, then the same `--out campaign/RUN` to `run_closure.sh` or the
+stream sweep. The directory may contain `_q_map_cache` before sampling, but
+no prior production artifacts. For a custom cache outside the campaign, use
+`--cache-root` for preparation and `--map-cache-root` for the sweep, or export
+`PIXEL_Q_MAP_CACHE_ROOT` for both stages. The standalone preparation command
+accepts either `--out` or `--cache-root`, not both.
 `--Q` and `--modes` accept comma lists; repeat for each truth/data selection.
 
 The source suites own generated truth, pseudodata, and kernel caches. This
@@ -132,7 +140,10 @@ the total CPU affinity on Linux.
 The sampling arguments in `submit_closure.sh` are unchanged. The batch script
 now performs kernel preparation, runs the standalone MAP command once (or
 reuses its validated result), and launches production only on success. A MAP
-prepared independently is therefore reused by the existing submission script.
+prepared independently with `--out campaign/JAM_Q2_exp_prod` is therefore
+reused by the submission script. Its cache is
+`campaign/JAM_Q2_exp_prod/_q_map_cache`; the batch script overrides any
+previous `PIXEL_Q_MAP_CACHE_ROOT` value so the streams use that campaign's MAP.
 Its MAP terminal output is saved to `campaign/JAM_Q2_exp_prod.map.log`.
 `PIXEL_MAP_ADAM_STEPS`, `PIXEL_MAP_ADAM_LEARNING_RATES`,
 `PIXEL_MAP_LBFGS_MAXITER`, `PIXEL_MAP_NEWTON_MAXITER`, and
