@@ -10,6 +10,7 @@ import sys
 from threading import RLock
 
 from . import config as policy
+from .map_start import default_map_cache_root
 
 
 ROOT = Path(__file__).resolve().parent
@@ -40,7 +41,7 @@ def activated(truth: str, data: str, *, output_root: Path | None = None,
         output_root = (Path(output_root) if output_root is not None else
                        ROOT / "outputs" / key[0].lower() / key[1].lower())
         map_cache_root = (Path(map_cache_root) if map_cache_root is not None else
-                          output_root.parent / "_map_cache")
+                          default_map_cache_root())
         overrides = {
             "Q_INTEGRATION_ENABLED": True,
             "Q_INTEGRATION_SAMPLER": policy.Q_INTEGRATION_SAMPLER,
@@ -89,10 +90,13 @@ def main(argv=None) -> None:
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--output-root", type=Path, default=None,
                         help="private root for results and inference caches")
+    parser.add_argument("--map-cache-root", type=Path, default=None,
+                        help="directory containing independently prepared q MAPs")
     args, forwarded = parser.parse_known_args(argv)
     if forwarded[:1] == ["--"]:
         forwarded = forwarded[1:]
-    with activated(args.truth, args.data, output_root=args.output_root) as (
+    with activated(args.truth, args.data, output_root=args.output_root,
+                   map_cache_root=args.map_cache_root) as (
         package, cfg, _fit, runner,
     ):
         if args.n_samples is not None:

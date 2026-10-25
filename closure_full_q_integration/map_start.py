@@ -1,42 +1,61 @@
-"""Reproducible, shared MAP starts for full-scale explicit-q closure streams."""
+"""Explicit, persistent MAP preparation and load-only starts for full-scale q fits."""
 
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
 import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
+import time
 
 import numpy as np
 
 
-_ALGORITHM_VERSION = 1
-_LBFGS_MAXITER = 4000
-_NEWTON_MAXITER = 200
+_ALGORITHM_VERSION = 2
+_LBFGS_MAXITER = 40000
+_NEWTON_MAXITER = 2000
 _MAX_GRADIENT_NORM = 1.0e-3
 
 
+@dataclass(frozen=True)
+class MapOptions:
+    lbfgs_maxiter: int = _LBFGS_MAXITER
+    newton_maxiter: int = _NEWTON_MAXITER
+    lbfgs_maxfun: int = 400000
+    checkpoint_every: int = 50
+
+    def __post_init__(self):
+        if min(self.lbfgs_maxiter, self.newton_maxiter) < 0:
+            raise ValueError("MAP iteration limits must be nonnegative")
+        if self.lbfgs_maxfun < 1 or self.checkpoint_every < 1:
+            raise ValueError("MAP maxfun and checkpoint interval must be positive")
+
+
+def default_map_cache_root() -> Path:
+    """Independent of stream output, so a prepared MAP survives new campaigns."""
+    return Path(os.environ.get(
+        "PIXEL_Q_MAP_CACHE_ROOT",
+        str(Path(__file__).resolve().parents[1] / "campaign" / "_q_map_cache"),
+    )).expanduser().resolve()
+
+
 def _cache_key(model, coordinates, target) -> str:
-    """Include numerical target data, coordinates and optimizer policy."""
+    """Identify the numerical target, independently of optimization budgets."""
     from pixel.infer.q_integration._legacy import _direct_model_fingerprint
 
     payload = {
         "algorithm_version": _ALGORITHM_VERSION,
         "model_fingerprint": _direct_model_fingerprint(model, coordinates),
         "target_metadata": target.metadata(),
-        "lbfgs_maxiter": _LBFGS_MAXITER,
-        "newton_maxiter": _NEWTON_MAXITER,
-        "max_gradient_norm": _MAX_GRADIENT_NORM,
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
     ).hexdigest()
 
 
-def _load_center(path: Path, fingerprint: str, dimension: int):
-    if not path.is_file():
-        return None
+def _load_point(path: Path, fingerprint: str, dimension: int):
     try:
         with np.load(path, allow_pickle=False) as saved:
             if str(saved["fingerprint"].item()) != fingerprint:
@@ -47,20 +66,25 @@ def _load_center(path: Path, fingerprint: str, dimension: int):
             return None
         if not np.isfinite(float(info["action"])):
             return None
-        gradient_norm = float(info["gradient_norm"])
-        if not np.isfinite(gradient_norm) or gradient_norm > _MAX_GRADIENT_NORM:
+        if not np.isfinite(float(info["gradient_norm"])):
             return None
+        return center, info
     except (OSError, ValueError, KeyError, TypeError):
         return None
-    return center, {**info, "cache_status": "hit"}
+
+
+def _load_center(path: Path, fingerprint: str, dimension: int):
+    cached = _load_point(path, fingerprint, dimension)
+    if cached is None or float(cached[1]["gradient_norm"]) > _MAX_GRADIENT_NORM:
+        return None
+    return cached[0], {**cached[1], "cache_status": "hit"}
 
 
 def _save_center(path: Path, center: np.ndarray, info: dict) -> None:
     temporary = path.with_name(path.name + f".{os.getpid()}.tmp.npz")
     try:
         np.savez_compressed(
-            temporary,
-            center=np.asarray(center, dtype=float),
+            temporary, center=np.asarray(center, dtype=float),
             fingerprint=np.asarray(info["fingerprint"]),
             info=np.asarray(json.dumps(info, sort_keys=True)),
         )
@@ -69,19 +93,38 @@ def _save_center(path: Path, center: np.ndarray, info: dict) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def _optimize_center(target, initial) -> tuple[np.ndarray, dict]:
-    """Minimize the explicit-q action, then require a stationary finite center."""
+def _save_json(path: Path, info: dict) -> None:
+    temporary = path.with_name(path.name + f".{os.getpid()}.tmp")
+    try:
+        temporary.write_text(json.dumps(info, indent=2, sort_keys=True) + "\n")
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+class MapConvergenceError(RuntimeError):
+    def __init__(self, info):
+        self.info = info
+        super().__init__(
+            "full-scale q MAP did not converge: "
+            f"|gradient|={info['gradient_norm']:.6g} > {_MAX_GRADIENT_NORM:g}; "
+            "sampling is refused. See the saved MAP attempt diagnostics."
+        )
+
+
+def _optimize_center(target, initial, *, options=None, progress=None):
+    """L-BFGS then exact-HVP Newton refinement; preserve failure diagnostics."""
     import jax
     import jax.numpy as jnp
     from scipy.optimize import minimize
 
-    # QTarget's explicit pullback avoids materializing a data-row x grid-node
-    # Jacobian during every high-dimensional MAP objective evaluation.
+    options = options or MapOptions(
+        lbfgs_maxiter=_LBFGS_MAXITER, newton_maxiter=_NEWTON_MAXITER,
+    )
     value_and_grad = jax.jit(target.action_and_grad)
     hessian_vector_product = jax.jit(
         lambda x, direction: jax.jvp(
-            lambda point: target.action_and_grad(point)[1],
-            (x,), (direction,)
+            lambda point: target.action_and_grad(point)[1], (x,), (direction,)
         )[1]
     )
 
@@ -99,69 +142,164 @@ def _optimize_center(target, initial) -> tuple[np.ndarray, dict]:
     initial_action, initial_gradient = objective(origin)
     if not np.isfinite(initial_action) or not np.all(np.isfinite(initial_gradient)):
         raise ValueError("full-scale q MAP has a non-finite initial action or gradient")
-    quasi = minimize(
-        objective, origin, jac=True, method="L-BFGS-B",
-        options={"maxiter": _LBFGS_MAXITER, "gtol": 1.0e-8,
-                 "ftol": 1.0e-12, "maxls": 50, "maxcor": 50},
-    )
-    newton = minimize(
-        objective, np.asarray(quasi.x, dtype=float), jac=True, hessp=hessp,
-        method="trust-ncg",
-        options={"maxiter": _NEWTON_MAXITER, "gtol": 1.0e-6},
-    )
-    candidates = [origin, np.asarray(quasi.x, dtype=float),
-                  np.asarray(newton.x, dtype=float)]
-    evaluated = []
-    for point in candidates:
-        action, gradient = objective(point)
-        if np.isfinite(action) and np.all(np.isfinite(gradient)):
-            evaluated.append((action, point, float(np.linalg.norm(gradient))))
-    if not evaluated:
-        raise RuntimeError("full-scale q MAP optimizer produced no finite point")
-    action, center, gradient_norm = min(evaluated, key=lambda item: item[0])
-    if gradient_norm > _MAX_GRADIENT_NORM:
-        raise RuntimeError(
-            "full-scale q MAP did not converge: "
-            f"|gradient|={gradient_norm:.6g} > {_MAX_GRADIENT_NORM:g}; "
-            "sampling from the prior-mean origin is refused"
-        )
+    best = (initial_action, origin.copy(), float(np.linalg.norm(initial_gradient)))
+    started = time.monotonic()
     info = {
-        "method": "lbfgs_then_trust_ncg",
-        "action": action,
-        "gradient_norm": gradient_norm,
+        "method": "lbfgs_then_trust_ncg", "options": asdict(options),
         "start_action": initial_action,
-        "start_gradient_norm": float(np.linalg.norm(initial_gradient)),
-        "lbfgs_success": bool(quasi.success),
-        "lbfgs_message": str(quasi.message),
-        "newton_success": bool(newton.success),
-        "newton_message": str(newton.message),
+        "start_gradient_norm": best[2], "stages": {},
     }
-    return np.asarray(center, dtype=float), info
+
+    def record(point, stage, iteration, status="running"):
+        nonlocal best
+        action, gradient = objective(point)
+        norm = float(np.linalg.norm(gradient))
+        if np.isfinite(action) and np.isfinite(norm) and action <= best[0]:
+            best = (action, np.asarray(point, dtype=float).copy(), norm)
+        info.update(action=best[0], gradient_norm=best[2], stage=stage,
+                    iteration=iteration, status=status,
+                    elapsed_seconds=time.monotonic() - started)
+        if progress is not None:
+            progress(best[1], dict(info))
+
+    record(origin, "initial", 0)
+    point = origin
+    for stage, method, limit, extra in (
+        ("lbfgs", "L-BFGS-B", options.lbfgs_maxiter, {
+            # Action cancellation can stop this fit well before stationarity.
+            "gtol": 1.0e-8, "ftol": 0.0, "maxls": 100, "maxcor": 50,
+            "maxfun": options.lbfgs_maxfun,
+        }),
+        ("newton", "trust-ncg", options.newton_maxiter, {"gtol": 1.0e-6}),
+    ):
+        if limit == 0:
+            info["stages"][stage] = {"nit": 0, "message": "disabled", "success": False}
+            continue
+        iteration = 0
+
+        def callback(x):
+            nonlocal iteration
+            iteration += 1
+            if iteration % options.checkpoint_every == 0:
+                record(x, stage, iteration)
+
+        result = minimize(
+            objective, point, jac=True, method=method, callback=callback,
+            **({"hessp": hessp} if stage == "newton" else {}),
+            options={"maxiter": limit, **extra},
+        )
+        info["stages"][stage] = {
+            name: int(result[name]) for name in ("nit", "nfev", "njev", "nhev", "status")
+            if name in result
+        }
+        end_action, end_gradient = objective(result.x)
+        info["stages"][stage].update(
+            success=bool(result.success), message=str(result.message),
+            action=end_action if np.isfinite(end_action) else None,
+            gradient_norm=(float(np.linalg.norm(end_gradient))
+                           if np.all(np.isfinite(end_gradient)) else None),
+        )
+        record(result.x, stage, int(result.nit))
+        # Refine the best finite candidate even after an uphill last point.
+        point = best[1]
+    converged = best[2] <= _MAX_GRADIENT_NORM
+    record(best[1], "finished", 0, "complete" if converged else "failed")
+    if not converged:
+        raise MapConvergenceError(info)
+    return best[1], info
 
 
-def prepare_q_map_start(model, *, prior_rcond: float, cache_root: Path):
-    """Return exact q coordinates and a cached MAP for the compiled fit target.
-
-    The lock makes simultaneous streams of one cell wait for one optimization.
-    No truth curve is used; the center depends only on the fit's target.
-    """
+def _target(model, prior_rcond):
     from pixel.infer.q_integration._legacy import DirectCoordinates
     from pixel.infer.q_integration.target import QTarget
 
     coordinates = DirectCoordinates.from_model(model, prior_rcond=prior_rcond)
     target = QTarget(coordinates)
-    fingerprint = _cache_key(model, coordinates, target)
+    return coordinates, target, _cache_key(model, coordinates, target)
+
+
+def _validated_center(path, fingerprint, coordinates, target):
+    cached = _load_center(path, fingerprint, coordinates.dimension)
+    if cached is None:
+        return None
+    center, info = cached
+    action, gradient = target.action_and_grad(center)
+    action, norm = float(action), float(np.linalg.norm(np.asarray(gradient)))
+    if (not np.isfinite(action) or not np.isfinite(norm)
+            or norm > _MAX_GRADIENT_NORM
+            or not np.isclose(action, info["action"], rtol=1e-9, atol=1e-8)):
+        return None
+    return center, {**info, "action": action, "gradient_norm": norm,
+                    "cache_path": str(path)}
+
+
+def load_q_map_start(model, *, prior_rcond: float, cache_root: Path):
+    """Load and re-evaluate a stationary MAP; never optimize in a stream."""
+    coordinates, target, fingerprint = _target(model, prior_rcond)
+    path = Path(cache_root) / f"q_map_{fingerprint}.npz"
+    cached = _validated_center(path, fingerprint, coordinates, target)
+    if cached is None:
+        raise FileNotFoundError(
+            f"no validated full-scale q MAP for this target: {path}. "
+            "Run python -m closure_full_q_integration.prepare_map with the same "
+            "--truth, --data, --Q and --modes first (and the same MAP cache root)."
+        )
+    return coordinates, *cached
+
+
+def prepare_q_map_start(model, *, prior_rcond: float, cache_root: Path,
+                        options=None, resume=False, progress=None):
+    """Explicit preparation only; save checkpoints and optimizer diagnostics."""
+    coordinates, target, fingerprint = _target(model, prior_rcond)
     cache_root = Path(cache_root)
     cache_root.mkdir(parents=True, exist_ok=True)
-    path = cache_root / f"q_map_{fingerprint}.npz"
-    lock_path = cache_root / f"q_map_{fingerprint}.lock"
-    with lock_path.open("a+b") as lock:
+    stem = cache_root / f"q_map_{fingerprint}"
+    path = stem.with_suffix(".npz")
+    checkpoint = stem.with_suffix(".checkpoint.npz")
+    attempt_path = stem.with_suffix(".attempt.json")
+    with stem.with_suffix(".lock").open("a+b") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        cached = _load_center(path, fingerprint, coordinates.dimension)
+        cached = _validated_center(path, fingerprint, coordinates, target)
         if cached is not None:
-            center, info = cached
-        else:
-            center, info = _optimize_center(target, coordinates.x0)
-            info = {**info, "fingerprint": fingerprint, "cache_status": "miss"}
-            _save_center(path, center, info)
+            return coordinates, *cached
+        initial = coordinates.x0
+        if resume:
+            saved = _load_point(checkpoint, fingerprint, coordinates.dimension)
+            if saved is None:
+                raise FileNotFoundError(f"no matching finite MAP checkpoint: {checkpoint}")
+            initial = saved[0]
+        attempt_id = time.time_ns()
+        latest = {
+            "fingerprint": fingerprint, "attempt_id": attempt_id,
+            "status": "starting", "resumed": bool(resume),
+            "options": asdict(options or MapOptions()), "updated_at": time.time(),
+        }
+        _save_json(attempt_path, latest)
+
+        def persist(center, info):
+            nonlocal latest
+            latest = {**info, "fingerprint": fingerprint, "attempt_id": attempt_id,
+                      "resumed": bool(resume), "updated_at": time.time(),
+                      "checkpoint_path": str(checkpoint)}
+            _save_center(checkpoint, center, latest)
+            _save_json(attempt_path, latest)
+            with stem.with_suffix(".history.jsonl").open("a") as history:
+                history.write(json.dumps(latest, sort_keys=True) + "\n")
+            if progress is not None:
+                progress(center, latest)
+
+        try:
+            center, info = _optimize_center(
+                target, initial, options=options, progress=persist,
+            )
+        except BaseException as exc:
+            if latest:
+                _save_json(attempt_path, {
+                    **latest, "status": "interrupted" if isinstance(
+                        exc, (KeyboardInterrupt, SystemExit)) else "failed",
+                    "error": f"{type(exc).__name__}: {exc}",
+                })
+            raise
+        info = {**latest, **info, "fingerprint": fingerprint, "cache_status": "miss"}
+        _save_center(path, center, info)
     return coordinates, center, {**info, "cache_path": str(path)}

@@ -90,7 +90,10 @@ def test_full_q_variant_routes_dense_nuts_with_ninety_percent_target(
             "cache_status": "miss", "fingerprint": "test-map",
         }
 
-    monkeypatch.setattr(map_start, "prepare_q_map_start", fake_map_start)
+    monkeypatch.setattr(map_start, "load_q_map_start", fake_map_start)
+    monkeypatch.setattr(map_start, "prepare_q_map_start", lambda *a, **k: pytest.fail(
+        "sampling must never optimize a MAP"
+    ))
     previous_results = cfg.RESULTS_ROOT
     previous_cache = cfg.INFERENCE_CACHE_ROOT
     assert not hasattr(cfg, "Q_INTEGRATION_ENABLED")
@@ -163,7 +166,7 @@ def test_full_q_variant_accepts_private_output_root(tmp_path):
     with activated("JAM", "union", output_root=tmp_path / "stream"):
         assert cfg.RESULTS_ROOT == tmp_path / "stream" / "results"
         assert cfg.INFERENCE_CACHE_ROOT == tmp_path / "stream" / "inference_cache"
-        assert cfg.Q_INTEGRATION_MAP_CACHE_ROOT == tmp_path / "_map_cache"
+        assert cfg.Q_INTEGRATION_MAP_CACHE_ROOT == variant.default_map_cache_root()
     assert (cfg.RESULTS_ROOT, cfg.INFERENCE_CACHE_ROOT) == original
 
 

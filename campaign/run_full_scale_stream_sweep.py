@@ -19,6 +19,7 @@ import sys
 import time
 
 from closure_full_q_integration.variant import SOURCE_SUITES, activated
+from closure_full_q_integration.map_start import default_map_cache_root
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -31,7 +32,7 @@ THREAD_VARS = (
     "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
     "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS",
     "PIXEL_ASSEMBLY_WORKERS", "PIXEL_KERNEL_WORKERS",
-    "PIXEL_POSTERIOR_WORKERS",
+    "PIXEL_POSTERIOR_WORKERS", "PIXEL_DATASET_WORKERS",
 )
 
 
@@ -74,7 +75,9 @@ def plan(args) -> list[dict]:
         {
             "parameterization": cell[0], "truth": cell[1], "data": cell[2],
             "scale": cell[3], "mode": cell[4], "stream_count": count,
-            "map_cache_root": str(args.out / "_q_map_cache"),
+            "map_cache_root": str(
+                Path(getattr(args, "map_cache_root", None) or default_map_cache_root()).resolve()
+            ),
             "streams": [
                 {
                     "number": number,
@@ -263,14 +266,31 @@ def run_sweep(args) -> int:
                 raise FileNotFoundError(
                     f"missing {source}; prepare data with run_closure.sh first"
                 )
+    env = os.environ.copy()
+    env.update({name: "1" for name in THREAD_VARS})
+    env.setdefault("XLA_FLAGS", "--xla_cpu_multi_thread_eigen=false")
+    # Validate each target once before creating output or launching any worker.
+    # A missing/failed MAP never triggers optimization in the sampling process.
+    checked = set()
+    for cell in cells:
+        key = (cell["truth"], cell["data"], cell["scale"], cell["mode"])
+        if cell["parameterization"] != "q" or key in checked:
+            continue
+        command = [
+            args.python, "-m", "closure_full_q_integration.prepare_map",
+            "--truth", cell["truth"], "--data", cell["data"],
+            "--Q", cell["scale"], "--modes", cell["mode"],
+            "--cache-root", cell["map_cache_root"], "--check-only",
+        ]
+        print("[MAP preflight] " + " ".join(command), flush=True)
+        if subprocess.run(command, cwd=REPO, env=env, check=False).returncode != 0:
+            raise ValueError("q MAP preflight failed; prepare this target's MAP first")
+        checked.add(key)
     output_root.mkdir(parents=True, exist_ok=True)
     manifest = {"samples_per_stream": args.samples,
                 "warmup_per_stream_requested": args.warmup, "cells": cells,
                 "status": "running", "started_at": time.time()}
     write_json(output_root / "manifest.json", manifest)
-    env = os.environ.copy()
-    env.update({name: "1" for name in THREAD_VARS})
-    env.setdefault("XLA_FLAGS", "--xla_cpu_multi_thread_eigen=false")
     failures = 0
     completed = False
     try:
@@ -341,6 +361,8 @@ def main(argv=None) -> int:
     sweep.add_argument("--seed-base", type=int, default=20261018)
     sweep.add_argument("--python", default=sys.executable)
     sweep.add_argument("--dry-run", action="store_true")
+    sweep.add_argument("--map-cache-root", type=Path, default=None,
+                       help="prepared MAP directory; defaults to PIXEL_Q_MAP_CACHE_ROOT or campaign/_q_map_cache")
     worker = subparsers.add_parser("worker", help=argparse.SUPPRESS)
     worker.add_argument("--parameterization", choices=PARAMETERIZATIONS, required=True)
     worker.add_argument("--truth", choices=TRUTHS, required=True)

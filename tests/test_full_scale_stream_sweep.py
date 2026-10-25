@@ -45,7 +45,7 @@ def test_sweep_dry_run_does_not_write(tmp_path):
                                    sweep.plan(args)[0]["streams"][0], 5, 500)
     assert command[-2:] == ["--warmup", "500"]
     assert command[command.index("--map-cache-root") + 1] == str(
-        args.out / "_q_map_cache"
+        sweep.default_map_cache_root()
     )
 
 
