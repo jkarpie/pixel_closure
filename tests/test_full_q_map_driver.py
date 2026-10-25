@@ -36,6 +36,7 @@ def test_map_driver_builds_same_final_t0_target(monkeypatch, tmp_path, selection
             assert kwargs["prior_rcond"] == 0
             assert kwargs["cache_root"] == tmp_path
             return None, None, {"action": 1, "gradient_norm": 0,
+                                "gradient_inf_norm": 0,
                                 "cache_status": "hit", "cache_path": "test.npz"}
 
         def forbidden(*a, **k):
@@ -59,6 +60,7 @@ def test_cli_passes_large_custom_budgets_and_multiple_cells(monkeypatch, tmp_pat
         "--truth", "NNPDF", "--data", "JAM", "--Q", "2,3", "--modes", "dis,exp",
         "--cache-root", str(tmp_path), "--lbfgs-maxiter", "80000",
         "--newton-maxiter", "8000", "--lbfgs-maxfun", "900000", "--resume",
+        "--report-every", "150",
         "--adam-steps", "100,200", "--adam-learning-rates", "0.02,0.005",
     ]) == 0
     assert [call[0][2:] for call in calls] == [("2", "dis"), ("2", "exp"), ("3", "dis"), ("3", "exp")]
@@ -66,10 +68,47 @@ def test_cli_passes_large_custom_budgets_and_multiple_cells(monkeypatch, tmp_pat
         assert kwargs["options"].lbfgs_maxiter == 80000
         assert kwargs["options"].newton_maxiter == 8000
         assert kwargs["options"].lbfgs_maxfun == 900000
+        assert kwargs["options"].report_every == 150
         assert kwargs["options"].adam_steps == (100, 200)
         assert kwargs["options"].adam_learning_rates == (0.02, 0.005)
         assert kwargs["resume"]
     assert prepare_map.main(["--newton-maxiter", "-1"]) == 2
+    assert prepare_map.main(["--report-every", "0"]) == 2
+    assert prepare_map.main(["--report-every", "125"]) == 2
+
+
+def test_map_progress_reports_recent_stage_rate_and_inf_norm(capsys):
+    report = prepare_map._progress_reporter(100)
+    base = {
+        "stage": "lbfgs", "action": -20.0, "gradient_norm": 10.0,
+        "gradient_inf_norm": 7.0, "status": "running",
+        "checkpoint_path": "checkpoint.npz",
+        "stages": {"lbfgs": {"maxiter": 400}},
+    }
+    for iteration, elapsed in ((0, 0.0), (50, 2.0), (100, 5.0),
+                               (150, 9.0), (200, 15.0)):
+        report(None, {**base, "iteration": iteration, "elapsed_seconds": elapsed})
+    output = capsys.readouterr().out
+    assert "iteration=50" not in output and "iteration=150" not in output
+    assert "iteration=100" in output and "iteration=200" in output
+    assert "recent=100 steps/5.0s (20.00 steps/s)" in output
+    assert "remaining=300 steps eta_to_limit=15.0s" in output
+    assert "recent=100 steps/10.0s (10.00 steps/s)" in output
+    assert "remaining=200 steps eta_to_limit=20.0s" in output
+    assert "|gradient|_inf=7" in output
+
+    report(None, {**base, "iteration": 225, "elapsed_seconds": 17.5,
+                  "status": "stage_complete",
+                  "stages": {"lbfgs": {"maxiter": 400, "message": "done"}}})
+    output = capsys.readouterr().out
+    assert "iteration=225" in output and "lbfgs: done" in output
+    assert "eta_to_limit" not in output
+
+    report(None, {**base, "stage": "adam_1", "iteration": 0,
+                  "elapsed_seconds": 17.5, "stages": {"adam_1": {"maxiter": 200}}})
+    report(None, {**base, "stage": "adam_1", "iteration": 100,
+                  "elapsed_seconds": 19.5, "stages": {"adam_1": {"maxiter": 200}}})
+    assert "recent=100 steps/2.0s (50.00 steps/s)" in capsys.readouterr().out
 
 
 def test_cli_can_disable_adam_and_rejects_bad_schedules(monkeypatch):
@@ -148,10 +187,11 @@ def test_submit_orders_preparation_and_production_and_propagates_failure(tmp_pat
         assert len(commands) == 1
     else:
         assert "closure_full_q_integration.prepare_map" in commands[1]
-        assert "--lbfgs-maxiter 40000" in commands[1]
+        assert "--lbfgs-maxiter 10000" in commands[1]
         assert "--newton-maxiter 2000" in commands[1]
-        assert "--adam-steps 2000,2000,2000" in commands[1]
+        assert "--adam-steps 4000,4000,4000" in commands[1]
         assert "--adam-learning-rates 0.01,0.003,0.001" in commands[1]
+        assert "--report-every 100" in commands[1]
         if failure == "map":
             assert result.returncode == 8
             assert len(commands) == 2

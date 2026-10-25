@@ -30,6 +30,8 @@ def test_optimizer_finds_map_not_origin():
     )
     np.testing.assert_allclose(center, [1.5, -2.0], atol=1.0e-6)
     assert info["gradient_norm"] < 1.0e-4
+    assert info["gradient_inf_norm"] <= info["gradient_norm"]
+    assert info["start_gradient_inf_norm"] == pytest.approx(28.0)
     assert info["start_action"] > info["action"]
 
 
@@ -95,6 +97,7 @@ def test_failure_diagnostics_and_resume_preserve_candidate(tmp_path, monkeypatch
     assert info["start_action"] == pytest.approx(saved_info["action"])
     assert not np.array_equal(saved_point, coordinates.x0)
     assert info["gradient_norm"] <= 1e-3
+    assert info["gradient_inf_norm"] <= info["gradient_norm"]
     history = [json.loads(line) for line in stem.with_suffix(".history.jsonl").read_text().splitlines()]
     assert len({row["attempt_id"] for row in history}) == 2
 
