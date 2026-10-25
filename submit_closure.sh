@@ -42,6 +42,7 @@ echo "Preparing explicit-q MAP (or loading an existing validated MAP)"
   --newton-maxiter "${PIXEL_MAP_NEWTON_MAXITER:-2000}" \
   > "${production_root}.map.log" 2>&1
 
+echo "Calling closure production run"
 ./run_closure.sh \
   --truth $truth --data union --Q $Q --modes $dataset \
   --parameterization q --warmup 1000 --samples 25000 --streams 16 \
