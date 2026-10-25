@@ -37,11 +37,11 @@ PIXEL_PROGRESS=1 ./run_closure.sh --truth $truth --data union --Q $Q \
 echo "Preparing explicit-q MAP: L-BFGS -> Adam -> Newton (or loading validated MAP)"
 "$python_bin" -m closure_full_q_integration.prepare_map \
   --truth "$truth" --data union --Q "$Q" --modes "$dataset" \
-  --lbfgs-maxiter "${PIXEL_MAP_LBFGS_MAXITER:-10000}" \
+  --lbfgs-maxiter "${PIXEL_MAP_LBFGS_MAXITER:-20000}" \
   --lbfgs-maxfun "${PIXEL_MAP_LBFGS_MAXFUN:-100000}" \
-  --adam-steps "${PIXEL_MAP_ADAM_STEPS:-4000,4000,4000}" \
+  --adam-steps "${PIXEL_MAP_ADAM_STEPS:-10000,10000,10000}" \
   --adam-learning-rates "${PIXEL_MAP_ADAM_LEARNING_RATES:-0.01,0.003,0.001}" \
-  --newton-maxiter "${PIXEL_MAP_NEWTON_MAXITER:-2000}" \
+  --newton-maxiter "${PIXEL_MAP_NEWTON_MAXITER:-200}" \
   > "${production_root}.map.log" 2>&1
 
 echo "Calling closure production run"
