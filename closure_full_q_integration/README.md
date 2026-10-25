@@ -52,9 +52,17 @@ output directories. For each numerical target fingerprint:
 - `q_map_<hash>.history.jsonl` retains progress across attempts.
 
 Checkpoints are saved every 50 iterations and at stage boundaries; change
-this with `--checkpoint-every`. On interruption, the last saved checkpoint
-survives. To restart optimization from that point with fresh optimizer state,
-repeat the preparation command with `--resume` and optionally larger budgets.
+this with `--checkpoint-every`. Terminal progress defaults to every 100
+iterations (`--report-every`) without changing the checkpoint frequency.
+The report interval must be a multiple of the checkpoint interval.
+Each progress line gives both the Euclidean gradient norm and its infinity norm
+(largest absolute component) at the best-action point. It also reports the
+measured time and step rate since the previous line, plus remaining iterations
+and an ETA to the current stage's iteration limit. That ETA is an extrapolation
+of recent speed, not a convergence prediction; the stage can stop earlier.
+On interruption, the last saved checkpoint survives. To restart optimization
+from that point with fresh optimizer state, repeat the preparation command with
+`--resume` and optionally larger budgets.
 This restarts the selected L-BFGS/Adam/Newton sequence with fresh optimizer
 state. Use `--resume --adam-steps 0` to go straight to L-BFGS/Newton from the
 saved candidate. A matching converged MAP is always reused. Use `--check-only` to
@@ -128,6 +136,8 @@ prepared independently is therefore reused by the existing submission script.
 Its MAP terminal output is saved to `campaign/JAM_Q2_exp_prod.map.log`.
 `PIXEL_MAP_ADAM_STEPS`, `PIXEL_MAP_ADAM_LEARNING_RATES`,
 `PIXEL_MAP_LBFGS_MAXITER`, `PIXEL_MAP_NEWTON_MAXITER`, and
-`PIXEL_MAP_LBFGS_MAXFUN` override the batch preparation budgets. Existing
-production results are preserved; select a fresh output path or archive the
+`PIXEL_MAP_LBFGS_MAXFUN` override the batch preparation budgets.
+`PIXEL_MAP_REPORT_EVERY` changes terminal progress cadence; checkpointing
+still defaults to every 50 iterations. Existing production results are
+preserved; select a fresh output path or archive the
 old directory explicitly before another production run.

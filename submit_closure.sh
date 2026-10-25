@@ -42,6 +42,7 @@ echo "Preparing explicit-q MAP: L-BFGS -> Adam -> Newton (or loading validated M
   --adam-steps "${PIXEL_MAP_ADAM_STEPS:-4000,4000,4000}" \
   --adam-learning-rates "${PIXEL_MAP_ADAM_LEARNING_RATES:-0.01,0.003,0.001}" \
   --newton-maxiter "${PIXEL_MAP_NEWTON_MAXITER:-2000}" \
+  --report-every "${PIXEL_MAP_REPORT_EVERY:-100}" \
   > "${production_root}.map.log" 2>&1
 
 echo "Calling closure production run"

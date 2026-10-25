@@ -26,14 +26,17 @@ class MapOptions:
     newton_maxiter: int = _NEWTON_MAXITER
     lbfgs_maxfun: int = 400000
     checkpoint_every: int = 50
+    report_every: int = 100
     adam_steps: tuple[int, ...] = (2000, 2000, 2000)
     adam_learning_rates: tuple[float, ...] = (0.01, 0.003, 0.001)
 
     def __post_init__(self):
         if min(self.lbfgs_maxiter, self.newton_maxiter) < 0:
             raise ValueError("MAP iteration limits must be nonnegative")
-        if self.lbfgs_maxfun < 1 or self.checkpoint_every < 1:
-            raise ValueError("MAP maxfun and checkpoint interval must be positive")
+        if self.lbfgs_maxfun < 1 or self.checkpoint_every < 1 or self.report_every < 1:
+            raise ValueError("MAP maxfun, checkpoint and report intervals must be positive")
+        if self.report_every % self.checkpoint_every:
+            raise ValueError("MAP report interval must be a multiple of checkpoint interval")
         if self.adam_steps and len(self.adam_steps) != len(self.adam_learning_rates):
             raise ValueError("Adam steps and learning rates need the same number of passes")
         if any(steps < 1 for steps in self.adam_steps):
@@ -152,23 +155,27 @@ def _optimize_center(target, initial, *, options=None, progress=None):
     initial_action, initial_gradient = objective(origin)
     if not np.isfinite(initial_action) or not np.all(np.isfinite(initial_gradient)):
         raise ValueError("full-scale q MAP has a non-finite initial action or gradient")
-    best = (initial_action, origin.copy(), float(np.linalg.norm(initial_gradient)))
+    best = (initial_action, origin.copy(), float(np.linalg.norm(initial_gradient)),
+            float(np.max(np.abs(initial_gradient))) if initial_gradient.size else 0.0)
     started = time.monotonic()
     info = {
         "method": ("lbfgs_then_adam_then_trust_ncg" if options.adam_steps
                    else "lbfgs_then_trust_ncg"),
         "options": asdict(options),
         "start_action": initial_action,
-        "start_gradient_norm": best[2], "stages": {},
+        "start_gradient_norm": best[2],
+        "start_gradient_inf_norm": best[3], "stages": {},
     }
 
     def record(point, stage, iteration, status="running"):
         nonlocal best
         action, gradient = objective(point)
         norm = float(np.linalg.norm(gradient))
+        inf_norm = float(np.max(np.abs(gradient))) if gradient.size else 0.0
         if np.isfinite(action) and np.isfinite(norm) and action <= best[0]:
-            best = (action, np.asarray(point, dtype=float).copy(), norm)
-        info.update(action=best[0], gradient_norm=best[2], stage=stage,
+            best = (action, np.asarray(point, dtype=float).copy(), norm, inf_norm)
+        info.update(action=best[0], gradient_norm=best[2],
+                    gradient_inf_norm=best[3], stage=stage,
                     iteration=iteration, status=status,
                     elapsed_seconds=time.monotonic() - started)
         if progress is not None:
@@ -212,7 +219,7 @@ def _optimize_center(target, initial, *, options=None, progress=None):
             gradient_norm=(float(np.linalg.norm(end_gradient))
                            if np.all(np.isfinite(end_gradient)) else None),
         )
-        record(result.x, stage, int(result.nit))
+        record(result.x, stage, int(result.nit), "stage_complete")
         # Pass the lowest finite action to the next optimizer even if the last
         # step was uphill or non-finite.
         point = best[1]
@@ -256,7 +263,7 @@ def _optimize_center(target, initial, *, options=None, progress=None):
             action=float(result.fun) if np.isfinite(result.fun) else None,
             gradient_norm=norm if np.isfinite(norm) else None,
         )
-        record(result.x, stage, int(result.nit))
+        record(result.x, stage, int(result.nit), "stage_complete")
         # Reset moments for the next learning rate; retain the lowest finite
         # action so an overshoot cannot worsen the Newton start.
         point = best[1]
@@ -290,7 +297,9 @@ def _validated_center(path, fingerprint, coordinates, target):
             or norm > _MAX_GRADIENT_NORM
             or not np.isclose(action, info["action"], rtol=1e-9, atol=1e-8)):
         return None
+    inf_norm = float(np.max(np.abs(np.asarray(gradient)))) if coordinates.dimension else 0.0
     return center, {**info, "action": action, "gradient_norm": norm,
+                    "gradient_inf_norm": inf_norm,
                     "cache_path": str(path)}
 
 

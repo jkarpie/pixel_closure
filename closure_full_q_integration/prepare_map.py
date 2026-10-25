@@ -30,6 +30,57 @@ def _adam_schedule(steps_raw, rates_raw):
     return (() if steps == (0,) else steps), rates
 
 
+def _format_duration(seconds):
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes, whole_seconds = divmod(round(seconds), 60)
+    if minutes < 60:
+        return f"{minutes}m {whole_seconds:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes:02d}m"
+
+
+def _progress_reporter(report_every):
+    last_report = {}
+
+    def progress(_point, info):
+        stage = info["stage"]
+        iteration = int(info["iteration"])
+        elapsed = float(info["elapsed_seconds"])
+        result = info["stages"].get(stage, {})
+        previous = last_report.get(stage)
+        terminal = info["status"] != "running"
+        if (previous is not None and not terminal
+                and iteration - previous[0] < report_every):
+            return
+
+        recent = ""
+        if previous is not None:
+            steps = iteration - previous[0]
+            seconds = elapsed - previous[1]
+            if steps > 0 and seconds > 0:
+                rate = steps / seconds
+                recent = (f" recent={steps} steps/{_format_duration(seconds)} "
+                          f"({rate:.2f} steps/s)")
+                limit = result.get("maxiter")
+                if not terminal and limit is not None:
+                    remaining = max(int(limit) - iteration, 0)
+                    recent += (f" remaining={remaining} steps "
+                               f"eta_to_limit={_format_duration(remaining / rate)}")
+        last_report[stage] = (iteration, elapsed)
+        print(
+            f"MAP {stage} iteration={iteration} "
+            f"action={info['action']:.12g} |gradient|={info['gradient_norm']:.6g} "
+            f"|gradient|_inf={info['gradient_inf_norm']:.6g} "
+            f"elapsed={elapsed:.1f}s{recent} status={info['status']}\n"
+            f"  checkpoint: {info['checkpoint_path']}", flush=True,
+        )
+        if "message" in result:
+            print(f"  {stage}: {result['message']}", flush=True)
+
+    return progress
+
+
 def prepare_cell(truth, data, q_key, mode, *, cache_root=None, options=None,
                  resume=False, check_only=False):
     """Build exactly the source runner's final t0 target, without run_fit/MCMC."""
@@ -49,10 +100,9 @@ def prepare_cell(truth, data, q_key, mode, *, cache_root=None, options=None,
             )
             model = analysis.compile()
         print(f"MAP target ready: DIS t0 iterations={iterations}", flush=True)
+        from .map_start import MapOptions
+        selected = options or MapOptions()
         if not check_only:
-            from .map_start import MapOptions
-
-            selected = options or MapOptions()
             schedule = ", ".join(
                 f"{steps} steps at lr={rate:g}" for steps, rate in zip(
                     selected.adam_steps, selected.adam_learning_rates,
@@ -62,29 +112,21 @@ def prepare_cell(truth, data, q_key, mode, *, cache_root=None, options=None,
                   f"Adam [{schedule}] -> "
                   f"Newton ({selected.newton_maxiter})", flush=True)
 
-        def progress(_point, info):
-            print(
-                f"MAP {info['stage']} iteration={info['iteration']} "
-                f"action={info['action']:.12g} |gradient|={info['gradient_norm']:.6g} "
-                f"elapsed={info['elapsed_seconds']:.1f}s status={info['status']}\n"
-                f"  checkpoint: {info['checkpoint_path']}", flush=True,
-            )
-            result = info["stages"].get(info["stage"], {})
-            if "message" in result:
-                print(f"  {info['stage']}: {result['message']}", flush=True)
-
         kwargs = dict(prior_rcond=cfg.Q_INTEGRATION_PRIOR_RCOND, cache_root=cache_root)
         if check_only:
             _coordinates, _center, info = load_q_map_start(model, **kwargs)
         else:
             _coordinates, _center, info = prepare_q_map_start(
-                model, **kwargs, options=options, resume=resume, progress=progress,
+                model, **kwargs, options=options, resume=resume,
+                progress=_progress_reporter(selected.report_every),
             )
         for stage, result in info.get("stages", {}).items():
             print(f"MAP {stage}: {result}", flush=True)
         print(
             f"MAP ready: action={info['action']:.12g} "
-            f"|gradient|={info['gradient_norm']:.6g} cache={info['cache_status']}\n"
+            f"|gradient|={info['gradient_norm']:.6g} "
+            f"|gradient|_inf={info['gradient_inf_norm']:.6g} "
+            f"cache={info['cache_status']}\n"
             f"  saved MAP: {info['cache_path']}", flush=True,
         )
         return info
@@ -102,6 +144,8 @@ def main(argv=None):
     parser.add_argument("--lbfgs-maxfun", type=int, default=400000)
     parser.add_argument("--newton-maxiter", type=int, default=2000)
     parser.add_argument("--checkpoint-every", type=int, default=50)
+    parser.add_argument("--report-every", type=int, default=100,
+                        help="terminal progress interval; checkpoints remain independent")
     parser.add_argument("--adam-steps", default="2000,2000,2000",
                         help="steps per Adam pass; comma list, or 0 to disable")
     parser.add_argument("--adam-learning-rates", default="0.01,0.003,0.001",
@@ -131,6 +175,7 @@ def main(argv=None):
         options = MapOptions(
             lbfgs_maxiter=args.lbfgs_maxiter, newton_maxiter=args.newton_maxiter,
             lbfgs_maxfun=args.lbfgs_maxfun, checkpoint_every=args.checkpoint_every,
+            report_every=args.report_every,
             adam_steps=adam_steps, adam_learning_rates=adam_rates,
         )
         for q_key in scales:
