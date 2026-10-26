@@ -63,19 +63,19 @@ echo "Preparing explicit-q MAP: L-BFGS -> Adam -> L-BFGS -> Newton (or loading v
   --out "$production_root" \
   --lbfgs-maxiter "${PIXEL_MAP_LBFGS_MAXITER:-10000}" \
   --lbfgs-maxfun "${PIXEL_MAP_LBFGS_MAXFUN:-100000}" \
-  --lbfgs-gtol "${PIXEL_MAP_LBFGS_GTOL:-1e-8}" \
+  --lbfgs-gtol "${PIXEL_MAP_LBFGS_GTOL:-1e-6}" \
   --lbfgs-maxls "${PIXEL_MAP_LBFGS_MAXLS:-100}" \
   --lbfgs-maxcor "${PIXEL_MAP_LBFGS_MAXCOR:-50}" \
-  --adam-steps "${PIXEL_MAP_ADAM_STEPS:-4000,4000,4000}" \
+  --adam-steps "${PIXEL_MAP_ADAM_STEPS:-10000,10000,10000}" \
   --adam-learning-rates "${PIXEL_MAP_ADAM_LEARNING_RATES:-0.01,0.003,0.001}" \
-  --refine-lbfgs-maxiter "${PIXEL_MAP_REFINE_LBFGS_MAXITER:-5000}" \
-  --refine-lbfgs-maxfun "${PIXEL_MAP_REFINE_LBFGS_MAXFUN:-50000}" \
+  --refine-lbfgs-maxiter "${PIXEL_MAP_REFINE_LBFGS_MAXITER:-10000}" \
+  --refine-lbfgs-maxfun "${PIXEL_MAP_REFINE_LBFGS_MAXFUN:-100000}" \
   --refine-lbfgs-gtol "${PIXEL_MAP_REFINE_LBFGS_GTOL:-1e-10}" \
   --refine-lbfgs-maxls "${PIXEL_MAP_REFINE_LBFGS_MAXLS:-100}" \
   --refine-lbfgs-maxcor "${PIXEL_MAP_REFINE_LBFGS_MAXCOR:-100}" \
-  --map-gradient-tol "${PIXEL_MAP_GRADIENT_TOL:-1e-3}" \
-  --newton-gtol "${PIXEL_MAP_NEWTON_GTOL:-1e-6}" \
-  --newton-maxiter "${PIXEL_MAP_NEWTON_MAXITER:-2000}" \
+  --map-gradient-tol "${PIXEL_MAP_GRADIENT_TOL:-1e-1}" \
+  --newton-gtol "${PIXEL_MAP_NEWTON_GTOL:-1e-4}" \
+  --newton-maxiter "${PIXEL_MAP_NEWTON_MAXITER:-100}" \
   --report-every "${PIXEL_MAP_REPORT_EVERY:-100}" \
   >> "${production_root}.map.log" 2>&1
 
