@@ -17,29 +17,24 @@ Q=2
 production_root="campaign/${truth}_Q${Q}_${dataset}_prod"
 python_bin=../pixel/venv/bin/python
 export PIXEL_Q_MAP_CACHE_ROOT="$PWD/$production_root/_q_map_cache"
-# Re-submit the same campaign with PIXEL_RESUME=1 after an interrupted job.
+# Resume automatically when this campaign already has a manifest.
 # Completed streams are skipped; unfinished streams use saved NUTS checkpoints.
-resume="${PIXEL_RESUME:-0}"
-[[ "$resume" == 0 || "$resume" == 1 ]] || {
-  echo "PIXEL_RESUME must be 0 or 1" >&2
-  exit 2
-}
-
-if [[ "$resume" == 1 ]]; then
-  [[ -d "$production_root" && ! -L "$production_root" && \
-     -f "$production_root/manifest.json" ]] || {
-    echo "No production manifest to resume: $production_root" >&2
-    exit 2
-  }
-elif [[ -e "$production_root" || -L "$production_root" ]]; then
+export PIXEL_RESUME=0
+if [[ -e "$production_root" || -L "$production_root" ]]; then
   if [[ ! -d "$production_root" || -L "$production_root" || \
         ( -e "$production_root/_q_map_cache" && ! -d "$production_root/_q_map_cache" ) || \
-        -L "$production_root/_q_map_cache" || \
-        -n "$(find "$production_root" -mindepth 1 -maxdepth 1 ! -name _q_map_cache -print -quit)" ]]; then
+        -L "$production_root/_q_map_cache" ]]; then
+    echo "Production output already exists: $production_root; choose a fresh path or archive it first." >&2
+    exit 2
+  fi
+  if [[ -f "$production_root/manifest.json" ]]; then
+    export PIXEL_RESUME=1
+  elif [[ -n "$(find "$production_root" -mindepth 1 -maxdepth 1 ! -name _q_map_cache -print -quit)" ]]; then
     echo "Production output already exists: $production_root; choose a fresh path or archive it first." >&2
     exit 2
   fi
 fi
+resume="$PIXEL_RESUME"
 
 echo "Batch job started"
 export PIXEL_PROGRESS=1
@@ -80,12 +75,12 @@ echo "Preparing explicit-q MAP: L-BFGS -> Adam -> L-BFGS -> Newton (or loading v
   >> "${production_root}.map.log" 2>&1
 
 echo "Calling closure production run"
-production_args=()
+production_args=(--no-plots)
 [[ "$resume" == 1 ]] && production_args+=(--resume)
 ./run_closure.sh \
   --truth $truth --data union --Q $Q --modes $dataset \
   --parameterization q --warmup 1000 --samples 25000 --streams 16 \
-  --out "$production_root" --no-plots \
+  --out "$production_root" \
   --python "$python_bin" "${production_args[@]}" \
   >> "${production_root}.log" 2>&1
 

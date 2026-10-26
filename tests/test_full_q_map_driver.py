@@ -255,6 +255,34 @@ def test_submit_orders_preparation_and_production_and_propagates_failure(tmp_pat
     assert log.read_text().splitlines() == commands
 
 
+@pytest.mark.parametrize("has_manifest", (False, True))
+def test_submit_closure_enables_resume_for_existing_campaign(tmp_path, has_manifest):
+    repo = tmp_path / "closure"
+    repo.mkdir()
+    script = repo / "submit_closure.sh"
+    shutil.copyfile(Path(__file__).parents[1] / "submit_closure.sh", script)
+    launcher = repo / "run_closure.sh"
+    launcher.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$CALL_LOG"\n')
+    launcher.chmod(0o755)
+    python = tmp_path / "pixel" / "venv" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text("#!/bin/bash\nexit 0\n")
+    python.chmod(0o755)
+    root = repo / "campaign" / "JAM_Q2_exp_prod"
+    if has_manifest:
+        root.mkdir(parents=True)
+        (root / "manifest.json").write_text("{}")
+    log = tmp_path / "calls.txt"
+    env = {**os.environ, "CALL_LOG": str(log), "SLURM_SUBMIT_DIR": str(repo),
+           "PIXEL_RESUME": "0"}
+    result = subprocess.run(["bash", str(script)], cwd=tmp_path, env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    production = log.read_text().splitlines()[-1]
+    assert "--parameterization q" in production
+    assert ("--resume" in production) == has_manifest
+
+
 def test_top_level_q_launcher_allows_only_prepared_campaign_map(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
