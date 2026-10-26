@@ -37,6 +37,17 @@ def test_q_cli_routes_isolated_streams_and_warmup_to_sweep(tmp_path):
     assert not output.exists()
 
 
+def test_q_cli_forwards_resume_to_sweep(tmp_path):
+    result = _run(
+        "--truth", "JAM", "--data", "union", "--Q", "2", "--modes", "exp",
+        "--parameterization", "q", "--out", str(tmp_path / "existing"),
+        "--resume", "--dry-run",
+    )
+    assert result.returncode == 0, result.stderr
+    assert "campaign.run_full_scale_stream_sweep sweep" in result.stdout
+    assert "--resume" in result.stdout
+
+
 def test_q_cli_requires_private_output_and_rejects_mock(tmp_path):
     missing = _run("--parameterization", "q", "--Q", "2", "--dry-run")
     assert missing.returncode == 2

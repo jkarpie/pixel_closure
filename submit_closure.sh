@@ -17,8 +17,21 @@ Q=2
 production_root="campaign/${truth}_Q${Q}_${dataset}_prod"
 python_bin=../pixel/venv/bin/python
 export PIXEL_Q_MAP_CACHE_ROOT="$PWD/$production_root/_q_map_cache"
+# Re-submit the same campaign with PIXEL_RESUME=1 after an interrupted job.
+# Completed streams are skipped; unfinished streams use saved NUTS checkpoints.
+resume="${PIXEL_RESUME:-0}"
+[[ "$resume" == 0 || "$resume" == 1 ]] || {
+  echo "PIXEL_RESUME must be 0 or 1" >&2
+  exit 2
+}
 
-if [[ -e "$production_root" || -L "$production_root" ]]; then
+if [[ "$resume" == 1 ]]; then
+  [[ -d "$production_root" && ! -L "$production_root" && \
+     -f "$production_root/manifest.json" ]] || {
+    echo "No production manifest to resume: $production_root" >&2
+    exit 2
+  }
+elif [[ -e "$production_root" || -L "$production_root" ]]; then
   if [[ ! -d "$production_root" || -L "$production_root" || \
         ( -e "$production_root/_q_map_cache" && ! -d "$production_root/_q_map_cache" ) || \
         -L "$production_root/_q_map_cache" || \
@@ -31,11 +44,16 @@ fi
 echo "Batch job started"
 export PIXEL_PROGRESS=1
 mkdir -p campaign
+if [[ "$resume" == 0 ]]; then
+  : > "${production_root}.kern_data_gen.log"
+  : > "${production_root}.map.log"
+  : > "${production_root}.log"
+fi
 
 echo "Calling kernel maker"
 PIXEL_PROGRESS=1 ./run_closure.sh --truth $truth --data union --Q $Q \
   --modes $dataset --kernels-only --cores 32 \
-  --python "$python_bin" > "${production_root}.kern_data_gen.log" 2>&1
+  --python "$python_bin" >> "${production_root}.kern_data_gen.log" 2>&1
 
 # This command can also be run independently before submitting this job.
 # A matching finite saved MAP is reused without another optimization.
@@ -59,15 +77,17 @@ echo "Preparing explicit-q MAP: L-BFGS -> Adam -> L-BFGS -> Newton (or loading v
   --newton-gtol "${PIXEL_MAP_NEWTON_GTOL:-1e-6}" \
   --newton-maxiter "${PIXEL_MAP_NEWTON_MAXITER:-2000}" \
   --report-every "${PIXEL_MAP_REPORT_EVERY:-100}" \
-  > "${production_root}.map.log" 2>&1
+  >> "${production_root}.map.log" 2>&1
 
 echo "Calling closure production run"
+production_args=()
+[[ "$resume" == 1 ]] && production_args+=(--resume)
 ./run_closure.sh \
   --truth $truth --data union --Q $Q --modes $dataset \
   --parameterization q --warmup 1000 --samples 25000 --streams 16 \
   --out "$production_root" --no-plots \
-  --python "$python_bin" \
-  > "${production_root}.log" 2>&1
+  --python "$python_bin" "${production_args[@]}" \
+  >> "${production_root}.log" 2>&1
 
 
 echo "Batch job finished"

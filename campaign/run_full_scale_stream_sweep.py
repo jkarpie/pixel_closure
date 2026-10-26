@@ -123,6 +123,42 @@ def write_json(path: Path, value: dict) -> None:
     os.replace(temporary, path)
 
 
+def read_json(path: Path) -> dict:
+    with path.open() as handle:
+        return json.load(handle)
+
+
+def _same_sweep(saved: dict, cells: list[dict], args) -> bool:
+    """Require the exact original streams before reusing their checkpoints."""
+    if (saved.get("samples_per_stream") != args.samples
+            or saved.get("warmup_per_stream_requested") != args.warmup):
+        return False
+    old_cells = saved.get("cells", [])
+    if len(old_cells) != len(cells):
+        return False
+    cell_keys = ("parameterization", "truth", "data", "scale", "mode",
+                 "stream_count", "map_cache_root")
+    stream_keys = ("number", "seed", "output")
+    return all(
+        all(old.get(key) == new.get(key) for key in cell_keys)
+        and len(old.get("streams", [])) == len(new["streams"])
+        and all(
+            all(previous.get(key) == current.get(key) for key in stream_keys)
+            for previous, current in zip(old["streams"], new["streams"])
+        )
+        for old, new in zip(old_cells, cells)
+    )
+
+
+def _stream_complete(stream: dict) -> bool:
+    output = Path(stream["output"])
+    status = output / "stream.json"
+    return (status.is_file()
+            and read_json(status).get("status") == "complete"
+            and (output / "chain.npz").is_file()
+            and (output / "inference_summary.json").is_file())
+
+
 def _json_safe(value):
     """Keep every PIXEL summary field, including NumPy/complex diagnostics."""
     import numpy as np
@@ -170,6 +206,12 @@ def run_worker(args) -> int:
         raise ValueError("--warmup is currently supported only for q-integration")
     output = args.output.resolve()
     (output / "inference_cache").mkdir(parents=True, exist_ok=True)
+    checkpoint_env = "PIXEL_CHECKPOINT_DIR"
+    previous_checkpoint_dir = os.environ.get(checkpoint_env)
+    if args.parameterization == "q" and previous_checkpoint_dir is None:
+        checkpoint_dir = output / "inference_cache" / "checkpoints"
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        os.environ[checkpoint_env] = str(checkpoint_dir)
     metadata = {
         "parameterization": args.parameterization, "truth": args.truth,
         "data": args.data, "scale": args.scale, "mode": args.mode,
@@ -232,6 +274,8 @@ def run_worker(args) -> int:
     finally:
         metadata["wall_seconds"] = time.time() - metadata["started_at"]
         write_json(output / "stream.json", metadata)
+        if args.parameterization == "q" and previous_checkpoint_dir is None:
+            os.environ.pop(checkpoint_env, None)
 
 
 def run_sweep(args) -> int:
@@ -260,7 +304,14 @@ def run_sweep(args) -> int:
     if args.dry_run:
         return 0
     output_root = args.out
-    if output_root.exists():
+    resume = bool(getattr(args, "resume", False))
+    if resume:
+        manifest_path = output_root / "manifest.json"
+        if not manifest_path.is_file():
+            raise ValueError(f"no sweep manifest to resume: {manifest_path}")
+        if not _same_sweep(read_json(manifest_path), cells, args):
+            raise ValueError("resume request does not match the original sweep")
+    elif output_root.exists():
         if not output_root.is_dir():
             raise ValueError(f"output path is not a directory: {output_root}")
         internal_cache = output_root / "_q_map_cache"
@@ -307,6 +358,11 @@ def run_sweep(args) -> int:
     manifest = {"samples_per_stream": args.samples,
                 "warmup_per_stream_requested": args.warmup, "cells": cells,
                 "status": "running", "started_at": time.time()}
+    if resume:
+        previous = read_json(output_root / "manifest.json")
+        manifest["first_started_at"] = previous.get(
+            "first_started_at", previous.get("started_at")
+        )
     write_json(output_root / "manifest.json", manifest)
     failures = 0
     completed = False
@@ -315,9 +371,14 @@ def run_sweep(args) -> int:
             active = []
             try:
                 for stream in cell["streams"]:
+                    if resume and _stream_complete(stream):
+                        stream["exit_code"] = 0
+                        print(f"[{index}/{len(cells)}] {stream['output']}: "
+                              "already complete", flush=True)
+                        continue
                     output = Path(stream["output"])
-                    output.mkdir(parents=True)
-                    log = (output / "run.log").open("w")
+                    output.mkdir(parents=True, exist_ok=resume)
+                    log = (output / "run.log").open("a" if resume else "w")
                     command = worker_command(
                         args.python, cell, stream, args.samples, args.warmup
                     )
@@ -378,6 +439,8 @@ def main(argv=None) -> int:
     sweep.add_argument("--seed-base", type=int, default=20261018)
     sweep.add_argument("--python", default=sys.executable)
     sweep.add_argument("--dry-run", action="store_true")
+    sweep.add_argument("--resume", action="store_true",
+                       help="resume unfinished streams in a matching output root")
     sweep.add_argument("--map-cache-root", type=Path, default=None,
                        help="prepared MAP directory; defaults to PIXEL_Q_MAP_CACHE_ROOT or OUT/_q_map_cache")
     worker = subparsers.add_parser("worker", help=argparse.SUPPRESS)
