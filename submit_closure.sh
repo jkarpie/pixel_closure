@@ -57,7 +57,7 @@ echo "Preparing explicit-q MAP: L-BFGS -> Adam -> L-BFGS -> Newton (or loading v
   --refine-lbfgs-maxcor "${PIXEL_MAP_REFINE_LBFGS_MAXCOR:-100}" \
   --map-gradient-tol "${PIXEL_MAP_GRADIENT_TOL:-1e-1}" \
   --newton-gtol "${PIXEL_MAP_NEWTON_GTOL:-1e-4}" \
-  --newton-maxiter "${PIXEL_MAP_NEWTON_MAXITER:-100}" \
+  --newton-maxiter "${PIXEL_MAP_NEWTON_MAXITER:-5}" \
   --report-every "${PIXEL_MAP_REPORT_EVERY:-100}" \
   > "${production_root}.map.log" 2>&1
 
