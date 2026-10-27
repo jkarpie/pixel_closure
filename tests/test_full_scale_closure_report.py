@@ -37,6 +37,25 @@ def test_frozen_disagreeing_chains_are_not_reported_as_converged():
     assert "frozen" in result["issue"]
 
 
+def test_aggregate_sampler_uses_independent_chain_tau_proxy():
+    rows = [
+        {"number": 1, "sampler": {"draws": 100, "tau_int_max": 2.,
+          "slowest_parameter": "a", "acceptance_statistic": .8,
+          "num_divergence": 1, "tau_reliable": True}},
+        {"number": 3, "sampler": {"draws": 300, "tau_int_max": 6.,
+          "slowest_parameter": "b", "acceptance_statistic": .9,
+          "num_divergence": 2, "tau_reliable": True}},
+    ]
+    totals = report.aggregate_sampler(rows)
+    assert totals["stream_numbers"] == [1, 3]
+    assert totals["draws"] == 400
+    assert totals["pooled_tau_upper_proxy"] == pytest.approx(5.)
+    assert totals["pooled_ess_lower_proxy"] == pytest.approx(40.)
+    assert totals["mean_acceptance_statistic"] == pytest.approx(.875)
+    assert totals["num_divergence"] == 3
+    assert totals["worst_tau_stream"] == 3
+
+
 def test_pull_statistics_matches_suite_coverage_and_old_finite_node_policy():
     from closure_JAM_truth.fit import coverage_report
 
@@ -102,7 +121,8 @@ def _make_campaign(tmp_path):
         chi2 = report.prediction_chi2(pred.mean(0), layout, model, 1e-10)["chi2"]
         fit = {"q_key": "2", "mode": "exp", "sampler": "q_nuts", "n_data": 3,
                "n_physical_data": 2, "n_constraint_data": 1, "chi2": chi2,
-               "chi2_per_data": chi2/3, "coverage": {}}
+               "chi2_per_data": chi2/3, "coverage": {},
+               "direct_diagnostics": {"inv_mass": [[1., 0.], [0., 1.]]}}
         (result_path / "summary_exp.json").write_text(json.dumps(fit))
         moments = PosteriorMoments(q.mean(0), np.cov(q, rowvar=False, ddof=0), q_layout,
                                    pred.mean(0), np.cov(pred, rowvar=False, ddof=0), tuple(layout),
@@ -125,6 +145,9 @@ def test_complete_cli_pools_moments_matches_direct_draws_and_pixel_sampler(tmp_p
     assert "Pooled posterior: 80 retained draws" in text
     assert "NUTS acceptance" in text
     saved = json.loads(out.with_suffix(".json").read_text())["cells"][0]
+    assert "direct_diagnostics" not in saved["streams"][0]["fit"]
+    original_fit = report.stream_path(root, cell, 1) / "results/truthQ_2/summary_exp.json"
+    assert "direct_diagnostics" in json.loads(original_fit.read_text())
     physics = saved["pooled_physics"]
     expected = report.pull_statistics(q.mean(0), q.var(0), np.array([1., 2.]), np.array([.1, .3]), [{"name": "g", "start": 0, "stop": 2}])
     assert physics["mean_abs_pull"] == pytest.approx(expected["mean_abs_pull"], rel=1e-14)
@@ -157,6 +180,45 @@ def test_changed_source_covariance_refuses_pooled_physics(tmp_path, monkeypatch)
     result = report.report_cell(root, cell)
     assert result["pooled_physics"] is None
     assert any("do not reproduce saved chi2" in s for s in result["unavailable"])
+
+
+def test_partial_campaign_pools_only_complete_streams(tmp_path, monkeypatch, capsys):
+    root, cell, model, _q, _prediction, chains = _make_campaign(tmp_path)
+    monkeypatch.setattr(report, "build_source_model", lambda _: (model, 1e-10))
+    second = report.stream_path(root, cell, 2) / "stream.json"
+    record = json.loads(second.read_text())
+    record["status"] = "failed"
+    second.write_text(json.dumps(record))
+    result = report.report_cell(root, cell)
+    assert result["rhat"] is None
+    assert result["sampler_totals"]["stream_numbers"] == [1]
+    assert result["sampler_totals"]["draws"] == 40
+    assert result["sampler_totals"]["worst_stream_tau_int"] == pytest.approx(chains[0].summary()["tau_int_max"])
+    assert result["sampler_totals"]["pooled_tau_upper_proxy"] == pytest.approx(chains[0].summary()["tau_int_max"])
+    assert result["pooled_physics"]["stream_numbers"] == [1]
+    assert result["pooled_physics"]["draws"] == 40
+    assert result["pooled_physics"]["chi2"] == pytest.approx(
+        json.loads((report.stream_path(root, cell, 1) / "results/truthQ_2/summary_exp.json").read_text())["chi2"])
+    assert "streams 1" in report.render({"root": str(root), "manifest_status": "failed",
+                                          "requested_samples": 40, "requested_warmup": 10,
+                                          "cells": [result]})
+    output = tmp_path / "partial_report"
+    assert report.main(["--root", str(root), "--out", str(output)]) == 2
+    assert "Pooled posterior: 40 retained draws from streams 1" in capsys.readouterr().out
+    saved = json.loads(output.with_suffix(".json").read_text())["cells"][0]
+    assert saved["pooled_physics"]["stream_numbers"] == [1]
+
+
+def test_partial_campaign_rhat_uses_available_complete_chains(tmp_path):
+    root, cell, _model, *_ = _make_campaign(tmp_path)
+    (root / "streams_2").rename(root / "streams_3")
+    cell["stream_count"] = 3
+    cell["streams"].append({"number": 3, "seed": 3, "output": "/remote/stream_03"})
+    result = report.report_cell(root, cell, physics_builder=lambda _cell, rows: {"stream_numbers": [r["number"] for r in rows]})
+    assert result["rhat"]["stream_numbers"] == [1, 2]
+    assert result["sampler_totals"]["stream_numbers"] == [1, 2]
+    assert result["pooled_physics"]["stream_numbers"] == [1, 2]
+    assert result["streams"][2]["status"] == "missing"
 
 
 def test_partial_transfer_reports_missing_inputs_and_preserves_launch_records(tmp_path, capsys):

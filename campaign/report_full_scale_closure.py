@@ -267,12 +267,43 @@ def pooled_physics(cell, streams, model_builder=None):
         total += count
     result = prediction_chi2(prediction, reference["prediction_layout"], model, rcond, precisions)
     result.update(pull_statistics(mean, variance, reference["truth"], reference["nodes"], reference["q_layout"]))
-    result.update(draws=total, validation=checked,
+    result.update(draws=total, stream_numbers=[s["number"] for s in streams], validation=checked,
                   source="saved matched-draw posterior moments, weighted by retained draw count; source chi2 verified per stream")
     return result
 
 
-def report_cell(root, cell, *, summary_only=False):
+def aggregate_sampler(streams):
+    """Summarize independent chains without pretending they form one chain."""
+    rows = [(r["number"], r["sampler"]) for r in streams if r.get("sampler")]
+    if not rows:
+        return None
+    draws = sum(int(s["draws"]) for _, s in rows)
+    tau = [(number, s["tau_int_max"], s.get("slowest_parameter")) for number, s in rows
+           if s.get("tau_int_max") is not None and np.isfinite(s["tau_int_max"])]
+    worst = max(tau, key=lambda item: item[1]) if tau else None
+    # The slowest coordinate may differ by stream. Weighting each stream's
+    # maximum tau gives a conservative proxy for the pooled-mean variance
+    # when the independent chains sample the same stationary distribution.
+    pooled_tau = (sum(int(s["draws"])*s["tau_int_max"] for _, s in rows)/draws
+                  if len(tau) == len(rows) else None)
+    accept = [(int(s["draws"]), s.get("acceptance_statistic")) for _, s in rows]
+    divergence = [s.get("num_divergence") for _, s in rows]
+    return {
+        "stream_numbers": [number for number, _ in rows],
+        "draws": draws,
+        "worst_stream_tau_int": worst[1] if worst else None,
+        "worst_tau_stream": worst[0] if worst else None,
+        "worst_tau_parameter": worst[2] if worst else None,
+        "pooled_tau_upper_proxy": pooled_tau,
+        "pooled_ess_lower_proxy": draws/(2*pooled_tau) if pooled_tau and pooled_tau > 0 else None,
+        "mean_acceptance_statistic": (sum(n*v for n, v in accept)/draws
+                                      if all(v is not None for _, v in accept) else None),
+        "num_divergence": sum(divergence) if all(v is not None for v in divergence) else None,
+        "tau_reliable": all(s.get("tau_reliable") is True for _, s in rows),
+    }
+
+
+def report_cell(root, cell, *, summary_only=False, physics_builder=None):
     if len(cell["streams"]) != cell["stream_count"]:
         raise ValueError("manifest stream count disagrees with stream list")
     numbers = [int(s["number"]) for s in cell["streams"]]
@@ -282,8 +313,9 @@ def report_cell(root, cell, *, summary_only=False):
     cached_path = destination / "REPORT.json"
     cached = read_json(cached_path) if cached_path.is_file() else None
     result = {"cell": {k: cell[k] for k in (*IDENTITY, "stream_count")},
-              "streams": [], "unavailable": [], "rhat": None, "pooled_physics": None}
-    stats, labels, summaries = [], None, []
+              "streams": [], "unavailable": [], "rhat": None,
+              "sampler_totals": None, "pooled_physics": None}
+    stats, stat_numbers, labels, summaries = [], [], None, []
     for entry in sorted(cell["streams"], key=lambda s: s["number"]):
         number = entry["number"]
         path = stream_path(root, cell, number)
@@ -323,13 +355,22 @@ def report_cell(root, cell, *, summary_only=False):
                               "source": "recomputed from saved PIXEL chain"}
             row["sampler"]["n_max_depth"] = int(np.sum(chain.reached_max_depth)) if hasattr(chain, "reached_max_depth") else None
             stats.append(split_statistics(chain.samples))
+            stat_numbers.append(number)
             del chain
+        elif not summary_only and not (path / "chain.npz").is_file():
+            result["unavailable"].append(f"stream {number}: missing chain.npz")
         fit_path = path / "results" / f"truthQ_{cell['scale']}" / f"summary_{cell['mode']}.json"
         row["moments_path"] = str(fit_path.with_name(f"posterior_moments_{cell['mode']}.npz"))
+        if not summary_only and not Path(row["moments_path"]).is_file():
+            result["unavailable"].append(f"stream {number}: missing posterior_moments_{cell['mode']}.npz")
         if fit_path.is_file():
             fit = read_json(fit_path)
             if str(fit["q_key"]) != str(cell["scale"]) or fit["mode"] != cell["mode"]:
                 raise ValueError(f"stream {number}: fit summary belongs to another cell")
+            # The sampler section already carries the needed diagnostics.
+            # Direct diagnostics can include million-entry dense mass matrices;
+            # copying them into every report makes a portable JSON hundreds of MB.
+            fit.pop("direct_diagnostics", None)
             row["fit"] = fit
             row["pull_summary"] = coverage_totals(fit.get("coverage", {}))
         else:
@@ -349,27 +390,30 @@ def report_cell(root, cell, *, summary_only=False):
             if row["sampler"]["source"] != "recomputed from saved PIXEL chain":
                 row["sampler"] = {**row["sampler"], **old,
                                   "source": "saved cell REPORT.json, matched inference summaries"}
-    if len(stats) == cell["stream_count"] and len(stats) >= 2:
-        if len({r["sampler"]["draws"] for r in result["streams"]}) != 1:
-            raise ValueError("stream lengths differ; refusing to truncate for R-hat")
-        result["rhat"] = split_rhat(stats, labels)
+    result["sampler_totals"] = aggregate_sampler(result["streams"])
+    if len(stats) >= 2:
+        try:
+            result["rhat"] = {**split_rhat(stats, labels), "stream_numbers": stat_numbers}
+        except ValueError as exc:
+            result["unavailable"].append(f"cross-stream R-hat: {exc}")
     elif cache_valid and cached.get("split_rhat_max") is not None:
         result["rhat"] = {"max": cached["split_rhat_max"], "parameter": cached["split_rhat_parameter"],
-                          "source": "saved cell REPORT.json, matched inference summaries"}
+                          "source": "saved cell REPORT.json, matched inference summaries",
+                          "stream_numbers": [r["number"] for r in result["streams"]]}
     elif cell["stream_count"] > 1:
-        result["unavailable"].append("cross-stream R-hat: need every chain.npz or a matching cell REPORT.json")
-    if cell["parameterization"] == "q" and not summary_only and all(
-        r.get("fit") and r.get("sampler") and Path(r["moments_path"]).is_file()
-        for r in result["streams"]
-    ):
+        result["unavailable"].append("cross-stream R-hat: need at least two completed chains or a matching full cell REPORT.json")
+    physics_streams = [r for r in result["streams"] if r["status"] == "complete"
+                       and r.get("fit") and r.get("sampler")
+                       and Path(r["moments_path"]).is_file()]
+    if cell["parameterization"] == "q" and not summary_only and physics_streams:
         try:
             # Libraries' setup messages go to stderr; stdout remains the report.
             with redirect_stdout(sys.stderr):
-                result["pooled_physics"] = pooled_physics(cell, result["streams"])
+                result["pooled_physics"] = (physics_builder or pooled_physics)(cell, physics_streams)
         except (ValueError, OSError, KeyError, ImportError, RuntimeError) as exc:
             result["unavailable"].append(f"pooled physics: {type(exc).__name__}: {exc}")
     else:
-        result["unavailable"].append("pooled chi2, max PDF pull and worst datasets: need all completed posterior_moments files and source data (omitted with --summary-only)")
+        result["unavailable"].append("pooled chi2, PDF pulls and worst datasets: need at least one completed stream with posterior moments and source data (omitted with --summary-only)")
     for row in result["streams"]:
         sampler = row.get("sampler")
         if sampler and (sampler.get("average_depth") is None or sampler.get("dense_metric_realized") is None):
@@ -381,6 +425,10 @@ def report_cell(root, cell, *, summary_only=False):
 
 def fmt(value):
     return "unavailable" if value is None else f"{value:.6g}"
+
+
+def stream_list(numbers):
+    return ", ".join(str(n) for n in numbers) if numbers else "none"
 
 
 def render(report):
@@ -407,7 +455,12 @@ def render(report):
                 lines.append(f"| {row['number']} | " + " | ".join(fmt(s.get(k)) for k in (
                     "acceptance_statistic", "max_abs_delta_h", "step_size", "average_depth", "num_divergence", "n_max_depth", "steps_per_trajectory")) + " |")
         rhat = result["rhat"] or {}
-        lines += ["", f"Worst split R-hat: {fmt(rhat.get('max'))} ({rhat.get('parameter') or 'unavailable'}).", ""]
+        lines += ["", f"Worst split R-hat: {fmt(rhat.get('max'))} ({rhat.get('parameter') or 'unavailable'}); streams: {stream_list(rhat.get('stream_numbers'))}.", ""]
+        totals = result.get("sampler_totals")
+        if totals:
+            lines.append(f"Completed streams with sampler diagnostics: {stream_list(totals['stream_numbers'])} ({len(totals['stream_numbers'])}/{c['stream_count']}); {totals['draws']} retained draws.")
+            lines.append(f"Aggregate tau upper proxy: {fmt(totals['pooled_tau_upper_proxy'])}; pooled ESS lower proxy: {fmt(totals['pooled_ess_lower_proxy'])}. Worst per-stream tau: {fmt(totals['worst_stream_tau_int'])} (stream {totals['worst_tau_stream'] or 'unavailable'}, {totals['worst_tau_parameter'] or 'unavailable'}).")
+            lines.append(f"Draw-weighted NUTS acceptance statistic: {fmt(totals['mean_acceptance_statistic'])}; total divergences: {fmt(totals['num_divergence'])}.")
         if samplers:
             draws = sum(s["draws"] for s in samplers)
             divergence = [s.get("num_divergence") for s in samplers]
@@ -430,7 +483,7 @@ def render(report):
                     p.get("mean_abs_pull"), p.get("frac_pull_le_1"), p.get("frac_pull_le_2"))) + " |")
         physics = result["pooled_physics"]
         if physics:
-            lines += ["", f"Pooled posterior: {physics['draws']} retained draws; chi2={fmt(physics['chi2'])}, chi2/npt={fmt(physics['chi2_per_npt'])}, npt={physics['npt']} ({physics['n_physical_data']} physical + {physics['n_constraint_data']} constraints).",
+            lines += ["", f"Pooled posterior: {physics['draws']} retained draws from streams {stream_list(physics.get('stream_numbers'))}; chi2={fmt(physics['chi2'])}, chi2/npt={fmt(physics['chi2_per_npt'])}, npt={physics['npt']} ({physics['n_physical_data']} physical + {physics['n_constraint_data']} constraints).",
                       f"Pooled PDF pulls: mean abs={fmt(physics['mean_abs_pull'])}, max abs={fmt(physics['max_abs_pull'])}, fraction <1={fmt(physics['frac_pull_lt_1'])}, fraction <2={fmt(physics['frac_pull_lt_2'])}.",
                       f"Chi2 components: {json.dumps(physics['chi2_components'], sort_keys=True)}."]
             worst = physics["worst_true_pdf_pull"]
@@ -462,7 +515,7 @@ def render(report):
             lines += ["", "Unavailable inputs/statistics:", ""]
             lines += [f"- {item}" for item in result["unavailable"]]
         lines.append("")
-    lines += ["tau uses Wolff's convention: independent draws have tau=0.5; ESS=N/(2*tau).",
+    lines += ["Tau uses Wolff's convention: independent draws have tau=0.5; ESS=N/(2*tau). The aggregate tau upper proxy is the draw-weighted mean of each independent stream's maximum tau; its ESS lower proxy assumes a shared stationary distribution. Check split R-hat before interpreting either as pooled precision.",
               "NUTS acceptance is a mean transition acceptance statistic. It is not a binary acceptance rate.",
               "Chi2/npt is not chi2/degrees of freedom; totals include constraint rows. Dataset rankings exclude constraints.",
               "PDF pulls use posterior standard deviations and finite nodes in 0.01 <= x <= 0.9. Nodes are correlated; fractions are descriptive.",
