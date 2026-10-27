@@ -212,7 +212,7 @@ def test_submit_orders_preparation_and_production_and_propagates_failure(tmp_pat
     log = tmp_path / "calls.txt"
     env = {**os.environ, "CALL_LOG": str(log), "TEST_FAIL": failure,
            "SLURM_SUBMIT_DIR": str(repo)}
-    occupied = repo / "campaign" / "JAM_Q2_exp_prod"
+    occupied = repo / "campaign" / "JAM_Q2_exp_prod_smallprior"
     prepared_cache = occupied / "_q_map_cache"
     prepared_cache.mkdir(parents=True)
     (prepared_cache / "candidate.npz").write_bytes(b"saved")
@@ -227,17 +227,17 @@ def test_submit_orders_preparation_and_production_and_propagates_failure(tmp_pat
         assert len(commands) == 1
     else:
         assert "closure_full_q_integration.prepare_map" in commands[1]
-        assert "--out campaign/JAM_Q2_exp_prod" in commands[1]
+        assert "--out campaign/JAM_Q2_exp_prod_smallprior" in commands[1]
         assert "--lbfgs-maxiter 10000" in commands[1]
-        assert "--lbfgs-gtol 1e-8" in commands[1]
+        assert "--lbfgs-gtol 1e-6" in commands[1]
         assert "--lbfgs-maxcor 50" in commands[1]
-        assert "--refine-lbfgs-maxiter 5000" in commands[1]
-        assert "--refine-lbfgs-maxfun 50000" in commands[1]
+        assert "--refine-lbfgs-maxiter 10000" in commands[1]
+        assert "--refine-lbfgs-maxfun 100000" in commands[1]
         assert "--refine-lbfgs-gtol 1e-10" in commands[1]
-        assert "--map-gradient-tol 1e-3" in commands[1]
-        assert "--newton-gtol 1e-6" in commands[1]
-        assert "--newton-maxiter 2000" in commands[1]
-        assert "--adam-steps 4000,4000,4000" in commands[1]
+        assert "--map-gradient-tol 1e-1" in commands[1]
+        assert "--newton-gtol 1e-4" in commands[1]
+        assert "--newton-maxiter 5" in commands[1]
+        assert "--adam-steps 10000,10000,10000" in commands[1]
         assert "--adam-learning-rates 0.01,0.003,0.001" in commands[1]
         assert "--report-every 100" in commands[1]
         if failure == "map":
@@ -268,7 +268,7 @@ def test_submit_closure_enables_resume_for_existing_campaign(tmp_path, has_manif
     python.parent.mkdir(parents=True)
     python.write_text("#!/bin/bash\nexit 0\n")
     python.chmod(0o755)
-    root = repo / "campaign" / "JAM_Q2_exp_prod"
+    root = repo / "campaign" / "JAM_Q2_exp_prod_smallprior"
     if has_manifest:
         root.mkdir(parents=True)
         (root / "manifest.json").write_text("{}")

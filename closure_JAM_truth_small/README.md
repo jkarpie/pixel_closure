@@ -128,23 +128,23 @@ central values by `Normal(central, sigma)` — the fake data are uncorrelated.
   146 rather than 145 because a quintic tiles the grid only when `(n - 1) % 5 == 0`;
   145 would leave a ragged degree-4 cell at large `x`.
 - **Prior:** each field is a log-RBF GP (`length = ln 2`, fixed `x_reg`) with a
-  **constant, x-independent mean** (`priors.Const`):
-  - the C-even singlet (`sigma`), gluon (`g`) and charm (`t15`) use **mean 5,
-    σ 5**;
-  - the C-even non-singlets (`t3`, `t8`) and every C-odd valence field
-    (`v3`, `v8`, `v`, `v15`) use **mean 0.5, σ 1**.
+  **constant, x-independent mean** (`priors.Const`). The tied mean and σ are
+  `t3=0.25`, `t8=0.5`, `sigma=5`, `t15=2`, `g=5`, `v3=0.25`, `v8=0.2`,
+  `v=0.5`, and `v15=0.5`. The explicit-q small runner sets covariance jitter
+  to `1e-6`.
 
   The mean `N` is **tied** to σ (`analysis.tie`), so each prior is `a ± a`; the
   tied amplitude, length and `x_reg` are all **frozen** (set
   `config.GP_AMPLITUDE_FREE = True` to sample the amplitudes instead, which
   attaches a hard floor at `GP_AMPLITUDE_FLOOR` and a log-normal hyper-prior
-  centred on each tier), and the 1,152 GP field
-  coefficients are marginalized analytically.  Lattice-only fits therefore
+  centred on each field's value). In the source suite's analytic route, the
+  1,314 GP field coefficients are marginalized analytically. Lattice-only fits therefore
   have zero sampled parameters; DIS/DY fits sample their fitted table
   normalizations and, for DY, the 12 mathematical H-S coordinates.  When
   inference is requested on a model with no free parameters, PIXEL returns the
-  closed-form posterior as a `pixel.infer.PosteriorResult`.  (Grouping lives in
-  `config.HIGH_PRIOR_FIELDS` / `gp_amplitude`.)
+  closed-form posterior as a `pixel.infer.PosteriorResult`. The explicit-q
+  variant samples the same 1,314 coefficients instead. (Values live in
+  `config.GP_AMPLITUDES`.)
 - **Physics constraints** (near-hard pseudo-data, every mode):
   - every distribution vanishes at `x = 1` (a `Delta` evaluation `= 0`);
   - `x*f(x) -> 0` at the origin, for every field but `sigma`/`g`

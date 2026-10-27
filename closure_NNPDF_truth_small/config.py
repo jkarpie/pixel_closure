@@ -742,7 +742,8 @@ TEST_MODE_DY = "dy"                               # DY-only test mode
 #: and `g` (5.0), and the other fields are tuned towards their observed scales --
 #: `t3` 0.25, `t8` 0.5, `t15` 2.0, valence 0.2-0.5.  These are owner-specified
 #: (HANDOFF.md); change them only with the full 9-field signed + RMS pull table.
-#: The full suites still use the 5.0/1.0 tiers.
+#: The full NNPDF suite retains the 5.0/1.0 tiers; the full JAM/union suite now
+#: uses this per-field table for new campaigns.
 #:
 #: Known costs of these values against the 5.0/1.0 tiers, measured when they were
 #: first tried, so a retune is not attempted blind:

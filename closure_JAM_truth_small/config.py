@@ -740,7 +740,8 @@ TEST_MODE_DY = "dy"                               # DY-only test mode
 #: and `g` (5.0), and the other fields are tuned towards their observed scales --
 #: `t3` 0.25, `t8` 0.5, `t15` 2.0, valence 0.2-0.5.  These are owner-specified
 #: (HANDOFF.md); change them only with the full 9-field signed + RMS pull table.
-#: The full suites still use the 5.0/1.0 tiers.
+#: The full JAM/union suite now uses this table for new campaigns; older full
+#: campaign results retain the original 5.0/1.0 tiers.
 #:
 #: Known costs of these values against the 5.0/1.0 tiers, measured when they were
 #: first tried, so a retune is not attempted blind:
@@ -1085,11 +1086,14 @@ CONTOUR_FLOW_TIME = 0.2
 CONTOUR_N_FLOW_STEPS = 8
 CONTOUR_NUTS_AFFINE_REFERENCE = False
 CONTOUR_NUTS_FLOW_FROM_AFFINE_REFERENCE = False
-#: Ceiling passed to PIXEL's normalization-reference memory refusal, in bytes;
-#: ``None`` keeps PIXEL's default (or ``PIXEL_NORMALIZATION_REFERENCE_BUDGET_BYTES``).
-#: That projection is calibrated on small GP grids and models the flowed map, so
-#: on this suite's grid it refuses runs whose measured footprint fits; set this
-#: (or the environment variable) to run contour NUTS here.
+#: Threshold at which PIXEL's normalization-reference projection *warns*, in
+#: bytes; ``None`` keeps PIXEL's default (or
+#: ``PIXEL_NORMALIZATION_REFERENCE_BUDGET_BYTES``).  That projection is
+#: calibrated on small GP grids and models the flowed map, so on this suite's
+#: grid it over-predicts runs whose measured footprint fits comfortably -- about
+#: 99.6 GiB projected against ~12.7 GiB resident at Q2.  It used to refuse those
+#: runs; it now reports the number and proceeds, so ``None`` is the right value
+#: and contour NUTS needs no override here.
 CONTOUR_NUTS_REFERENCE_BUDGET_BYTES = None
 #: Refuse a contour-NUTS fit whose residual complex-weight ESS fraction falls
 #: below this, matching the small suites' VEGAS outer-ESS gate.

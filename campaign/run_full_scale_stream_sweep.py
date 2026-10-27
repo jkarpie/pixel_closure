@@ -59,6 +59,25 @@ def stream_seed(base: int, cell: tuple[str, ...], stream: int) -> int:
     return (base + int.from_bytes(digest[:4], "big") + stream) % (2**32)
 
 
+def prior_identity(truth: str, data: str) -> dict:
+    """Record the source prior so a changed prior cannot resume old streams."""
+    package = SOURCE_SUITES[(truth, data)]
+    cfg = importlib.import_module(f"{package}.config")
+    form = cfg.PRIOR_FORM
+    result = {
+        "form": form,
+        "amplitudes": {name: float(cfg.gp_amplitude(name)) for name in cfg.ALL_FIELDS},
+        "length_log": float(cfg.GP_LENGTH_LOG),
+        "amplitude_free": bool(cfg.GP_AMPLITUDE_FREE),
+        "amplitude_floor": float(cfg.GP_AMPLITUDE_FLOOR),
+        "amplitude_prior_sigma": float(cfg.GP_AMPLITUDE_PRIOR_SIGMA),
+        "jitter": float(cfg.GP_ENVELOPE_JITTER if form == "beta_envelope" else cfg.GP_JITTER),
+    }
+    if form == "beta_envelope":
+        result["envelope"] = cfg.GP_ENVELOPE
+    return result
+
+
 def plan(args) -> list[dict]:
     selected_cache_root = (getattr(args, "map_cache_root", None)
                            or os.environ.get("PIXEL_Q_MAP_CACHE_ROOT"))
@@ -75,11 +94,14 @@ def plan(args) -> list[dict]:
         for mode in csv_choices(args.modes, MODES, "--modes")
     )
     selected_cells = tuple(cells)
+    priors = {(truth, data): prior_identity(truth, data)
+              for _, truth, data, _, _ in selected_cells}
     return [
         {
             "parameterization": cell[0], "truth": cell[1], "data": cell[2],
             "scale": cell[3], "mode": cell[4], "stream_count": count,
             "map_cache_root": str(map_cache_root),
+            "prior_identity": priors[(cell[1], cell[2])],
             "streams": [
                 {
                     "number": number,
@@ -137,7 +159,7 @@ def _same_sweep(saved: dict, cells: list[dict], args) -> bool:
     if len(old_cells) != len(cells):
         return False
     cell_keys = ("parameterization", "truth", "data", "scale", "mode",
-                 "stream_count", "map_cache_root")
+                 "stream_count", "map_cache_root", "prior_identity")
     stream_keys = ("number", "seed", "output")
     return all(
         all(old.get(key) == new.get(key) for key in cell_keys)

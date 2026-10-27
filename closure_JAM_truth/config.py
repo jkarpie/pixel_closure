@@ -1043,24 +1043,28 @@ TEST_MODE_DY = "dy"                               # DY-only test mode
 # field values are marginalized analytically -- no free hyperparameters to sample.
 
 #: One amplitude per field sets **both** the constant prior mean and the log-RBF
-#: sigma, so every physical field's prior is ``a +- a``: a 100% relative prior
-#: uncertainty about its own mean.  The C-even singlet (sigma), gluon (g) and
-#: charm (t15) fields use GP_AMPLITUDE_HIGH; every other field -- the C-even
-#: non-singlets (t3, t8) and all C-odd valence fields (v3, v8, v, v15) -- uses
-#: GP_AMPLITUDE_LOW.  The mean is a constant function of x (priors.Const).
+#: sigma, so every physical field's prior is ``a +- a``. Match the per-field
+#: amplitudes of closure_JAM_truth_small used by the explicit-q small closure.
+#: The mean is a constant function of x (priors.Const).
 #:
 #: ``fit.py`` enforces the relation with ``analysis.tie(mean.N, to=cov.sigma)``
-#: rather than trusting two constants to stay equal.  Both stay **frozen**: a
-#: fitted tied amplitude collapses onto its lower bound when the data cannot
-#: distinguish the field from zero (see guides/tying_parameters.md).
-HIGH_PRIOR_FIELDS = ("sigma", "g", "t15")
-GP_AMPLITUDE_HIGH = 5.0
-GP_AMPLITUDE_LOW = 1.0
+#: rather than trusting two constants to stay equal.  Both stay **frozen**.
+GP_AMPLITUDES = {
+    "t3": 0.25,
+    "t8": 0.5,
+    "sigma": 5.0,
+    "t15": 2.0,
+    "g": 5.0,
+    "v3": 0.25,
+    "v8": 0.2,
+    "v": 0.5,
+    "v15": 0.5,
+}
 
 
 def gp_amplitude(field: str) -> float:
-    """Tied prior mean *and* log-RBF sigma (HIGH for singlet/gluon/charm)."""
-    return GP_AMPLITUDE_HIGH if field in HIGH_PRIOR_FIELDS else GP_AMPLITUDE_LOW
+    """Tied prior mean and log-RBF sigma for one physical field."""
+    return GP_AMPLITUDES[field]
 
 
 #: Floating the tied amplitude.  Off: both ends of every tie stay frozen and the
@@ -1069,12 +1073,10 @@ def gp_amplitude(field: str) -> float:
 #: tier value -- the mitigation for the ``a -> 0`` collapse that tying the mean to
 #: the width introduces (see guides/tying_parameters.md).
 GP_AMPLITUDE_FREE = False
-#: Hard floor on a *fitted* amplitude: essentially forbid ``a < 1``, so the prior
-#: width can never shrink below 1.  Deliberately a hair under 1.0 rather than
-#: exactly 1.0, because GP_AMPLITUDE_LOW *is* 1.0 and a bound sitting exactly on
-#: the starting value maps to ``eta = -inf`` under the sampler's lower-softplus
-#: transform (pixel.infer.samplers.hmc.ParameterCoordinates).
-GP_AMPLITUDE_FLOOR = 0.99
+#: Hard floor on a *fitted* amplitude. Keep it below the smallest starting
+#: value so the sampler's lower-softplus transform remains finite if floating
+#: amplitudes are enabled later. It is inert while GP_AMPLITUDE_FREE is False.
+GP_AMPLITUDE_FLOOR = 0.99 * min(GP_AMPLITUDES.values())
 #: Log-normal width of that hyper-prior, in e-folds about the tier amplitude.
 GP_AMPLITUDE_PRIOR_SIGMA = 0.5
 
@@ -1231,7 +1233,10 @@ GP_ENVELOPE = {
 #: confirm before relying on it at full scale.
 #:
 #: Full derivation and the ladder: `EXT:pixel/plans/hs_saddle_contour_algorithms.md`.
-GP_JITTER = 1.0e-8
+#: Match the explicit-q small closure's covariance jitter. The preceding
+#: numerical study motivated 1e-8 for the original full-suite prior; this is a
+#: deliberate prior change and requires a fresh campaign, not resumed streams.
+GP_JITTER = 1.0e-6
 
 
 #: Jitter for the ENVELOPE prior, which needs far more than the constant one.

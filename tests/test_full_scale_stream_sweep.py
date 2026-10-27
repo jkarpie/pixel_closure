@@ -205,6 +205,26 @@ def test_resume_rejects_changed_stream_seed_before_touching_output(tmp_path):
     assert json.loads(manifest_path.read_text()) == original
 
 
+def test_resume_rejects_changed_prior_before_touching_output(tmp_path, monkeypatch):
+    from closure_JAM_truth import config as cfg
+
+    args = _args(tmp_path, parameterizations="q", data="union",
+                 modes="exp", stream_counts="1", warmup=5,
+                 dry_run=False, resume=True)
+    args.out.mkdir()
+    original = {
+        "samples_per_stream": args.samples,
+        "warmup_per_stream_requested": args.warmup,
+        "cells": sweep.plan(args),
+    }
+    manifest_path = args.out / "manifest.json"
+    manifest_path.write_text(json.dumps(original))
+    monkeypatch.setattr(cfg, "GP_JITTER", cfg.GP_JITTER * 10)
+    with pytest.raises(ValueError, match="does not match"):
+        sweep.run_sweep(args)
+    assert json.loads(manifest_path.read_text()) == original
+
+
 def test_report_uses_pixel_nuts_chains_and_pixel_split_rhat(tmp_path):
     from pixel.infer.diagnostics.multichain import split_r_hat
     from pixel.infer.samplers.nuts import NUTSSamples

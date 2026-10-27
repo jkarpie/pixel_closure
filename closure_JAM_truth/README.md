@@ -59,11 +59,14 @@ measurements behind leaving `x_min = 1e-6` alone.
 
 Each field's prior is `a ± a`: one amplitude sets both the constant log-RBF mean
 and its sigma, pinned by `analysis.tie` rather than by two constants agreeing.
-Both ends are frozen.  Set `config.GP_AMPLITUDE_FREE = True` to sample the
-amplitudes instead; that attaches a hard floor (`GP_AMPLITUDE_FLOOR = 0.99`, on
-`Parameter.bounds` so it binds MAP as well as the samplers) and a log-normal
-hyper-prior centred on each tier.  While the flag is off nothing is attached, so
-the evidence is unshifted.
+The per-field values now match the small JAM explicit-q closure: `t3=0.25`,
+`t8=0.5`, `sigma=5`, `t15=2`, `g=5`, `v3=0.25`, `v8=0.2`, `v=0.5`, and
+`v15=0.5`. The log-RBF covariance jitter is `1e-6`. Both ends are frozen.
+Set `config.GP_AMPLITUDE_FREE = True` to sample the amplitudes instead; that
+attaches a floor below the smallest configured amplitude and a log-normal
+hyper-prior centred on each field's value. While the flag is off nothing is
+attached, so the evidence is unshifted. Existing production chains were drawn
+under their original prior and must be kept separate from new runs.
 
 The full closure compiles Drell--Yan with the `block-sparse` bilinear layout.
 Only the 9 physical PDF fields enter the H--S precision; lattice nuisance fields

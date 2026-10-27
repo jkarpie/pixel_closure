@@ -127,16 +127,17 @@ def test_all_four_suites_ship_the_same_envelope():
         )
 
 
-def test_all_four_suites_share_the_numerical_settings():
-    """Constraint, GP and H-S flow numerics must not drift between suites.
+def test_all_four_suites_share_the_other_numerical_settings():
+    """Constraint, envelope GP and H-S flow numerics must not drift between suites.
 
     These carry measurements in their config comments (the constraint cliff at
-    1e-6, the rcond plateau, the two jitter boundaries).  A per-suite drift makes
-    those comments wrong somewhere without saying where.
+    1e-6, the rcond plateau, the envelope jitter boundary). The constant-GP
+    jitter in the full JAM suite intentionally matches its small explicit-q
+    variant, which uses 1e-6 rather than the other suites' 1e-8 default.
     """
     keys = ("CONSTRAINT_ENDPOINT_SIGMA", "CONSTRAINT_NORM_SIGMA",
             "CONSTRAINT_ORIGIN_SIGMA", "CONSTRAINT_MOMENTUM_SIGMA",
-            "RCOND", "GP_JITTER", "GP_ENVELOPE_JITTER", "GP_LENGTH_LOG",
+            "RCOND", "GP_ENVELOPE_JITTER", "GP_LENGTH_LOG",
             "CONTOUR_FLOW_TIME", "CONTOUR_N_FLOW_STEPS",
             "PRIOR_FORM")
     ref = {k: getattr(_cfg(SUITES[0]), k) for k in keys}
@@ -145,3 +146,22 @@ def test_all_four_suites_share_the_numerical_settings():
         got = {k: getattr(cfg, k) for k in keys}
         diff = {k: (got[k], ref[k]) for k in keys if got[k] != ref[k]}
         assert not diff, f"{suite} differs from {SUITES[0]}: {diff}"
+
+
+def test_full_jam_constant_gp_matches_small_explicit_q_prior():
+    """All nine tied amplitudes and the active covariance jitter match."""
+    from closure_JAM_truth import config as full, fit as full_fit
+    from small_closure_variant import q_integration_activated
+
+    with q_integration_activated("JAM") as (_package, small, small_fit, _runner):
+        assert full.PRIOR_FORM == small.PRIOR_FORM == "const_logrbf"
+        assert full.GP_AMPLITUDES == small.GP_AMPLITUDES
+        assert set(full.GP_AMPLITUDES) == set(full.ALL_FIELDS)
+        assert full.GP_JITTER == small.GP_JITTER == 1.0e-6
+        assert full.GP_AMPLITUDE_FLOOR < min(full.GP_AMPLITUDES.values())
+        for name in full.ALL_FIELDS:
+            full_prior = full_fit._gp_prior(name)
+            small_prior = small_fit._gp_prior(name)
+            assert float(full_prior.mean.N.value) == float(small_prior.mean.N.value)
+            assert float(full_prior.cov.sigma.value) == float(small_prior.cov.sigma.value)
+            assert full_prior.cov.jitter == small_prior.cov.jitter

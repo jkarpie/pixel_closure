@@ -14,9 +14,15 @@ cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")}"
 dataset=exp
 truth=JAM
 Q=2
-production_root="campaign/${truth}_Q${Q}_${dataset}_prod"
+# The small-closure-matched prior differs from earlier *_prod campaigns. Use a
+# separate output root so neither completed streams nor checkpoints are mixed.
+production_root="${PIXEL_PRODUCTION_ROOT:-campaign/${truth}_Q${Q}_${dataset}_prod_smallprior}"
 python_bin=../pixel/venv/bin/python
-export PIXEL_Q_MAP_CACHE_ROOT="$PWD/$production_root/_q_map_cache"
+if [[ "$production_root" = /* ]]; then
+  export PIXEL_Q_MAP_CACHE_ROOT="$production_root/_q_map_cache"
+else
+  export PIXEL_Q_MAP_CACHE_ROOT="$PWD/$production_root/_q_map_cache"
+fi
 # Resume automatically when this campaign already has a manifest.
 # Completed streams are skipped; unfinished streams use saved NUTS checkpoints.
 export PIXEL_RESUME=0
@@ -38,7 +44,7 @@ resume="$PIXEL_RESUME"
 
 echo "Batch job started"
 export PIXEL_PROGRESS=1
-mkdir -p campaign
+mkdir -p "$(dirname "$production_root")"
 if [[ "$resume" == 0 ]]; then
   : > "${production_root}.kern_data_gen.log"
   : > "${production_root}.map.log"
