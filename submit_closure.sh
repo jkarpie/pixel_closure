@@ -17,25 +17,38 @@ Q=2
 production_root="campaign/${truth}_Q${Q}_${dataset}_prod"
 python_bin=../pixel/venv/bin/python
 export PIXEL_Q_MAP_CACHE_ROOT="$PWD/$production_root/_q_map_cache"
-
+# Resume automatically when this campaign already has a manifest.
+# Completed streams are skipped; unfinished streams use saved NUTS checkpoints.
+export PIXEL_RESUME=0
 if [[ -e "$production_root" || -L "$production_root" ]]; then
   if [[ ! -d "$production_root" || -L "$production_root" || \
         ( -e "$production_root/_q_map_cache" && ! -d "$production_root/_q_map_cache" ) || \
-        -L "$production_root/_q_map_cache" || \
-        -n "$(find "$production_root" -mindepth 1 -maxdepth 1 ! -name _q_map_cache -print -quit)" ]]; then
+        -L "$production_root/_q_map_cache" ]]; then
+    echo "Production output already exists: $production_root; choose a fresh path or archive it first." >&2
+    exit 2
+  fi
+  if [[ -f "$production_root/manifest.json" ]]; then
+    export PIXEL_RESUME=1
+  elif [[ -n "$(find "$production_root" -mindepth 1 -maxdepth 1 ! -name _q_map_cache -print -quit)" ]]; then
     echo "Production output already exists: $production_root; choose a fresh path or archive it first." >&2
     exit 2
   fi
 fi
+resume="$PIXEL_RESUME"
 
 echo "Batch job started"
 export PIXEL_PROGRESS=1
 mkdir -p campaign
+if [[ "$resume" == 0 ]]; then
+  : > "${production_root}.kern_data_gen.log"
+  : > "${production_root}.map.log"
+  : > "${production_root}.log"
+fi
 
 echo "Calling kernel maker"
 PIXEL_PROGRESS=1 ./run_closure.sh --truth $truth --data union --Q $Q \
   --modes $dataset --kernels-only --cores 32 \
-  --python "$python_bin" > "${production_root}.kern_data_gen.log" 2>&1
+  --python "$python_bin" >> "${production_root}.kern_data_gen.log" 2>&1
 
 # This command can also be run independently before submitting this job.
 # A matching finite saved MAP is reused without another optimization.
@@ -59,15 +72,17 @@ echo "Preparing explicit-q MAP: L-BFGS -> Adam -> L-BFGS -> Newton (or loading v
   --newton-gtol "${PIXEL_MAP_NEWTON_GTOL:-1e-4}" \
   --newton-maxiter "${PIXEL_MAP_NEWTON_MAXITER:-5}" \
   --report-every "${PIXEL_MAP_REPORT_EVERY:-100}" \
-  > "${production_root}.map.log" 2>&1
+  >> "${production_root}.map.log" 2>&1
 
 echo "Calling closure production run"
+production_args=(--no-plots)
+[[ "$resume" == 1 ]] && production_args+=(--resume)
 ./run_closure.sh \
   --truth $truth --data union --Q $Q --modes $dataset \
   --parameterization q --warmup 1000 --samples 25000 --streams 16 \
-  --out "$production_root" --no-plots \
-  --python "$python_bin" \
-  > "${production_root}.log" 2>&1
+  --out "$production_root" \
+  --python "$python_bin" "${production_args[@]}" \
+  >> "${production_root}.log" 2>&1
 
 
 echo "Batch job finished"

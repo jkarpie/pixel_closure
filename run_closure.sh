@@ -72,6 +72,8 @@ Options:
   --out PATH               Required for q sampling: new private output root.
                            Only a prepared _q_map_cache may already be present.
                            Each stream gets separate results and inference caches.
+  --resume                 Resume unfinished q streams in the same --out root.
+                           All sweep settings and stream seeds must match.
   --data-only              Run dis_audit/generate as needed, then stop before fitting.
                            Use with --remake-data to force rebuilding existing data.
   --kernels-only           Ensure selected data exist, build all selected kernel
@@ -155,8 +157,8 @@ export PIXEL_KERNEL_PROCESS_START_METHOD="${PIXEL_KERNEL_PROCESS_START_METHOD:-s
 # runs: with the default VEGAS sampler the driver takes `samples.mean` /
 # `.covariance` directly and never calls it.
 export PIXEL_POSTERIOR_WORKERS="${PIXEL_POSTERIOR_WORKERS:-$NPROC}"
-# Detailed library checkpoints are opt-in; the closure driver's own fit summaries
-# and timing lines remain visible in the default, quieter mode.
+# Detailed library progress messages are opt-in; the closure driver's own fit
+# summaries and timing lines remain visible in the default, quieter mode.
 export PIXEL_PROGRESS="${PIXEL_PROGRESS:-0}"
 # The three-line runtime banner is ON here even though progress is off.  Every
 # variable set in this block -- the worker counts above, the BLAS pinning below --
@@ -232,6 +234,7 @@ warmup_flag=""
 streams_flag=""
 seed_base_flag=""
 out_flag=""
+resume_flag=0
 fail_fast=0
 
 die() {
@@ -510,6 +513,10 @@ while [[ $# -gt 0 ]]; do
             out_flag="$2"
             shift 2
             ;;
+        --resume)
+            resume_flag=1
+            shift
+            ;;
         --data-only|--generate-only|--make-data-only)
             data_only=1
             shift
@@ -586,16 +593,20 @@ apply_concurrency
 if [[ "$parameterization" == hs ]]; then
     [[ -z "$samples_flag$warmup_flag$streams_flag$seed_base_flag$out_flag" ]] || \
         die "--samples, --warmup, --streams, --seed-base and --out require --parameterization q"
+    [[ "$resume_flag" -eq 0 ]] || die "--resume requires --parameterization q"
 elif [[ "$data_only" -eq 0 && "$kernels_only" -eq 0 ]]; then
-    [[ -n "$out_flag" ]] || die "q sampling requires --out with a new, private output directory"
-    if [[ "$dry_run" -eq 0 && ( -e "$out_flag" || -L "$out_flag" ) ]]; then
+    [[ -n "$out_flag" ]] || die "q sampling requires --out with a private output directory"
+    if [[ "$resume_flag" -eq 1 && "$dry_run" -eq 0 ]]; then
+        [[ -d "$out_flag" && ! -L "$out_flag" && -f "$out_flag/manifest.json" ]] || \
+            die "--resume requires an existing q sweep manifest in --out: $out_flag"
+    elif [[ "$dry_run" -eq 0 && ( -e "$out_flag" || -L "$out_flag" ) ]]; then
         [[ -d "$out_flag" && ! -L "$out_flag" ]] || die "q output path exists and is not a directory: $out_flag"
         if [[ -e "$out_flag/_q_map_cache" || -L "$out_flag/_q_map_cache" ]]; then
             [[ -d "$out_flag/_q_map_cache" && ! -L "$out_flag/_q_map_cache" ]] || \
                 die "q MAP cache path is not a directory: $out_flag/_q_map_cache"
         fi
         [[ -z "$(find "$out_flag" -mindepth 1 -maxdepth 1 ! -name _q_map_cache -print -quit)" ]] || \
-            die "q output directory already contains production artifacts: $out_flag"
+            die "q output directory is not empty (contains production artifacts): $out_flag"
     fi
     [[ "$scale" != small ]] || die "q stream sampling currently supports full-scale data, not --data mock"
     [[ "$plots_only" -eq 0 ]] || die "q stream sampling does not support --plots-only"
@@ -748,6 +759,7 @@ if [[ "$parameterization" == q && "$kernels_only" -eq 0 ]]; then
     q_sweep_cmd+=(--modes "$(IFS=,; echo "${modes[*]}")")
     if [[ -n "$warmup_flag" ]]; then q_sweep_cmd+=(--warmup "$warmup_flag"); fi
     if [[ -n "$seed_base_flag" ]]; then q_sweep_cmd+=(--seed-base "$seed_base_flag"); fi
+    if [[ "$resume_flag" -eq 1 ]]; then q_sweep_cmd+=(--resume); fi
     case "$kernel_cache_check" in
         trust) export PIXEL_TRUST_KERNEL_CACHE=1 ;;
         rows) export PIXEL_VERIFY_KERNEL_ROWS=1 ;;
