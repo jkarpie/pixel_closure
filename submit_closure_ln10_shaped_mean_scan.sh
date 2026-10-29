@@ -1,6 +1,7 @@
 #!/bin/bash
 # Submit one shaped-mean job per GP width; each width is shared by all PDFs.
 #   PIXEL_CLOSURE_Q=2 bash submit_closure_ln10_shaped_mean_scan.sh 0.1 0.3 1 3
+# Prefix PIXEL_T0_PRIOR=jam_shape to give the t0 fits the JAM-like mean.
 set -euo pipefail
 cd "$(dirname "$0")"
 

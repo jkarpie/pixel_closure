@@ -173,7 +173,7 @@ def constraint_datasets(fields, truth=None):
 # -- build -------------------------------------------------------------------
 
 
-def _gp_prior(field: str, *, shaped: bool = False):
+def _gp_prior(field: str, *, shaped: bool = False, t0_shape: bool = False):
     # The baseline ties the mean to sigma. The zero-unit variant specifies
     # independent means and widths, frozen below, for all nine fields.
     value = cfg.gp_sigma(field)
@@ -187,7 +187,13 @@ def _gp_prior(field: str, *, shaped: bool = False):
         frozen=not cfg.GP_AMPLITUDE_FREE,
         tags=("gp_kernel",),
     )
-    if shaped:
+    if t0_shape:
+        # JAM-like t0 mean: free M_f, fixed a_f and b_f.
+        a, b = cfg.t0_mean_exponents(field)
+        mean = AnchoredBetaMean(x0=cfg.SHAPED_MEAN_X0,
+                                M_prior=tuple(cfg.SHAPED_MEAN_M_PRIOR),
+                                a_prior=a, b_prior=b)
+    elif shaped:
         shaped_priors = cfg.shaped_mean_priors(field)
         mean = AnchoredBetaMean(
             x0=cfg.SHAPED_MEAN_X0,
@@ -245,8 +251,10 @@ def _envelope_prior(field: str):
     )
 
 
-def gp_prior(field: str):
-    """Dispatch on :data:`cfg.PRIOR_FORM`."""
+def gp_prior(field: str, *, t0: bool = False):
+    """Dispatch on :data:`cfg.PRIOR_FORM`, or :data:`cfg.T0_PRIOR` for t0 fits."""
+    if t0 and cfg.T0_PRIOR == "jam_shape":
+        return _gp_prior(field, t0_shape=True)
     if cfg.PRIOR_FORM == "beta_envelope":
         return _envelope_prior(field)
     if cfg.PRIOR_FORM == "shaped_logrbf":
@@ -275,7 +283,8 @@ def nuisance_field_names() -> list:
 
 
 def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
-                   t0=None, bilinear_layout: str = "block-sparse"):
+                   t0=None, bilinear_layout: str = "block-sparse",
+                   t0_prior: bool = False):
     """Construct the Analysis for ``(q_key, mode)`` and freeze all GP cov params.
 
     When lattice data are present, pseudo-ITD systematics use shared x-space
@@ -286,6 +295,8 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     ``t0`` maps a DIS dataset name to the current theory prediction for its rows;
     multiplicative uncertainties are then referenced to it rather than to the
     data (the NNPDF t0 prescription).  :func:`run_fit` iterates it.
+    ``t0_prior`` builds the prior of those preliminary t0 fits
+    (:data:`config.T0_PRIOR`) instead of the production prior.
 
     Returns ``(analysis, fields)``.
     """
@@ -313,7 +324,7 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     for name in cfg.ALL_FIELDS:
         fields[name] = analysis.field(
             name, grid=cfg.make_grid(), element_type=cfg.ELEMENT_TYPE,
-            prior=gp_prior(name),
+            prior=gp_prior(name, t0=t0_prior),
         )
     nuisance_names = []
     if include_lattice:
@@ -363,8 +374,10 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         # The envelope form has a Zero mean, which carries no `N` leaf at all --
         # there is nothing to tie, and asking for one raises rather than silently
         # doing nothing.  Its exponents are frozen by the covariance itself.
-        if cfg.PRIOR_FORM == "shaped_logrbf":
-            # M, a, b carry their own Gaussian priors and remain free.
+        if cfg.PRIOR_FORM == "shaped_logrbf" or (
+                t0_prior and cfg.T0_PRIOR == "jam_shape"):
+            # Free M, a, b carry their own Gaussian priors; fixed ones are
+            # frozen in the mean itself.
             pass
         elif cfg.PRIOR_FORM != "beta_envelope":
             if cfg.VANISHING_PDF_PRIOR == "zero_unit":
@@ -675,9 +688,9 @@ def _iterate_t0(q_key, mode, model, *, use_kernel_cache=True):
     # t0 is a DIS covariance reference.  In mixed modes, derive it from the
     # linear DIS sub-fit so the bilinear HS sector is never sent through MAP.
     t0_mode = "dis" if mode in ("exp", "both") else mode
-    if t0_mode != mode:
+    if t0_mode != mode or cfg.T0_PRIOR != "same":
         analysis, _ = build_analysis(
-            q_key, t0_mode, use_kernel_cache=use_kernel_cache
+            q_key, t0_mode, use_kernel_cache=use_kernel_cache, t0_prior=True
         )
         model = analysis.compile()
     t0 = _dis_predictions(model)
@@ -685,7 +698,8 @@ def _iterate_t0(q_key, mode, model, *, use_kernel_cache=True):
         return ({} if not t0 else t0), 0
     for iteration in range(1, max_iter + 1):
         analysis, _ = build_analysis(q_key, t0_mode,
-                                     use_kernel_cache=use_kernel_cache, t0=t0)
+                                     use_kernel_cache=use_kernel_cache, t0=t0,
+                                     t0_prior=True)
         nxt = _dis_predictions(analysis.compile())
         shift = max(
             float(np.max(np.abs(nxt[k] - t0[k]) / (np.abs(t0[k]) + 1e-300)))

@@ -9,22 +9,31 @@ from pixel import priors
 from pixel.core.params import Normal, Parameter
 
 
+def _parameter(spec) -> Parameter:
+    """A (center, width) pair is a free Gaussian parameter; a number is fixed."""
+    if isinstance(spec, (int, float)):
+        return Parameter(float(spec), frozen=True, tags=("prior_mean",))
+    return Parameter(spec[0], prior=Normal(*spec), tags=("prior_mean",))
+
+
 class AnchoredBetaMean(priors.MeanFunction):
-    """M (x/x0)^a ((1-x)/(1-x0))^b, with M equal to the mean at x0."""
+    """M (x/x0)^a ((1-x)/(1-x0))^b, with M equal to the mean at x0.
+
+    Each of ``M_prior``, ``a_prior`` and ``b_prior`` is a (center, width) pair
+    for a free Gaussian parameter, or a plain number for a fixed one.
+    """
 
     M: Parameter
     a: Parameter
     b: Parameter
     x0: float = eqx.field(static=True)
 
-    def __init__(self, *, x0: float, M_prior: tuple[float, float],
-                 a_prior: tuple[float, float],
-                 b_prior: tuple[float, float]):
+    def __init__(self, *, x0: float, M_prior, a_prior, b_prior):
         if not 0 < x0 < 1:
             raise ValueError("x0 must be inside (0, 1)")
-        self.M = Parameter(M_prior[0], prior=Normal(*M_prior), tags=("prior_mean",))
-        self.a = Parameter(a_prior[0], prior=Normal(*a_prior), tags=("prior_mean",))
-        self.b = Parameter(b_prior[0], prior=Normal(*b_prior), tags=("prior_mean",))
+        self.M = _parameter(M_prior)
+        self.a = _parameter(a_prior)
+        self.b = _parameter(b_prior)
         self.x0 = float(x0)
         self.floor = 1e-6
         self.ndim = 1

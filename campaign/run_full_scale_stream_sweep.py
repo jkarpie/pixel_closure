@@ -86,6 +86,14 @@ def prior_identity(truth: str, data: str) -> dict:
         }
     if form == "beta_envelope":
         result["envelope"] = cfg.GP_ENVELOPE
+    if getattr(cfg, "T0_PRIOR", "same") != "same":
+        # Only non-default t0 priors are recorded, keeping older identities.
+        result["t0_prior"] = {
+            "form": cfg.T0_PRIOR,
+            "M": list(cfg.SHAPED_MEAN_M_PRIOR),
+            "exponents": {name: list(cfg.t0_mean_exponents(name))
+                          for name in cfg.ALL_FIELDS},
+        }
     return result
 
 

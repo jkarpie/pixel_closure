@@ -1226,6 +1226,28 @@ def shaped_mean_priors(field: str) -> dict:
     b = SHAPED_MEAN_GLUON_B_PRIOR if field == "g" else SHAPED_MEAN_QUARK_B_PRIOR
     return {"M": list(SHAPED_MEAN_M_PRIOR), "a": list(a), "b": list(b)}
 
+
+# Prior for the preliminary DIS MAP fits that set the t0 covariance reference.
+# "same" uses the production prior. "jam_shape" uses the JAM-like mean
+# M_f (x/x0)^a_f ((1-x)/(1-x0))^b_f with M_f free under its shaped-mean prior
+# and a_f, b_f fixed per flavor; the GP width is the production one. The mean
+# is the same in every t0 iteration; only the covariance reference is refined.
+T0_PRIOR = os.environ.get("PIXEL_T0_PRIOR", "same")
+if T0_PRIOR not in ("same", "jam_shape"):
+    raise ValueError("PIXEL_T0_PRIOR must be same or jam_shape")
+T0_CONVERGENT_A = 0.5
+T0_DIVERGENT_A = -0.2
+T0_QUARK_B = 3.0
+T0_GLUON_B = 5.0
+
+
+def t0_mean_exponents(field: str) -> tuple[float, float]:
+    """Fixed (a_f, b_f) of the JAM-like t0 mean for one physical PDF."""
+    if field not in ALL_FIELDS:
+        raise KeyError(f"no t0 mean for {field!r}")
+    a = T0_CONVERGENT_A if field in VANISHING_PDF_FIELDS else T0_DIVERGENT_A
+    return a, T0_GLUON_B if field == "g" else T0_QUARK_B
+
 #: Envelope exponents and amplitude per field, **derived, not guessed**.
 #:
 #: The criterion is a **minimax**: among all (alpha, beta) whose envelope bounds
