@@ -110,21 +110,19 @@ tuned to each truth:
 members, reports how far each lands from these priors (all within 1.6 sigma; the largest is `a_g`),
 and draws `campaign/shaped_mean_truth_fit.png`.
 
-The GP width is the spread about that free mean, and it is chosen at
-submission. With no argument it keeps the zero-unit control widths (1 for the
-convergent fields; 2, 3, 5 and 10 for `t8`, `t15`, `sigma` and `g`). The
-argument is a comma-separated spec applied left to right: `1.5` sets all nine,
-`x0.5` scales the current widths, and `g=3` or `g=x2` changes one field:
+The GP width is the spread about that free mean: the prior lets `x f(x)` wander
+about `+- sigma` from `m_f(x)`. It is one number shared by all nine PDFs, since
+the relative size of each field comes from its mean prior. It is required at
+submission:
 
-    sbatch submit_closure_ln10_shaped_mean.sh x0.5
-    sbatch submit_closure_ln10_shaped_mean.sh x2,g=5
-    bash submit_closure_ln10_shaped_mean_scan.sh             # x0.25 x0.5 x1 x2 x4
-    bash submit_closure_ln10_shaped_mean_scan.sh x0.5 1 x2   # your own list
+    PIXEL_CLOSURE_Q=2 sbatch submit_closure_ln10_shaped_mean.sh 0.3
+    PIXEL_CLOSURE_Q=2 bash submit_closure_ln10_shaped_mean_scan.sh 0.1 0.3 1 3
 
 Each width writes to its own root,
-`campaign/JAM_Q<scale>_exp_prod_smallprior_ln10_shaped_mean[_gpsig_<spec>]`,
-with its own MAP cache, so a scan, the zero-unit control and other Q values can
-run at once. Set `PIXEL_CLOSURE_Q=mc` or `3` for the other truth members.
+`campaign/JAM_Q<scale>_exp_prod_smallprior_ln10_shaped_mean_gpsig_<width>`
+(`.` written as `p`), with its own MAP cache, so a scan, the zero-unit control
+and other Q values can run at once. Set `PIXEL_CLOSURE_Q=mc` or `3` for the
+other truth members.
 
 The full closure compiles Drell--Yan with the `block-sparse` bilinear layout.
 Only the 9 physical PDF fields enter the H--S precision; lattice nuisance fields

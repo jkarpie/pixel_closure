@@ -13,11 +13,9 @@ from closure_JAM_truth import config as cfg, fit
 
 @pytest.fixture
 def shaped(monkeypatch):
-    amplitudes = {**cfg.GP_AMPLITUDES,
-                  **{name: 1.0 for name in cfg.VANISHING_PDF_FIELDS},
-                  **{name: width for name, (_mean, width)
-                     in cfg.ZERO_UNIT_NONVANISHING_PRIORS.items()}}
+    amplitudes = {**cfg.GP_AMPLITUDES, **{name: 0.3 for name in cfg.ALL_FIELDS}}
     monkeypatch.setattr(cfg, "PRIOR_FORM", "shaped_logrbf")
+    monkeypatch.setattr(cfg, "SHAPED_GP_SIGMA", 0.3)
     monkeypatch.setattr(cfg, "VANISHING_PDF_PRIOR", "zero_unit")
     monkeypatch.setattr(cfg, "GP_AMPLITUDES", amplitudes)
     monkeypatch.setattr(cfg, "PDF_GP_LENGTH_LOG", float(np.log(10)))
@@ -58,23 +56,25 @@ def test_shaped_campaign_identity_records_all_gaussian_priors(shaped):
     assert priors["g"]["b"] == [5.0, 3.0]
 
 
-def test_gp_sigma_spec_sets_scales_and_overrides():
-    base = {"t3": 1.0, "g": 10.0}
-    assert cfg.parse_gp_sigma_spec("1.5", base) == {"t3": 1.5, "g": 1.5}
-    assert cfg.parse_gp_sigma_spec("x0.5", base) == {"t3": 0.5, "g": 5.0}
-    assert cfg.parse_gp_sigma_spec("x2, g=3", base) == {"t3": 2.0, "g": 3.0}
-    assert cfg.parse_gp_sigma_spec("g=x0.1", base) == {"t3": 1.0, "g": 1.0}
-    for bad in ("", "0", "x-1", "q=1", "nan"):
+def test_gp_sigma_is_one_positive_number():
+    assert cfg.parse_gp_sigma("0.3") == 0.3
+    assert cfg.parse_gp_sigma("1e-1") == pytest.approx(0.1)
+    for bad in ("", "0", "-1", "x0.5", "g=3", "nan", "inf"):
         with pytest.raises(ValueError):
-            cfg.parse_gp_sigma_spec(bad, base)
+            cfg.parse_gp_sigma(bad)
 
 
-def test_gp_sigma_scan_reaches_prior_and_identity(shaped, monkeypatch):
-    widths = cfg.parse_gp_sigma_spec("x0.5,g=3", dict(cfg.GP_AMPLITUDES))
-    monkeypatch.setattr(cfg, "GP_AMPLITUDES", widths)
-    assert float(fit.gp_prior("t8").cov.sigma.value) == pytest.approx(1.0)
-    assert float(fit.gp_prior("g").cov.sigma.value) == pytest.approx(3.0)
-    assert prior_identity("JAM", "union")["amplitudes"]["g"] == pytest.approx(3.0)
+def test_one_gp_width_reaches_every_prior_and_identity(shaped):
+    for field in cfg.ALL_FIELDS:
+        assert float(fit.gp_prior(field).cov.sigma.value) == pytest.approx(0.3)
+    assert prior_identity("JAM", "union")["amplitudes"] == {
+        field: pytest.approx(0.3) for field in cfg.ALL_FIELDS}
+
+
+def test_shaped_prior_requires_a_gp_width(shaped, monkeypatch):
+    monkeypatch.setattr(cfg, "SHAPED_GP_SIGMA", None)
+    with pytest.raises(ValueError, match="PIXEL_SHAPED_GP_SIGMA"):
+        fit.gp_prior("g")
 
 
 def test_shaped_means_remain_free_in_analysis(shaped, monkeypatch):

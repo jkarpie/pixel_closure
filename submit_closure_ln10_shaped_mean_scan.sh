@@ -1,21 +1,20 @@
 #!/bin/bash
-# Submit one shaped-mean job per GP width, to study under/over-estimated errors.
-#   bash submit_closure_ln10_shaped_mean_scan.sh                 # default scan
-#   bash submit_closure_ln10_shaped_mean_scan.sh x0.5 x1 x2      # your own list
-#   PIXEL_CLOSURE_Q=3 bash submit_closure_ln10_shaped_mean_scan.sh
-# Widths use the same spec as submit_closure_ln10_shaped_mean.sh.
+# Submit one shaped-mean job per GP width; each width is shared by all PDFs.
+#   PIXEL_CLOSURE_Q=2 bash submit_closure_ln10_shaped_mean_scan.sh 0.1 0.3 1 3
 set -euo pipefail
 cd "$(dirname "$0")"
 
-widths=("$@")
-(( ${#widths[@]} )) || widths=(x0.25 x0.5 x1 x2 x4)
-for width in "${widths[@]}"; do
-  # Fail before submitting anything if a spec does not parse.
-  PIXEL_CLOSURE_PRIOR_FORM=shaped_logrbf PIXEL_VANISHING_PDF_PRIOR=zero_unit \
-    PIXEL_SHAPED_GP_SIGMA="$width" ../pixel/venv/bin/python -c \
-    "from closure_JAM_truth import config as c; print('$width:', {f: round(c.gp_sigma(f), 4) for f in c.ALL_FIELDS})"
+if (( $# == 0 )); then
+  echo "usage: bash $0 <GP width> [<GP width> ...]" >&2
+  exit 2
+fi
+for width in "$@"; do
+  # Fail before submitting anything if a width does not parse.
+  ../pixel/venv/bin/python -c \
+    "import sys; from closure_JAM_truth.config import parse_gp_sigma; parse_gp_sigma(sys.argv[1])" \
+    "$width"
 done
-for width in "${widths[@]}"; do
+for width in "$@"; do
   sbatch --job-name="pixel_closure_shaped_gpsig_${width}" \
     submit_closure_ln10_shaped_mean.sh "$width"
 done

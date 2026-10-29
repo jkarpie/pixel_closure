@@ -1083,47 +1083,33 @@ if VANISHING_PDF_PRIOR == "zero_unit":
                         in ZERO_UNIT_NONVANISHING_PRIORS.items()}}
 
 
-def parse_gp_sigma_spec(spec: str, base: dict[str, float]) -> dict[str, float]:
-    """Apply a comma-separated GP-width spec to ``base`` physical-PDF widths.
-
-    Items are applied left to right: ``1.5`` sets every physical field to 1.5,
-    ``x0.5`` scales every current width by 0.5, and ``g=3`` or ``g=x2`` changes
-    one field. For example, ``x0.5,g=3`` halves all widths, then sets g to 3.
-    """
-    def value(text: str, current: float) -> float:
-        number = float(text[1:]) * current if text.startswith("x") else float(text)
-        if not math.isfinite(number) or number <= 0:
-            raise ValueError(f"GP width {text!r} must be finite and positive")
-        return number
-
-    widths = dict(base)
-    items = [item.strip() for item in spec.split(",") if item.strip()]
-    if not items:
-        raise ValueError("empty GP width spec")
-    for item in items:
-        if "=" in item:
-            name, text = (part.strip() for part in item.split("=", 1))
-            if name not in widths:
-                raise ValueError(f"unknown physical PDF {name!r} in GP width spec")
-            widths[name] = value(text, widths[name])
-        else:
-            widths = {name: value(item, width) for name, width in widths.items()}
-    return widths
+def parse_gp_sigma(text: str) -> float:
+    """One positive GP width, shared by all nine physical PDFs."""
+    try:
+        value = float(text)
+    except ValueError:
+        raise ValueError(f"GP width {text!r} must be a single number") from None
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(f"GP width {text!r} must be finite and positive")
+    return value
 
 
-# Shaped-mean width scan: the GP width is the spread about the free mean, set
-# at submission (see submit_closure_ln10_shaped_mean.sh). Unset keeps the
-# zero-unit control widths. Nuisance fields are not affected.
+# Shaped-mean width scan: one GP width about the free mean, the same for every
+# physical PDF, set at submission (see submit_closure_ln10_shaped_mean.sh). The
+# relative size of each field comes from its mean prior, not from this width.
+# Nuisance fields are not affected.
 SHAPED_GP_SIGMA = os.environ.get("PIXEL_SHAPED_GP_SIGMA")
 if SHAPED_GP_SIGMA is not None:
     if os.environ.get("PIXEL_CLOSURE_PRIOR_FORM") != "shaped_logrbf":
         raise ValueError("PIXEL_SHAPED_GP_SIGMA requires PIXEL_CLOSURE_PRIOR_FORM=shaped_logrbf")
-    GP_AMPLITUDES = {**GP_AMPLITUDES, **parse_gp_sigma_spec(
-        SHAPED_GP_SIGMA, {name: GP_AMPLITUDES[name] for name in ALL_FIELDS})}
+    SHAPED_GP_SIGMA = parse_gp_sigma(SHAPED_GP_SIGMA)
+    GP_AMPLITUDES = {**GP_AMPLITUDES, **{name: SHAPED_GP_SIGMA for name in ALL_FIELDS}}
 
 
 def gp_amplitude(field: str) -> float:
     """Log-RBF sigma; also the mean in the baseline variant."""
+    if PRIOR_FORM == "shaped_logrbf" and SHAPED_GP_SIGMA is None and field in ALL_FIELDS:
+        raise ValueError("the shaped-mean prior needs PIXEL_SHAPED_GP_SIGMA, one width for all PDFs")
     return GP_AMPLITUDES[field]
 
 
