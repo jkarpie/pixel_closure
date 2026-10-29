@@ -205,7 +205,8 @@ def test_resume_rejects_changed_stream_seed_before_touching_output(tmp_path):
     assert json.loads(manifest_path.read_text()) == original
 
 
-def test_resume_rejects_changed_prior_before_touching_output(tmp_path, monkeypatch):
+@pytest.mark.parametrize("attribute", ("GP_JITTER", "PDF_GP_LENGTH_LOG"))
+def test_resume_rejects_changed_prior_before_touching_output(tmp_path, monkeypatch, attribute):
     from closure_JAM_truth import config as cfg
 
     args = _args(tmp_path, parameterizations="q", data="union",
@@ -219,7 +220,9 @@ def test_resume_rejects_changed_prior_before_touching_output(tmp_path, monkeypat
     }
     manifest_path = args.out / "manifest.json"
     manifest_path.write_text(json.dumps(original))
-    monkeypatch.setattr(cfg, "GP_JITTER", cfg.GP_JITTER * 10)
+    current = (cfg.pdf_gp_length_log() if attribute == "PDF_GP_LENGTH_LOG"
+               else getattr(cfg, attribute))
+    monkeypatch.setattr(cfg, attribute, current * 10)
     with pytest.raises(ValueError, match="does not match"):
         sweep.run_sweep(args)
     assert json.loads(manifest_path.read_text()) == original

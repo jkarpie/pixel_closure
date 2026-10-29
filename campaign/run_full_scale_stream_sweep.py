@@ -67,12 +67,18 @@ def prior_identity(truth: str, data: str) -> dict:
     result = {
         "form": form,
         "amplitudes": {name: float(cfg.gp_amplitude(name)) for name in cfg.ALL_FIELDS},
-        "length_log": float(cfg.GP_LENGTH_LOG),
+        "length_log": float(cfg.pdf_gp_length_log() if hasattr(cfg, "pdf_gp_length_log")
+                            else cfg.GP_LENGTH_LOG),
         "amplitude_free": bool(cfg.GP_AMPLITUDE_FREE),
         "amplitude_floor": float(cfg.GP_AMPLITUDE_FLOOR),
         "amplitude_prior_sigma": float(cfg.GP_AMPLITUDE_PRIOR_SIGMA),
         "jitter": float(cfg.GP_ENVELOPE_JITTER if form == "beta_envelope" else cfg.GP_JITTER),
     }
+    if form == "const_logrbf":
+        means = {name: float(cfg.gp_mean(name)) for name in cfg.ALL_FIELDS}
+        if any(means[name] != result["amplitudes"][name] for name in cfg.ALL_FIELDS):
+            # Keep baseline identities unchanged for existing resumable runs.
+            result["means"] = means
     if form == "beta_envelope":
         result["envelope"] = cfg.GP_ENVELOPE
     return result

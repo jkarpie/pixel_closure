@@ -13,7 +13,11 @@ cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")}"
 
 dataset=exp
 truth=JAM
-Q=2
+Q="${PIXEL_CLOSURE_Q:-2}"
+case "$Q" in
+  mc|1|2|3|4|5) ;;
+  *) echo "Unsupported PIXEL_CLOSURE_Q=$Q" >&2; exit 2 ;;
+esac
 # The small-closure-matched prior differs from earlier *_prod campaigns. Use a
 # separate output root so neither completed streams nor checkpoints are mixed.
 production_root="${PIXEL_PRODUCTION_ROOT:-campaign/${truth}_Q${Q}_${dataset}_prod_smallprior}"

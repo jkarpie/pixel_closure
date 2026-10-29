@@ -1042,13 +1042,13 @@ TEST_MODE_DY = "dy"                               # DY-only test mode
 # x_reg regularizer are all frozen, so the GP prior is fully specified and the GP
 # field values are marginalized analytically -- no free hyperparameters to sample.
 
-#: One amplitude per field sets **both** the constant prior mean and the log-RBF
-#: sigma, so every physical field's prior is ``a +- a``. Match the per-field
-#: amplitudes of closure_JAM_truth_small used by the explicit-q small closure.
-#: The mean is a constant function of x (priors.Const).
+#: In the baseline, one amplitude per field sets **both** the constant prior
+#: mean and log-RBF sigma, making ``a +- a``. These values match the explicit-q
+#: small closure. The zero-unit variant below specifies independent means and
+#: widths for all nine fields.
 #:
-#: ``fit.py`` enforces the relation with ``analysis.tie(mean.N, to=cov.sigma)``
-#: rather than trusting two constants to stay equal.  Both stay **frozen**.
+#: ``fit.py`` ties the baseline mean to sigma and freezes independent means in
+#: the variant. The widths stay frozen in both campaigns by default.
 GP_AMPLITUDES = {
     "t3": 0.25,
     "t8": 0.5,
@@ -1061,13 +1061,34 @@ GP_AMPLITUDES = {
     "v15": 0.5,
 }
 
+# The injected x*PDF curves for these non-singlet/valence fields approach zero
+# at small x. Keep their small-x prior mean at zero without shrinking the GP
+# covariance: the previous a +- a values pulled the extrapolated fits upward.
+VANISHING_PDF_FIELDS = ("t3", "v3", "v8", "v", "v15")
+# Trial flat priors for fields whose injected x*PDF remains appreciable at
+# small x. The mean and covariance width are independent values.
+ZERO_UNIT_NONVANISHING_PRIORS = {
+    "t8": (1.5, 2.0),
+    "t15": (2.0, 3.0),
+    "sigma": (4.0, 5.0),
+    "g": (5.0, 10.0),
+}
+VANISHING_PDF_PRIOR = os.environ.get("PIXEL_VANISHING_PDF_PRIOR", "baseline")
+if VANISHING_PDF_PRIOR not in ("baseline", "zero_unit"):
+    raise ValueError("PIXEL_VANISHING_PDF_PRIOR must be baseline or zero_unit")
+if VANISHING_PDF_PRIOR == "zero_unit":
+    GP_AMPLITUDES = {**GP_AMPLITUDES,
+                     **{name: 1.0 for name in VANISHING_PDF_FIELDS},
+                     **{name: width for name, (_mean, width)
+                        in ZERO_UNIT_NONVANISHING_PRIORS.items()}}
+
 
 def gp_amplitude(field: str) -> float:
-    """Tied prior mean and log-RBF sigma for one physical field."""
+    """Log-RBF sigma; also the mean in the baseline variant."""
     return GP_AMPLITUDES[field]
 
 
-#: Floating the tied amplitude.  Off: both ends of every tie stay frozen and the
+#: Floating the GP width. Off: all widths stay frozen and the
 #: hyper-prior contributes nothing.  On: each field's amplitude becomes a free
 #: parameter with a hard floor and a log-normal hyper-prior centred on its own
 #: tier value -- the mitigation for the ``a -> 0`` collapse that tying the mean to
@@ -1101,12 +1122,16 @@ def gp_amplitude_prior(field: str):
 
 
 def gp_mean(field: str) -> float:
-    """Constant log-RBF prior mean; tied to the amplitude, so == gp_sigma."""
+    """Constant log-RBF prior mean."""
+    if VANISHING_PDF_PRIOR == "zero_unit":
+        if field in VANISHING_PDF_FIELDS:
+            return 0.0
+        return ZERO_UNIT_NONVANISHING_PRIORS[field][0]
     return gp_amplitude(field)
 
 
 def gp_sigma(field: str) -> float:
-    """Log-RBF prior amplitude; tied to the mean, so == gp_mean."""
+    """Log-RBF prior amplitude, independent of zero-unit prior means."""
     return gp_amplitude(field)
 
 
@@ -1119,6 +1144,8 @@ def gp_sigma(field: str) -> float:
 #: ``"const_logrbf"``
 #:     The original.  ``Const(N=a)`` mean **tied** to ``LogRBF(sigma=a)``, so the
 #:     prior is ``a +- a`` and one number sets both the mean and the width.
+#:     ``PIXEL_VANISHING_PDF_PRIOR=zero_unit`` unties every mean, giving the
+#:     selected vanishing fields ``0 +- 1`` and the other four trial flat priors.
 #:
 #: ``"beta_envelope"``
 #:     ``Zero()`` mean under :class:`pixel.priors.BetaTaperedLogRBF`,
@@ -1262,6 +1289,18 @@ def gp_envelope(field: str) -> dict:
     return GP_ENVELOPE[field]
 
 GP_LENGTH_LOG = 0.6931471805599453           # ln(2)
+# A campaign may change the physical PDF length without also changing the
+# lattice-systematic nuisance prior. With no override, it follows GP_LENGTH_LOG
+# even when a prior scan changes that value after importing this module.
+_pdf_length_override = os.environ.get("PIXEL_PDF_GP_LENGTH_LOG")
+PDF_GP_LENGTH_LOG = float(_pdf_length_override) if _pdf_length_override is not None else None
+if PDF_GP_LENGTH_LOG is not None and (not math.isfinite(PDF_GP_LENGTH_LOG) or PDF_GP_LENGTH_LOG <= 0):
+    raise ValueError("PIXEL_PDF_GP_LENGTH_LOG must be finite and positive")
+
+
+def pdf_gp_length_log() -> float:
+    """Physical-PDF log-RBF length; inherit the scanned baseline unless overridden."""
+    return GP_LENGTH_LOG if PDF_GP_LENGTH_LOG is None else PDF_GP_LENGTH_LOG
 # ln(10) was tried on 2026-08-16 and REVERTED, for robustness rather than
 # accuracy.  At its working point ln(10) is more accurate -- the constant prior
 # reached 9.90e-06 against ln(2)'s 1.78e-05, and the envelope 1.33e-05 against

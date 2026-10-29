@@ -1,8 +1,9 @@
 """Build and run one closure fit ``(truth member Q, test mode)``.
 
-Every field prior is log-RBF with a **per-field constant mean that is tied to its
-own amplitude** (``cfg.gp_amplitude``, larger for singlet/gluon/charm), so the
-prior is ``a +- a``, **and a fixed length = log(2)**.  With the GP hyperparameters frozen the posterior is
+Every field prior is log-RBF with a fixed length (log(2) by default). The
+baseline ties each constant mean to its own covariance amplitude (``a +- a``);
+the zero-unit variant assigns independent means and widths to all nine fields.
+With the GP hyperparameters frozen the posterior is
 analytic
 in the GP field values; PIXEL returns a fixed-parameter ``PosteriorResult`` for
 this zero-dimensional inference problem.  The forward operators are identical
@@ -172,11 +173,9 @@ def constraint_datasets(fields, truth=None):
 
 
 def _gp_prior(field: str):
-    # One amplitude for both: the mean is pinned to the covariance sigma by
-    # analysis.tie in _build, so this prior is a +- a.  Passing the same number
-    # twice here only sets the starting value -- the tie is what keeps them
-    # equal, and it is what will keep them equal if the amplitude is ever thawed.
-    value = cfg.gp_amplitude(field)
+    # The baseline ties the mean to sigma. The zero-unit variant specifies
+    # independent means and widths, frozen below, for all nine fields.
+    value = cfg.gp_sigma(field)
     # The amplitude carries the floor and the hyper-prior; both are inert while
     # cfg.GP_AMPLITUDE_FREE is False (bounds_array skips frozen leaves, and
     # gp_amplitude_prior returns None so the evidence is unshifted).
@@ -188,14 +187,14 @@ def _gp_prior(field: str):
         tags=("gp_kernel",),
     )
     return priors.GaussianProcess(
-        mean=priors.Const(N=value),
+        mean=priors.Const(N=cfg.gp_mean(field)),
         # Read the SAME jitter knob the envelope prior reads.  Until 2026-08-16
         # this call passed no jitter at all and silently took LogRBF's class
         # default of 1e-10, so `cfg.GP_JITTER` did not reach this prior: a
         # 36-cell scan that varied it produced bit-identical results because
         # nothing was changing.  A knob that is not wired reads exactly like a
         # knob that does not matter.
-        cov=priors.LogRBF(sigma=amplitude, length=cfg.GP_LENGTH_LOG,
+        cov=priors.LogRBF(sigma=amplitude, length=cfg.pdf_gp_length_log(),
                           jitter=getattr(cfg, "GP_JITTER", 1.0e-10)),
     )
 
@@ -212,7 +211,7 @@ def _envelope_prior(field: str):
     return priors.GaussianProcess(
         mean=priors.Zero(),
         cov=priors.BetaTaperedLogRBF(
-            sigma=env["sigma"], length=cfg.GP_LENGTH_LOG,
+            sigma=env["sigma"], length=cfg.pdf_gp_length_log(),
             alpha=env["alpha"], beta=env["beta"],
             # NOT zero -- see cfg.GP_ENVELOPE_JITTER, which ships 1e-2.
             #
@@ -344,16 +343,18 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     frozen = []
     for name in cfg.ALL_FIELDS:
         params = analysis.prior_params(fields[name])
-        # Pin the constant prior mean to the covariance amplitude, so the prior
-        # is a +- a by construction rather than by two constants agreeing.  The
-        # target is frozen out of the free vector by the tie itself, which is
-        # why mean.N is not in `frozen` below.
+        # Baseline fields are a +- a by construction. Zero-unit fields have
+        # independent means, which must be frozen explicitly since no tie
+        # removes them from the free vector.
         #
         # The envelope form has a Zero mean, which carries no `N` leaf at all --
         # there is nothing to tie, and asking for one raises rather than silently
         # doing nothing.  Its exponents are frozen by the covariance itself.
         if cfg.PRIOR_FORM != "beta_envelope":
-            analysis.tie(params.mean.N, to=params.cov.sigma)
+            if cfg.VANISHING_PDF_PRIOR == "zero_unit":
+                frozen.append(params.mean.N)
+            else:
+                analysis.tie(params.mean.N, to=params.cov.sigma)
         for attr in cfg.FROZEN_COV_PARAMS:
             # The amplitude is the one cov parameter that may be floated; it
             # carries its own frozen flag from _gp_prior, so re-freezing it here

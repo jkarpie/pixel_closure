@@ -68,6 +68,35 @@ hyper-prior centred on each field's value. While the flag is off nothing is
 attached, so the evidence is unshifted. Existing production chains were drawn
 under their original prior and must be kept separate from new runs.
 
+For a Q=2 test with physical-PDF log-RBF length `ln(10)` instead of `ln(2)`, run
+`sbatch submit_closure_ln10.sh` from the repository root. It uses the same
+amplitudes, jitter, MAP stages, and 16-stream production as `submit_closure.sh`,
+but writes to `campaign/JAM_Q2_exp_prod_smallprior_ln10` and its own MAP cache.
+The lattice-systematic nuisance prior retains `ln(2)`. The launcher sets
+`PIXEL_PDF_GP_LENGTH_LOG` for MAP preparation and every stream; it can be run
+with `bash submit_closure_ln10.sh` outside Slurm for a local production. Set
+`PIXEL_LN10_PRODUCTION_ROOT` to choose another fresh output directory.
+
+To compare a new zero-centred small-x prior against both existing campaigns,
+run `sbatch submit_closure_ln10_zero_unit.sh`. It keeps the `ln(10)` physical-PDF
+length and sets `t3`, `v3`, `v8`, `v`, and `v15` to constant `0 ± 1` priors. The
+other flat priors are `t8=1.5 ± 2`, `t15=2 ± 3`, `sigma=4 ± 5`, and `g=5 ± 10`.
+Each mean and covariance width is an independent frozen value. `t8` and `t15`
+use nonzero means because the injected JAM truths rise at the smallest plotted
+x, despite the generic low-x completion's nonsinglet classification. These
+four values are trial priors, not fits to the injected truth. The launcher writes only to
+`campaign/JAM_Q2_exp_prod_smallprior_ln10_zero_unit` by default and has a
+separate MAP cache. Set `PIXEL_CLOSURE_Q=mc` or `PIXEL_CLOSURE_Q=3` when
+submitting the corresponding truth member; each gets its own `JAM_Q<scale>`
+root. Set `PIXEL_ZERO_UNIT_PRODUCTION_ROOT` to choose another fresh root.
+The old fit results and the default `submit_closure.sh` prior stay unchanged.
+
+Future prior study (not implemented): compare these constant-mean controls with
+field-dependent means proportional to `x^a (1-x)^b`, while keeping the GP
+covariance width independent of the mean normalization. Choose the exponents
+and normalization before running the comparison; the currently injected JAM
+truth member should not be used as an exact prior template.
+
 The full closure compiles Drell--Yan with the `block-sparse` bilinear layout.
 Only the 9 physical PDF fields enter the H--S precision; lattice nuisance fields
 are restored afterward from their exact Gaussian conditional.  Each physical
