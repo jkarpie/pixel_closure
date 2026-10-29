@@ -91,11 +91,40 @@ submitting the corresponding truth member; each gets its own `JAM_Q<scale>`
 root. Set `PIXEL_ZERO_UNIT_PRODUCTION_ROOT` to choose another fresh root.
 The old fit results and the default `submit_closure.sh` prior stay unchanged.
 
-Future prior study (not implemented): compare these constant-mean controls with
-field-dependent means proportional to `x^a (1-x)^b`, while keeping the GP
-covariance width independent of the mean normalization. Choose the exponents
-and normalization before running the comparison; the currently injected JAM
-truth member should not be used as an exact prior template.
+For the free shaped-mean study, run `sbatch submit_closure_ln10_shaped_mean.sh`.
+It uses the `ln(10)` GP length, but every physical field f has its own free
+mean `M_f (x/0.1)^a_f ((1-x)/0.9)^b_f`: 27 parameters across the nine fields.
+Their Gaussian priors are shared, rounded values set in `config.py`, not
+tuned to each truth:
+
+| parameter | fields | prior |
+|---|---|---|
+| `M_f` | all | `1 +- 1` |
+| `a_f` | `t3`, `v3`, `v8`, `v`, `v15` (convergent) | `0.5 +- 0.4` |
+| `a_f` | `t8`, `t15`, `sigma`, `g` (divergent) | `-0.2 +- 0.15` |
+| `b_f` | all quark fields | `3 +- 2` |
+| `b_g` | `g` | `5 +- 3` |
+
+`python -m campaign.fit_shaped_mean_truth` (with
+`PIXEL_CLOSURE_PRIOR_FORM=shaped_logrbf`) fits a beta shape to the three JAM truth
+members, reports how far each lands from these priors (all within 1.6 sigma; the largest is `a_g`),
+and draws `campaign/shaped_mean_truth_fit.png`.
+
+The GP width is the spread about that free mean, and it is chosen at
+submission. With no argument it keeps the zero-unit control widths (1 for the
+convergent fields; 2, 3, 5 and 10 for `t8`, `t15`, `sigma` and `g`). The
+argument is a comma-separated spec applied left to right: `1.5` sets all nine,
+`x0.5` scales the current widths, and `g=3` or `g=x2` changes one field:
+
+    sbatch submit_closure_ln10_shaped_mean.sh x0.5
+    sbatch submit_closure_ln10_shaped_mean.sh x2,g=5
+    bash submit_closure_ln10_shaped_mean_scan.sh             # x0.25 x0.5 x1 x2 x4
+    bash submit_closure_ln10_shaped_mean_scan.sh x0.5 1 x2   # your own list
+
+Each width writes to its own root,
+`campaign/JAM_Q<scale>_exp_prod_smallprior_ln10_shaped_mean[_gpsig_<spec>]`,
+with its own MAP cache, so a scan, the zero-unit control and other Q values can
+run at once. Set `PIXEL_CLOSURE_Q=mc` or `3` for the other truth members.
 
 The full closure compiles Drell--Yan with the `block-sparse` bilinear layout.
 Only the 9 physical PDF fields enter the H--S precision; lattice nuisance fields

@@ -79,6 +79,11 @@ def prior_identity(truth: str, data: str) -> dict:
         if any(means[name] != result["amplitudes"][name] for name in cfg.ALL_FIELDS):
             # Keep baseline identities unchanged for existing resumable runs.
             result["means"] = means
+    if form == "shaped_logrbf":
+        result["shaped_mean"] = {
+            "x0": float(cfg.SHAPED_MEAN_X0),
+            "priors": {name: cfg.shaped_mean_priors(name) for name in cfg.ALL_FIELDS},
+        }
     if form == "beta_envelope":
         result["envelope"] = cfg.GP_ENVELOPE
     return result

@@ -1083,6 +1083,45 @@ if VANISHING_PDF_PRIOR == "zero_unit":
                         in ZERO_UNIT_NONVANISHING_PRIORS.items()}}
 
 
+def parse_gp_sigma_spec(spec: str, base: dict[str, float]) -> dict[str, float]:
+    """Apply a comma-separated GP-width spec to ``base`` physical-PDF widths.
+
+    Items are applied left to right: ``1.5`` sets every physical field to 1.5,
+    ``x0.5`` scales every current width by 0.5, and ``g=3`` or ``g=x2`` changes
+    one field. For example, ``x0.5,g=3`` halves all widths, then sets g to 3.
+    """
+    def value(text: str, current: float) -> float:
+        number = float(text[1:]) * current if text.startswith("x") else float(text)
+        if not math.isfinite(number) or number <= 0:
+            raise ValueError(f"GP width {text!r} must be finite and positive")
+        return number
+
+    widths = dict(base)
+    items = [item.strip() for item in spec.split(",") if item.strip()]
+    if not items:
+        raise ValueError("empty GP width spec")
+    for item in items:
+        if "=" in item:
+            name, text = (part.strip() for part in item.split("=", 1))
+            if name not in widths:
+                raise ValueError(f"unknown physical PDF {name!r} in GP width spec")
+            widths[name] = value(text, widths[name])
+        else:
+            widths = {name: value(item, width) for name, width in widths.items()}
+    return widths
+
+
+# Shaped-mean width scan: the GP width is the spread about the free mean, set
+# at submission (see submit_closure_ln10_shaped_mean.sh). Unset keeps the
+# zero-unit control widths. Nuisance fields are not affected.
+SHAPED_GP_SIGMA = os.environ.get("PIXEL_SHAPED_GP_SIGMA")
+if SHAPED_GP_SIGMA is not None:
+    if os.environ.get("PIXEL_CLOSURE_PRIOR_FORM") != "shaped_logrbf":
+        raise ValueError("PIXEL_SHAPED_GP_SIGMA requires PIXEL_CLOSURE_PRIOR_FORM=shaped_logrbf")
+    GP_AMPLITUDES = {**GP_AMPLITUDES, **parse_gp_sigma_spec(
+        SHAPED_GP_SIGMA, {name: GP_AMPLITUDES[name] for name in ALL_FIELDS})}
+
+
 def gp_amplitude(field: str) -> float:
     """Log-RBF sigma; also the mean in the baseline variant."""
     return GP_AMPLITUDES[field]
@@ -1171,14 +1210,35 @@ def gp_sigma(field: str) -> float:
 #: It is deliberately NOT the intended user interface. A real analysis selects its
 #: prior by constructing the one it wants and handing it to ``analysis.gp_prior``
 #: (see ``guides/custom_prior_mean_covariance.md``); this variable exists to sweep
-#: the two forms these closure packages ship, nothing more. Anything outside this
+#: the forms these closure packages ship, nothing more. Anything outside this
 #: suite should ignore it.
 PRIOR_FORM = os.environ.get("PIXEL_CLOSURE_PRIOR_FORM", "const_logrbf")
-if PRIOR_FORM not in ("const_logrbf", "beta_envelope"):
+if PRIOR_FORM not in ("const_logrbf", "beta_envelope", "shaped_logrbf"):
     raise ValueError(
         f"PIXEL_CLOSURE_PRIOR_FORM={PRIOR_FORM!r} is not a known prior form; "
-        "expected 'const_logrbf' or 'beta_envelope'"
+        "expected 'const_logrbf', 'beta_envelope' or 'shaped_logrbf'"
     )
+
+# Shaped-mean trial: m_f = M_f (x/x0)^a_f ((1-x)/(1-x0))^b_f, with M_f, a_f,
+# b_f free for every field. The Gaussian priors are shared, rounded values, not
+# per-field fits to the injected truth; campaign/fit_shaped_mean_truth.py only
+# records that the truth members sit within about 1 sigma of them.
+SHAPED_MEAN_X0 = 0.1
+SHAPED_MEAN_M_PRIOR = (1.0, 1.0)
+SHAPED_MEAN_CONVERGENT_A_PRIOR = (0.5, 0.4)
+SHAPED_MEAN_DIVERGENT_A_PRIOR = (-0.2, 0.15)
+SHAPED_MEAN_QUARK_B_PRIOR = (3.0, 2.0)
+SHAPED_MEAN_GLUON_B_PRIOR = (5.0, 3.0)
+
+
+def shaped_mean_priors(field: str) -> dict:
+    """Return M, a, b Gaussian center/width pairs for one physical PDF."""
+    if field not in ALL_FIELDS:
+        raise KeyError(f"no shaped-mean prior for {field!r}")
+    a = (SHAPED_MEAN_CONVERGENT_A_PRIOR if field in VANISHING_PDF_FIELDS
+         else SHAPED_MEAN_DIVERGENT_A_PRIOR)
+    b = SHAPED_MEAN_GLUON_B_PRIOR if field == "g" else SHAPED_MEAN_QUARK_B_PRIOR
+    return {"M": list(SHAPED_MEAN_M_PRIOR), "a": list(a), "b": list(b)}
 
 #: Envelope exponents and amplitude per field, **derived, not guessed**.
 #:
@@ -1363,7 +1423,8 @@ CONTOUR_FLOW_FROM_AFFINE_REFERENCE = True
 # H-S saddle is accepted instead of aborting contour-NUTS initialization.
 CONTOUR_SADDLE_TOL = 5.0e-3
 
-N_HYPERPARAMS = len(ALL_FIELDS) if GP_AMPLITUDE_FREE else 0  # 0 = fully-fixed prior
+N_HYPERPARAMS = ((3 * len(ALL_FIELDS) if PRIOR_FORM == "shaped_logrbf" else 0)
+                 + (len(ALL_FIELDS) if GP_AMPLITUDE_FREE else 0))
 
 #: Test modes.  ``dy`` is Drell-Yan only; ``both`` = lattice + DIS + Drell-Yan.
 TEST_MODES = ("lattice", "dis", "dy", "exp", "both")

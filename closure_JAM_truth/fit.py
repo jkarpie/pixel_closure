@@ -33,6 +33,7 @@ from pixel.util.progress import ProgressReporter, Stopwatch, format_duration
 
 from . import config as cfg
 from . import datasets as dsets
+from .shaped_mean import AnchoredBetaMean
 
 
 # -- physics constraints -----------------------------------------------------
@@ -172,7 +173,7 @@ def constraint_datasets(fields, truth=None):
 # -- build -------------------------------------------------------------------
 
 
-def _gp_prior(field: str):
+def _gp_prior(field: str, *, shaped: bool = False):
     # The baseline ties the mean to sigma. The zero-unit variant specifies
     # independent means and widths, frozen below, for all nine fields.
     value = cfg.gp_sigma(field)
@@ -186,8 +187,18 @@ def _gp_prior(field: str):
         frozen=not cfg.GP_AMPLITUDE_FREE,
         tags=("gp_kernel",),
     )
+    if shaped:
+        shaped_priors = cfg.shaped_mean_priors(field)
+        mean = AnchoredBetaMean(
+            x0=cfg.SHAPED_MEAN_X0,
+            M_prior=tuple(shaped_priors["M"]),
+            a_prior=tuple(shaped_priors["a"]),
+            b_prior=tuple(shaped_priors["b"]),
+        )
+    else:
+        mean = priors.Const(N=cfg.gp_mean(field))
     return priors.GaussianProcess(
-        mean=priors.Const(N=cfg.gp_mean(field)),
+        mean=mean,
         # Read the SAME jitter knob the envelope prior reads.  Until 2026-08-16
         # this call passed no jitter at all and silently took LogRBF's class
         # default of 1e-10, so `cfg.GP_JITTER` did not reach this prior: a
@@ -238,6 +249,8 @@ def gp_prior(field: str):
     """Dispatch on :data:`cfg.PRIOR_FORM`."""
     if cfg.PRIOR_FORM == "beta_envelope":
         return _envelope_prior(field)
+    if cfg.PRIOR_FORM == "shaped_logrbf":
+        return _gp_prior(field, shaped=True)
     if cfg.PRIOR_FORM != "const_logrbf":
         raise ValueError(f"unknown PRIOR_FORM {cfg.PRIOR_FORM!r}")
     return _gp_prior(field)
@@ -350,7 +363,10 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         # The envelope form has a Zero mean, which carries no `N` leaf at all --
         # there is nothing to tie, and asking for one raises rather than silently
         # doing nothing.  Its exponents are frozen by the covariance itself.
-        if cfg.PRIOR_FORM != "beta_envelope":
+        if cfg.PRIOR_FORM == "shaped_logrbf":
+            # M, a, b carry their own Gaussian priors and remain free.
+            pass
+        elif cfg.PRIOR_FORM != "beta_envelope":
             if cfg.VANISHING_PDF_PRIOR == "zero_unit":
                 frozen.append(params.mean.N)
             else:
