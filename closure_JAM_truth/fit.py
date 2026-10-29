@@ -650,12 +650,12 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         "n_free": int(model.free_vector().size),
         "sampler": sampler,
         "t0_iterations": t0_iterations,
-        "ess": _effective_sample_size(samples),
-        "autocorr": _autocorrelation_ess(samples),
         "t0_pdf_curves": {
             name: {"x": x.tolist(), "values": values.tolist()}
             for name, (x, values) in getattr(t0, "pdf_curves", {}).items()
         },
+        "ess": _effective_sample_size(samples),
+        "autocorr": _autocorrelation_ess(samples),
         "direct_diagnostics": (
             samples.diagnostics() if isinstance(samples, DirectMCMCSamples) else None
         ),
@@ -669,8 +669,6 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     }
 
 
-def _dis_predictions(model) -> dict:
-    """MAP-point theory prediction per *linear experimental* dataset.
 class T0Reference(dict):
     """t0 predictions per DIS table, plus the fit's PDFs as ``pdf_curves``.
 
@@ -691,6 +689,8 @@ def _map_pdf_curves(model, vec) -> dict:
             for name, x, sl in _field_segments(model) if name in cfg.ALL_FIELDS}
 
 
+def _dis_predictions(model) -> dict:
+    """MAP-point theory prediction per *linear experimental* dataset.
 
     Only DIS tables carry multiplicative uncertainties here, and only those need
     a t0 reference; lattice and constraint datasets are skipped. For
@@ -714,10 +714,10 @@ def _map_pdf_curves(model, vec) -> dict:
     for layout in layouts:
         d = model.datasets[layout.dataset_index]
         out[d.name] = pred[layout.data_slice].copy()
-    return out
-
     if isinstance(out, T0Reference):
         out.pdf_curves = _map_pdf_curves(model, vec)
+    return out
+
 
 def _iterate_t0(q_key, mode, model, *, use_kernel_cache=True):
     """Iterate the NNPDF t0 reference to convergence.
