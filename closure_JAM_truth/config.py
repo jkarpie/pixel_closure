@@ -1100,16 +1100,19 @@ def parse_gp_sigma(text: str) -> float:
 # Nuisance fields are not affected.
 SHAPED_GP_SIGMA = os.environ.get("PIXEL_SHAPED_GP_SIGMA")
 if SHAPED_GP_SIGMA is not None:
-    if os.environ.get("PIXEL_CLOSURE_PRIOR_FORM") != "shaped_logrbf":
-        raise ValueError("PIXEL_SHAPED_GP_SIGMA requires PIXEL_CLOSURE_PRIOR_FORM=shaped_logrbf")
+    if os.environ.get("PIXEL_CLOSURE_PRIOR_FORM") not in ("shaped_logrbf", "t0_logrbf"):
+        raise ValueError("PIXEL_SHAPED_GP_SIGMA requires PIXEL_CLOSURE_PRIOR_FORM="
+                         "shaped_logrbf or t0_logrbf")
     SHAPED_GP_SIGMA = parse_gp_sigma(SHAPED_GP_SIGMA)
     GP_AMPLITUDES = {**GP_AMPLITUDES, **{name: SHAPED_GP_SIGMA for name in ALL_FIELDS}}
 
 
 def gp_amplitude(field: str) -> float:
     """Log-RBF sigma; also the mean in the baseline variant."""
-    if PRIOR_FORM == "shaped_logrbf" and SHAPED_GP_SIGMA is None and field in ALL_FIELDS:
-        raise ValueError("the shaped-mean prior needs PIXEL_SHAPED_GP_SIGMA, one width for all PDFs")
+    if (PRIOR_FORM in ("shaped_logrbf", "t0_logrbf") and SHAPED_GP_SIGMA is None
+            and field in ALL_FIELDS):
+        raise ValueError(f"the {PRIOR_FORM} prior needs PIXEL_SHAPED_GP_SIGMA, "
+                         "one width for all PDFs")
     return GP_AMPLITUDES[field]
 
 
@@ -1199,10 +1202,10 @@ def gp_sigma(field: str) -> float:
 #: the forms these closure packages ship, nothing more. Anything outside this
 #: suite should ignore it.
 PRIOR_FORM = os.environ.get("PIXEL_CLOSURE_PRIOR_FORM", "const_logrbf")
-if PRIOR_FORM not in ("const_logrbf", "beta_envelope", "shaped_logrbf"):
+if PRIOR_FORM not in ("const_logrbf", "beta_envelope", "shaped_logrbf", "t0_logrbf"):
     raise ValueError(
         f"PIXEL_CLOSURE_PRIOR_FORM={PRIOR_FORM!r} is not a known prior form; "
-        "expected 'const_logrbf', 'beta_envelope' or 'shaped_logrbf'"
+        "expected 'const_logrbf', 'beta_envelope', 'shaped_logrbf' or 't0_logrbf'"
     )
 
 # Shaped-mean trial: m_f = M_f (x/x0)^a_f ((1-x)/(1-x0))^b_f, with M_f, a_f,
@@ -1232,9 +1235,15 @@ def shaped_mean_priors(field: str) -> dict:
 # M_f (x/x0)^a_f ((1-x)/(1-x0))^b_f with M_f free under its shaped-mean prior
 # and a_f, b_f fixed per flavor; the GP width is the production one. The mean
 # is the same in every t0 iteration; only the covariance reference is refined.
-T0_PRIOR = os.environ.get("PIXEL_T0_PRIOR", "same")
+#
+# PRIOR_FORM="t0_logrbf" makes the production GP mean the fixed PDF curves of
+# the final t0 fit, so its t0 fits must use "jam_shape" (the default there).
+T0_PRIOR = os.environ.get("PIXEL_T0_PRIOR",
+                          "jam_shape" if PRIOR_FORM == "t0_logrbf" else "same")
 if T0_PRIOR not in ("same", "jam_shape"):
     raise ValueError("PIXEL_T0_PRIOR must be same or jam_shape")
+if PRIOR_FORM == "t0_logrbf" and T0_PRIOR != "jam_shape":
+    raise ValueError("PIXEL_CLOSURE_PRIOR_FORM=t0_logrbf needs PIXEL_T0_PRIOR=jam_shape")
 T0_CONVERGENT_A = 0.5
 T0_DIVERGENT_A = -0.2
 T0_QUARK_B = 3.0

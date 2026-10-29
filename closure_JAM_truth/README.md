@@ -124,19 +124,26 @@ Each width writes to its own root,
 and other Q values can run at once. Set `PIXEL_CLOSURE_Q=mc` or `3` for the
 other truth members.
 
-The preliminary DIS MAP fits that set the t0 covariance reference for the
-multiplicative systematics normally use the production prior. To give them a
-JAM-like mean instead, use the t0 launcher:
+For the t0-mean study, the production GP mean is the PDF of the t0 fit:
 
-    PIXEL_CLOSURE_Q=2 sbatch submit_closure_ln10_shaped_mean_t0jam.sh 0.3
-    PIXEL_T0_PRIOR=jam_shape PIXEL_CLOSURE_Q=2 bash submit_closure_ln10_shaped_mean_scan.sh 0.1 0.3 1 3
+    PIXEL_CLOSURE_Q=2 sbatch submit_closure_ln10_t0_mean.sh 0.3
+    PIXEL_CLOSURE_Q=2 bash submit_closure_ln10_shaped_mean_scan.sh --t0-mean 0.1 0.3 1 3
 
-In those t0 fits each field's mean is `M_f (x/0.1)^a_f ((1-x)/0.9)^b_f` with
-`M_f ~ Normal(1, 1)` free in the MAP search and the exponents fixed:
-`a_f = 0.5` (convergent) or `-0.2` (divergent), `b_f = 3` (quarks) or `5`
-(gluon). The GP width is the submitted one. The mean is the same in every t0
-iteration; only the covariance reference is refined. The production fit keeps
-its free shaped mean. These runs write to roots ending in `_t0jam`.
+1. The preliminary DIS MAP fits that set the t0 covariance reference for the
+   multiplicative systematics use a JAM-like mean
+   `M_f (x/0.1)^a_f ((1-x)/0.9)^b_f`: `M_f ~ Normal(1, 1)` free in the MAP
+   search, and the exponents fixed, `a_f = 0.5` (convergent) or `-0.2`
+   (divergent), `b_f = 3` (quarks) or `5` (gluon). That mean is the same in
+   every t0 iteration; only the covariance reference is refined.
+2. The final t0 fit's PDFs, the field posterior mean at its MAP point on the
+   fit grid, become the fixed production mean (`PIXEL_CLOSURE_PRIOR_FORM=t0_logrbf`).
+   The production fit has no free mean parameters. The curves are stored in
+   the fit result as `t0_pdf_curves`.
+
+The GP width, shared by all PDFs, is the submitted one in both steps. These
+runs write to `campaign/JAM_Q<scale>_exp_prod_smallprior_ln10_t0_mean_gpsig_<width>`.
+The DIS data enter both the t0 mean and the production likelihood, so this
+study is expected to understate uncertainties compared to the shaped mean.
 
 The full closure compiles Drell--Yan with the `block-sparse` bilinear layout.
 Only the 9 physical PDF fields enter the H--S precision; lattice nuisance fields

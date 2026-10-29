@@ -33,7 +33,7 @@ from pixel.util.progress import ProgressReporter, Stopwatch, format_duration
 
 from . import config as cfg
 from . import datasets as dsets
-from .shaped_mean import AnchoredBetaMean
+from .shaped_mean import AnchoredBetaMean, TabulatedMean
 
 
 # -- physics constraints -----------------------------------------------------
@@ -173,7 +173,8 @@ def constraint_datasets(fields, truth=None):
 # -- build -------------------------------------------------------------------
 
 
-def _gp_prior(field: str, *, shaped: bool = False, t0_shape: bool = False):
+def _gp_prior(field: str, *, shaped: bool = False, t0_shape: bool = False,
+              curve=None):
     # The baseline ties the mean to sigma. The zero-unit variant specifies
     # independent means and widths, frozen below, for all nine fields.
     value = cfg.gp_sigma(field)
@@ -187,7 +188,10 @@ def _gp_prior(field: str, *, shaped: bool = False, t0_shape: bool = False):
         frozen=not cfg.GP_AMPLITUDE_FREE,
         tags=("gp_kernel",),
     )
-    if t0_shape:
+    if curve is not None:
+        # Fixed mean: the PDF of the final t0 fit, tabulated on the fit grid.
+        mean = TabulatedMean(*curve)
+    elif t0_shape:
         # JAM-like t0 mean: free M_f, fixed a_f and b_f.
         a, b = cfg.t0_mean_exponents(field)
         mean = AnchoredBetaMean(x0=cfg.SHAPED_MEAN_X0,
@@ -251,10 +255,19 @@ def _envelope_prior(field: str):
     )
 
 
-def gp_prior(field: str, *, t0: bool = False):
-    """Dispatch on :data:`cfg.PRIOR_FORM`, or :data:`cfg.T0_PRIOR` for t0 fits."""
+def gp_prior(field: str, *, t0: bool = False, t0_curves=None):
+    """Dispatch on :data:`cfg.PRIOR_FORM`, or :data:`cfg.T0_PRIOR` for t0 fits.
+
+    ``t0_curves`` are the final t0 fit's PDFs, the fixed production mean of
+    ``t0_logrbf``. Before t0 exists that form falls back to the t0 prior, which
+    only ever serves as the starting point of the t0 fits.
+    """
     if t0 and cfg.T0_PRIOR == "jam_shape":
         return _gp_prior(field, t0_shape=True)
+    if cfg.PRIOR_FORM == "t0_logrbf":
+        if t0_curves is None:
+            return _gp_prior(field, t0_shape=True)
+        return _gp_prior(field, curve=t0_curves[field])
     if cfg.PRIOR_FORM == "beta_envelope":
         return _envelope_prior(field)
     if cfg.PRIOR_FORM == "shaped_logrbf":
@@ -319,12 +332,17 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
     # to True would enter these rows into a ``lattice``-only fit.
     generic_family = dsets.generic_section_family(q_key)
     include_nnpdf = generic_family is not None and generic_family in selected
+    t0_curves = getattr(t0, "pdf_curves", None)
+    if cfg.PRIOR_FORM == "t0_logrbf" and t0 and not t0_prior and t0_curves is None:
+        # A t0 without curves would silently fit with the wrong mean.
+        raise ValueError("t0_logrbf needs the t0 PDF curves from _iterate_t0")
     analysis = pixel.Analysis(f"closure_{cfg.truth_label(q_key)}_{mode}")
     fields = {}
     for name in cfg.ALL_FIELDS:
         fields[name] = analysis.field(
             name, grid=cfg.make_grid(), element_type=cfg.ELEMENT_TYPE,
-            prior=gp_prior(name, t0=t0_prior),
+            prior=gp_prior(name, t0=t0_prior,
+                           t0_curves=None if t0_prior else t0_curves),
         )
     nuisance_names = []
     if include_lattice:
@@ -374,10 +392,10 @@ def build_analysis(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         # The envelope form has a Zero mean, which carries no `N` leaf at all --
         # there is nothing to tie, and asking for one raises rather than silently
         # doing nothing.  Its exponents are frozen by the covariance itself.
-        if cfg.PRIOR_FORM == "shaped_logrbf" or (
+        if cfg.PRIOR_FORM in ("shaped_logrbf", "t0_logrbf") or (
                 t0_prior and cfg.T0_PRIOR == "jam_shape"):
-            # Free M, a, b carry their own Gaussian priors; fixed ones are
-            # frozen in the mean itself.
+            # Free M, a, b carry their own Gaussian priors; fixed ones, and
+            # the tabulated t0 mean, are frozen in the mean itself.
             pass
         elif cfg.PRIOR_FORM != "beta_envelope":
             if cfg.VANISHING_PDF_PRIOR == "zero_unit":
@@ -634,6 +652,10 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
         "t0_iterations": t0_iterations,
         "ess": _effective_sample_size(samples),
         "autocorr": _autocorrelation_ess(samples),
+        "t0_pdf_curves": {
+            name: {"x": x.tolist(), "values": values.tolist()}
+            for name, (x, values) in getattr(t0, "pdf_curves", {}).items()
+        },
         "direct_diagnostics": (
             samples.diagnostics() if isinstance(samples, DirectMCMCSamples) else None
         ),
@@ -649,9 +671,30 @@ def run_fit(q_key: str, mode: str, *, use_kernel_cache: bool = True,
 
 def _dis_predictions(model) -> dict:
     """MAP-point theory prediction per *linear experimental* dataset.
+class T0Reference(dict):
+    """t0 predictions per DIS table, plus the fit's PDFs as ``pdf_curves``.
+
+    ``pdf_curves`` maps each physical PDF to ``(x_nodes, values)``: the field
+    posterior mean at the t0 MAP point, which ``t0_logrbf`` uses as its mean.
+    """
+
+    pdf_curves: dict
+
+
+def _map_pdf_curves(model, vec) -> dict:
+    """Field posterior mean per physical PDF at the hyperparameters ``vec``."""
+    from pixel.core.evidence import posterior
+
+    qbar, _cov = posterior(model._blocks(model._rebuild(vec)), model.rcond)
+    qbar = np.asarray(qbar, dtype=float).reshape(-1)
+    return {name: (x.copy(), qbar[sl].copy())
+            for name, x, sl in _field_segments(model) if name in cfg.ALL_FIELDS}
+
+
 
     Only DIS tables carry multiplicative uncertainties here, and only those need
-    a t0 reference; lattice and constraint datasets are skipped.
+    a t0 reference; lattice and constraint datasets are skipped. For
+    ``t0_logrbf`` the result also carries the fit's PDFs (:class:`T0Reference`).
     """
     layouts = []
     for layout in model._layout.datasets:
@@ -667,12 +710,14 @@ def _dis_predictions(model) -> dict:
         model, method=cfg.MAP_METHOD, options=cfg.MAP_OPTIONS).x)
     pred, _, _ = model.posterior_predictive(vec)
     pred = np.asarray(pred)
-    out = {}
+    out = T0Reference() if cfg.PRIOR_FORM == "t0_logrbf" else {}
     for layout in layouts:
         d = model.datasets[layout.dataset_index]
         out[d.name] = pred[layout.data_slice].copy()
     return out
 
+    if isinstance(out, T0Reference):
+        out.pdf_curves = _map_pdf_curves(model, vec)
 
 def _iterate_t0(q_key, mode, model, *, use_kernel_cache=True):
     """Iterate the NNPDF t0 reference to convergence.

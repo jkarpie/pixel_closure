@@ -49,3 +49,34 @@ class AnchoredBetaMean(priors.MeanFunction):
             self.a.value * jnp.log(nodes / self.x0)
             + self.b.value * jnp.log((1.0 - nodes) / (1.0 - self.x0))
         )
+
+
+class TabulatedMean(priors.MeanFunction):
+    """A fixed mean curve, linear between the tabulated ``(x, value)`` nodes.
+
+    It is exact at the nodes, so a curve tabulated on the fit grid reproduces
+    itself there. It carries no parameters.
+    """
+
+    x: jnp.ndarray
+    values: jnp.ndarray
+
+    def __init__(self, x, values):
+        x = jnp.asarray(x, dtype=jnp.float64).reshape(-1)
+        values = jnp.asarray(values, dtype=jnp.float64).reshape(-1)
+        if x.shape != values.shape or x.size < 2:
+            raise ValueError("TabulatedMean needs matching x and values, at least two nodes")
+        if not bool(jnp.all(jnp.diff(x) > 0)):
+            raise ValueError("TabulatedMean x nodes must increase")
+        self.x = x
+        self.values = values
+        self.floor = 1e-12
+        self.ndim = 1
+
+    def __call__(self, x):
+        nodes = jnp.asarray(x, dtype=jnp.float64)
+        if nodes.ndim == 2:
+            if nodes.shape[1] != 1:
+                raise ValueError("TabulatedMean expects one x coordinate")
+            nodes = nodes[:, 0]
+        return jnp.interp(nodes, self.x, self.values)
