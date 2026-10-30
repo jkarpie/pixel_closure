@@ -83,6 +83,20 @@ def test_default_t0_prior_leaves_identity_unchanged(t0_jam, monkeypatch):
     assert "t0_prior" not in prior_identity("JAM", "union")
 
 
+def test_t0_cache_round_trips_named_prediction_tables(tmp_path):
+    path = tmp_path / "t0_cache.npz"
+    result = ({"dataset_a": np.array([1.0, 2.0]),
+               "dataset_b": np.array([3.0])}, 4)
+    fit._save_t0(path, "fingerprint", result)
+
+    loaded = fit._load_t0(path, "fingerprint")
+    assert loaded is not None and loaded[1] == 4
+    assert list(loaded[0]) == ["dataset_a", "dataset_b"]
+    np.testing.assert_array_equal(loaded[0]["dataset_a"], [1.0, 2.0])
+    np.testing.assert_array_equal(loaded[0]["dataset_b"], [3.0])
+    assert fit._load_t0(path, "different-fingerprint") is None
+
+
 # -- production mean = the final t0 fit's PDFs (t0_logrbf) --------------------
 
 

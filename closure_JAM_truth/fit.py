@@ -14,6 +14,9 @@ the posterior band covers the injected JAM truth.
 from __future__ import annotations
 
 import json
+import hashlib
+import fcntl
+import os
 import warnings
 
 import numpy as np
@@ -738,6 +741,34 @@ def _iterate_t0(q_key, mode, model, *, use_kernel_cache=True):
             q_key, t0_mode, use_kernel_cache=use_kernel_cache, t0_prior=True
         )
         model = analysis.compile()
+    cache = _t0_cache_path(model, q_key, t0_mode)
+    if cache is None:
+        return _calculate_t0(q_key, t0_mode, model, max_iter,
+                             use_kernel_cache=use_kernel_cache)
+
+    path, fingerprint, legacy_path, legacy_fingerprint = cache
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_suffix(".lock")
+    with lock_path.open("a") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        cached = _load_t0(path, fingerprint)
+        if cached is not None:
+            print(f"loaded t0 cache {path.name} ({cached[1]} iterations)", flush=True)
+            return cached
+        if legacy_path.is_file():
+            cached = _load_t0(legacy_path, legacy_fingerprint)
+            if cached is not None:
+                _save_t0(path, fingerprint, cached)
+                print(f"migrated t0 cache {legacy_path.name} to {path.name}", flush=True)
+                return cached
+        result = _calculate_t0(q_key, t0_mode, model, max_iter,
+                               use_kernel_cache=use_kernel_cache)
+        _save_t0(path, fingerprint, result)
+        return result
+
+
+def _calculate_t0(q_key, t0_mode, model, max_iter, *, use_kernel_cache):
+    """Compute the iterative reference once the persistent cache misses."""
     t0 = _dis_predictions(model)
     if not t0 or max_iter <= 0:
         return ({} if not t0 else t0), 0
@@ -754,6 +785,72 @@ def _iterate_t0(q_key, mode, model, *, use_kernel_cache=True):
         if shift <= cfg.T0_TOLERANCE:
             return t0, iteration
     return t0, max_iter
+
+
+def _t0_cache_path(model, q_key, t0_mode):
+    """Return a persistent, model-fingerprinted t0 cache path when supported."""
+    try:
+        from pixel.infer.q_integration._legacy import (
+            DirectCoordinates, _direct_model_fingerprint,
+        )
+        coordinates = DirectCoordinates.from_model(model, prior_rcond=0.0)
+        model_fingerprint = _direct_model_fingerprint(model, coordinates)
+    except (AttributeError, ImportError, TypeError, ValueError, RuntimeError):
+        # Non-direct inference models retain the old behavior. Full-scale q
+        # reports and streams use DirectCoordinates and always get this cache.
+        return None
+    legacy_identity = {
+        "cache_version": 1,
+        "model_fingerprint": model_fingerprint,
+        "q_key": str(q_key),
+        "mode": str(t0_mode),
+        "t0_prior": str(cfg.T0_PRIOR),
+        "tolerance": float(cfg.T0_TOLERANCE),
+        "max_iterations": int(getattr(cfg, "T0_MAX_ITERATIONS", 0)),
+    }
+    identity = {**legacy_identity, "map_method": str(cfg.MAP_METHOD),
+                "map_options": cfg.MAP_OPTIONS}
+    def key_for(payload):
+        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                             default=str)
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+    key, legacy_key = key_for(identity), key_for(legacy_identity)
+    cache_root = cfg.DATA_ROOT / "_t0_cache"
+    return (cache_root / f"t0_{key}.npz", key,
+            cache_root / f"t0_{legacy_key}.npz", legacy_key)
+
+
+def _load_t0(path, fingerprint):
+    try:
+        with np.load(path, allow_pickle=False) as saved:
+            metadata = json.loads(str(saved["metadata"].item()))
+            if metadata.get("fingerprint") != fingerprint:
+                return None
+            names = metadata["names"]
+            result = {name: np.asarray(saved[f"value_{index}"], dtype=float)
+                      for index, name in enumerate(names)}
+            iterations = int(metadata["iterations"])
+        if any(not np.all(np.isfinite(value)) for value in result.values()):
+            return None
+        return result, iterations
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _save_t0(path, fingerprint, result):
+    values, iterations = result
+    metadata = json.dumps({"fingerprint": fingerprint,
+                           "names": list(values),
+                           "iterations": int(iterations)}, sort_keys=True)
+    temporary = path.with_name(path.name + f".{os.getpid()}.tmp")
+    try:
+        with temporary.open("wb") as stream:
+            np.savez_compressed(stream, metadata=np.asarray(metadata),
+                                **{f"value_{index}": np.asarray(value, dtype=float)
+                                   for index, value in enumerate(values.values())})
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _weights(samples) -> np.ndarray:
