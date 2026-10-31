@@ -610,11 +610,11 @@ DY_Q2_MIN = Q0_2
 DY_MAX_ROWS = 6
 
 #: NNLO hard scattering uses ReDY's coherent sum of all partonic channels.
-#: Supply the ReDY v0.3 archive/tree with PIXEL_CLOSURE_DY_NNLO_SOURCE;
-#: the default uses the user's downloaded archive without copying its sources.
+#: Use the bundled ReDY v0.3 archive by default; override the archive/tree
+#: with PIXEL_CLOSURE_DY_NNLO_SOURCE when needed.
 DY_ORDER = "NNLO"
 DY_NNLO_SOURCE = Path(os.environ.get(
-    "PIXEL_CLOSURE_DY_NNLO_SOURCE", str(Path.home() / "Downloads" / "ReDY.tgz")
+    "PIXEL_CLOSURE_DY_NNLO_SOURCE", str(REPO_ROOT / "third_party" / "ReDY.tgz")
 )).expanduser()
 DY_ALPHA_EM = 1.0 / 137.035999
 DY_ALPHA_S = 0.20                                 # fixed alpha_s at the DY scale; this suite has no collider route, so it governs every DY row

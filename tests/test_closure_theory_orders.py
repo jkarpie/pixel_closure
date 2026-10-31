@@ -1,6 +1,11 @@
 """NNLO closure defaults reach PIXEL's DIS and coherent DY builders."""
 
 import importlib
+import hashlib
+import os
+from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -11,6 +16,36 @@ FULL_SUITES = tuple(
     for selection in ("", "_JAM_data", "_NNPDF_data")
 )
 SUITES = FULL_SUITES + ("closure_JAM_truth_small", "closure_NNPDF_truth_small")
+
+
+def test_bundled_redy_archive_matches_the_pinned_upstream_source():
+    from pixel.kernels.drell_yan.nnlo_source import REDY_V03_SHA256
+
+    archive = Path(__file__).resolve().parents[1] / "third_party" / "ReDY.tgz"
+    assert hashlib.sha256(archive.read_bytes()).hexdigest() == REDY_V03_SHA256
+
+
+@pytest.mark.parametrize("override", (None, "~/custom-redy/ReDY.tgz"))
+def test_redy_source_defaults_and_environment_override(override):
+    root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ)
+    env.pop("PIXEL_CLOSURE_DY_NNLO_SOURCE", None)
+    expected = root / "third_party" / "ReDY.tgz"
+    if override is not None:
+        env["PIXEL_CLOSURE_DY_NNLO_SOURCE"] = override
+        expected = Path(override).expanduser()
+    # A fresh interpreter exercises each config's import-time environment lookup.
+    code = (
+        "import importlib, sys; from pathlib import Path; "
+        f"suites = {SUITES!r}; "
+        "assert all(importlib.import_module(s + '.config').DY_NNLO_SOURCE "
+        "== Path(sys.argv[1]) for s in suites)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code, str(expected)], cwd=root, env=env,
+        text=True, capture_output=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize("suite", SUITES)

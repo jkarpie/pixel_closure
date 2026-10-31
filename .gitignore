@@ -9,6 +9,8 @@
 # imports; only *generation* needs them.
 *.tar.gz
 *.tgz
+# Small NNLO DY source archive, shipped for remote campaign reproducibility.
+!/third_party/ReDY.tgz
 lhapdf/
 
 # -- caches ------------------------------------------------------------------

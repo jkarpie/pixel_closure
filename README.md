@@ -20,8 +20,9 @@ PDF evolution in the full suites and **`fonll_c`** for tagged heavy-flavour DIS.
 Full-suite lattice pseudo-ITD matching remains **NLO**; the small fixtures retain
 their unevolved lattice and DY PDF-field approximations.
 
-NNLO Drell–Yan requires the ReDY v0.3 archive or extracted source tree. The default
-is `~/Downloads/ReDY.tgz`; set `PIXEL_CLOSURE_DY_NNLO_SOURCE` to use another path.
+NNLO Drell–Yan uses the bundled `third_party/ReDY.tgz` archive by default.
+It arrives with `git pull`; set `PIXEL_CLOSURE_DY_NNLO_SOURCE` only to use another
+archive or extracted source tree.
 Regenerate existing NLO pseudodata and kernels before fitting with these defaults:
 
 ```bash
@@ -36,10 +37,9 @@ The helper archives the current files without inferring their perturbative order
 
 On a remote checkout, update both `pixel_closure` and the sibling PIXEL checkout
 (the latter must support NNLO Drell–Yan and native FONLL-C). Archive the old inputs
-once, and make ReDY available on compute nodes:
+once; ReDY is included in the closure checkout:
 
 ```bash
-export PIXEL_CLOSURE_DY_NNLO_SOURCE=/path/on/remote/ReDY.tgz
 python3 tools/archive_nlo_data.py
 sbatch submit_closure.sh
 # Or the existing prior variants:

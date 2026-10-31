@@ -811,11 +811,11 @@ DY_Q2_MIN = Q0_2
 DY_MAX_ROWS = None
 
 #: NNLO hard scattering uses ReDY's coherent sum of all partonic channels.
-#: Supply the ReDY v0.3 archive/tree with PIXEL_CLOSURE_DY_NNLO_SOURCE;
-#: the default uses the user's downloaded archive without copying its sources.
+#: Use the bundled ReDY v0.3 archive by default; override the archive/tree
+#: with PIXEL_CLOSURE_DY_NNLO_SOURCE when needed.
 DY_ORDER = "NNLO"
 DY_NNLO_SOURCE = Path(os.environ.get(
-    "PIXEL_CLOSURE_DY_NNLO_SOURCE", str(Path.home() / "Downloads" / "ReDY.tgz")
+    "PIXEL_CLOSURE_DY_NNLO_SOURCE", str(REPO_ROOT / "third_party" / "ReDY.tgz")
 )).expanduser()
 #: Fixed couplings for the photon-only fixed-target arm (E866, E605).  Collider records
 #: are gamma*/Z and take running couplings instead -- ``datasets.collider_exchange``
