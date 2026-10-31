@@ -8,6 +8,9 @@
 #SBATCH -c 64
 #SBATCH --ntasks=1
 
+set -euo pipefail
+cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")}"
+mkdir -p campaign/NNLO_RUNS
 
 echo "Batch job finished"
 export PIXEL_PROGRESS=1 
