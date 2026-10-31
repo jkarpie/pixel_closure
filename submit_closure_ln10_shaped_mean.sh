@@ -34,7 +34,7 @@ esac
 export PIXEL_SHAPED_GP_SIGMA="$gp_sigma"
 export PIXEL_CLOSURE_PRIOR_FORM="$form"
 export PIXEL_VANISHING_PDF_PRIOR=zero_unit
-export PIXEL_LN10_PRODUCTION_ROOT="${PIXEL_SHAPED_MEAN_PRODUCTION_ROOT:-campaign/JAM_Q${PIXEL_CLOSURE_Q:-2}_exp_prod_smallprior_ln10_${name}_gpsig_${tag}}"
+export PIXEL_LN10_PRODUCTION_ROOT="${PIXEL_SHAPED_MEAN_PRODUCTION_ROOT:-campaign/NNLO_RUNS/JAM_Q${PIXEL_CLOSURE_Q:-2}_exp_prod_smallprior_ln10_${name}_gpsig_${tag}}"
 
 echo "Production mean=$name; t0 prior=$PIXEL_T0_PRIOR; GP width=$gp_sigma for all PDFs; output=$PIXEL_LN10_PRODUCTION_ROOT"
 exec bash ./submit_closure_ln10.sh

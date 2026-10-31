@@ -536,6 +536,7 @@ def build_drell_yan(rec, path, fields, cache, *, with_systematics=True):
         fields_A=fields_A, fields_B=fields_B,
         order=cfg.DY_ORDER, alpha_s=cfg.DY_ALPHA_S, nf=cfg.DY_NF,
         alpha_em=cfg.DY_ALPHA_EM, channels=cfg.DY_CHANNELS,
+        nnlo_source=cfg.DY_NNLO_SOURCE if cfg.DY_ORDER == "NNLO" else None,
         evolution_A=evolution_A, evolution_B=evolution_B,
         source="closure", component=rec["reaction"],
         cache_dir=str(cache.parent) if cache is not None else None,
@@ -607,8 +608,8 @@ def build_drell_yan_binned(rec, path, fields, cache, *, with_systematics=True):
        operator, folds the truth through it and produces a dataset whose shapes,
        covariance and row count agree with the commondata.  It has *not* been compared
        row-by-row against NNPDF's own FK predictions -- ``assert_native_campaign_ready``
-       still fails these sets on NNLO/theory-200 grounds (the closure runs NLO, and
-       NNLO Drell-Yan needs the unvendored ReDY source).  Treat a recovered pull here as
+       still requires independent theory-200 parity evidence even though the closure
+       uses NNLO kernels and a user-supplied ReDY source.  Treat a recovered pull here as
        a statement about this closure's internal consistency, not as an NNPDF benchmark.
     """
     from pixel.data import DrellYan
@@ -638,6 +639,7 @@ def build_drell_yan_binned(rec, path, fields, cache, *, with_systematics=True):
         fields_A=fields_A, fields_B=fields_B,
         order=cfg.DY_ORDER, alpha_s=cfg.DY_ALPHA_S, nf=5,
         alpha_em=cfg.DY_ALPHA_EM, channels=cfg.DY_CHANNELS,
+        nnlo_source=cfg.DY_NNLO_SOURCE if cfg.DY_ORDER == "NNLO" else None,
         evolution_A=evolution_A, evolution_B=evolution_B,
         observable_mode="fiducial_dilepton",
         **collider_exchange(),
@@ -658,14 +660,9 @@ def build_sigma_r_heavy(rec, path, fields, cache, *, with_systematics=True,
     is the bottom-pair contribution alone, so it takes different coefficient functions
     (photon-gluon fusion into a massive pair) and a different builder.
 
-    **Variant: FONLL-A, and that is the correct choice here rather than a fallback.**
-    ``fonll_a`` is ``pdf_order: NLO, massless_order: 1, massive_order: 1``
-    (``pixel.kernels.FONLL_VARIANTS``), which is exactly what this closure runs
-    (``cfg.ORDER``).  ``fonll_b``/``fonll_c`` raise ``NotImplementedError`` from
-    ``HeavyNCFONLL.from_arrays`` -- measured 2026-09-09 -- and NNPDF's theory-200 uses
-    FONLL-C, so a *parity* comparison against NNPDF is out of reach.  A closure is not a
-    parity comparison: it folds a truth through this operator and fits it back with the
-    same one, and FONLL-A is self-consistent at NLO.
+    **Variant: FONLL-C.** Native two-loop massive coefficients are matched to
+    NNLO massless heavy-current coefficients and NNLO PDF evolution. Generation
+    and fitting use the same central-scale operator.
 
     **Flavour handling: ``flavour_mode="vfns"`` with ``nf=4``.**  The bottom PDF does not
     exist in this suite's input basis -- the nine fields are Nf=4 at ``Q0 = mc``.  The
@@ -695,7 +692,7 @@ def build_sigma_r_heavy(rec, path, fields, cache, *, with_systematics=True,
                  "heavy_nonsinglet": fields["t15"]},
         heavy_flavour=rec["heavy_flavour"], mass=float(rec["heavy_mass"]),
         charge_sq=float(rec["charge_sq"]),
-        variant="fonll_a", nf=4, flavour_mode="vfns",
+        variant="fonll_c", nf=4, flavour_mode="vfns",
         Q20=cfg.Q0_2, alphaS_MZ=cfg.ALPHAS_MZ, mc=cfg.MC, mb=cfg.MB,
         target="proton", momentum_density=True,
         low_x_extensions=cfg.even_low_x_completions(),
@@ -760,6 +757,7 @@ def build_drell_yan_fiducial_lepton(rec, path, fields, cache, *, with_systematic
         fields_A=fields_A, fields_B=fields_B,
         order=cfg.DY_ORDER, alpha_s=cfg.DY_ALPHA_S, nf=5,
         alpha_em=cfg.DY_ALPHA_EM, channels=cfg.DY_CHANNELS,
+        nnlo_source=cfg.DY_NNLO_SOURCE if cfg.DY_ORDER == "NNLO" else None,
         evolution_A=evolution_A, evolution_B=evolution_B,
         observable_mode="fiducial_lepton",
         lepton_cuts=lepton_level_cuts_for(
@@ -819,6 +817,7 @@ def build_drell_yan_bin_integrated(rec, path, fields, cache, *, with_systematics
         fields_A=fields_A, fields_B=fields_B,
         order=cfg.DY_ORDER, alpha_s=cfg.DY_ALPHA_S, nf=5,
         alpha_em=cfg.DY_ALPHA_EM, channels=cfg.DY_CHANNELS,
+        nnlo_source=cfg.DY_NNLO_SOURCE if cfg.DY_ORDER == "NNLO" else None,
         evolution_A=evolution_A, evolution_B=evolution_B,
         observable_mode="bin_integrated",
         **collider_exchange(),
@@ -871,6 +870,7 @@ def build_drell_yan_mass_spectrum(rec, path, fields, cache, *, with_systematics=
         fields_A=fields_A, fields_B=fields_B,
         order=cfg.DY_ORDER, alpha_s=cfg.DY_ALPHA_S, nf=5,
         alpha_em=cfg.DY_ALPHA_EM, channels=cfg.DY_CHANNELS,
+        nnlo_source=cfg.DY_NNLO_SOURCE if cfg.DY_ORDER == "NNLO" else None,
         evolution_A=evolution_A, evolution_B=evolution_B,
         observable_mode="fiducial_dilepton",
         **collider_exchange(),

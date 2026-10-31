@@ -18,7 +18,7 @@ export PIXEL_PROGRESS=1
 
 
 
-../pixel/venv/bin/python -m campaign.scan_full_q_normalizations --out campaign/JAM_Q2_exp_prod/normalization_evidence_scan --chain campaign/JAM_Q2_exp_prod/streams_16/q/jam/union/truthQ_2/exp/stream_01/chain.npz > campaign/JAM_Q2_exp_prod/normalization_evidence_scan.log
+../pixel/venv/bin/python -m campaign.scan_full_q_normalizations --out campaign/NNLO_RUNS/JAM_Q2_exp_prod_smallprior/normalization_evidence_scan --chain campaign/NNLO_RUNS/JAM_Q2_exp_prod_smallprior/streams_16/q/jam/union/truthQ_2/exp/stream_01/chain.npz > campaign/NNLO_RUNS/JAM_Q2_exp_prod_smallprior/normalization_evidence_scan.log
 
 
 echo "Batch job finished"

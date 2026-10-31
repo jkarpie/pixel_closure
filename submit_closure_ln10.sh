@@ -14,7 +14,7 @@ set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")}"
 
 export PIXEL_PDF_GP_LENGTH_LOG=2.302585092994046
-export PIXEL_PRODUCTION_ROOT="${PIXEL_LN10_PRODUCTION_ROOT:-campaign/JAM_Q${PIXEL_CLOSURE_Q:-2}_exp_prod_smallprior_ln10}"
+export PIXEL_PRODUCTION_ROOT="${PIXEL_LN10_PRODUCTION_ROOT:-campaign/NNLO_RUNS/JAM_Q${PIXEL_CLOSURE_Q:-2}_exp_prod_smallprior_ln10}"
 
 echo "PDF log-RBF length=ln(10); output=$PIXEL_PRODUCTION_ROOT"
 exec bash ./submit_closure.sh

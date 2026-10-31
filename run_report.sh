@@ -6,7 +6,7 @@ dataset=exp
 truth=JAM
 Q=2
 [[ $# -le 1 ]] || { echo "usage: $0 [campaign-root]" >&2; exit 2; }
-production_root="${1:-campaign/${truth}_Q${Q}_${dataset}_prod}"
+production_root="${1:-campaign/NNLO_RUNS/${truth}_Q${Q}_${dataset}_prod_smallprior}"
 python_bin=../pixel/venv/bin/python
 if [[ "$production_root" = /* ]]; then
   export PIXEL_Q_MAP_CACHE_ROOT="$production_root/_q_map_cache"

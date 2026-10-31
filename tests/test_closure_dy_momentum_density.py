@@ -82,9 +82,10 @@ def test_small_suite_fold_is_the_leading_order_cross_section_of_number_densities
     cfg = importlib.import_module(f"{suite}.config")
     datasets = importlib.import_module(f"{suite}.datasets")
     generate = importlib.import_module(f"{suite}.generate")
-    # The closed form below is leading order and unevolved; if the suite ever changes
-    # either, this test must be rewritten rather than silently skipped.
-    assert str(cfg.DY_ORDER).upper() == "LO" and not getattr(cfg, "DY_EVOLVE", False)
+    # Keep the analytic Born oracle at LO independently of production defaults.
+    monkeypatch.setattr(cfg, "DY_ORDER", "LO")
+    monkeypatch.setattr(cfg, "DY_CHANNELS", ("qA,qbB", "qbA,qB"))
+    assert not cfg.DY_EVOLVE
 
     fields = cfg.make_fields()
     basis = next(iter(fields.values())).basis

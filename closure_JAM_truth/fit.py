@@ -7,7 +7,7 @@ With the GP hyperparameters frozen the posterior is
 analytic
 in the GP field values; PIXEL returns a fixed-parameter ``PosteriorResult`` for
 this zero-dimensional inference problem.  The forward operators are identical
-to generation (``Q0 = mc``, NLO, ``Nf = 4``, no systematic nuisances).  Success =
+to generation (``Q0 = mc``, NNLO, ``Nf = 4``, no systematic nuisances).  Success =
 the posterior band covers the injected JAM truth.
 """
 

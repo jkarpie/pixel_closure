@@ -15,11 +15,42 @@ and which dataset selection is fitted.
 | `closure_NNPDF_truth_NNPDF_data` | `NNPDF40_nnlo_as_01180_1000` | NNPDF_data | NNPDF4.0 (28) |
 | `closure_JAM_truth_NNPDF_data` | JAM | NNPDF_data | NNPDF4.0 (28) |
 
-Before generating NNLO data, preserve existing NLO inputs with
-`python3 tools/archive_nlo_data.py` (`--dry-run` previews the moves). This moves
-each suite's generated data and caches into `<suite>/NLO_RUNS/data/`, preserving
-LHAPDF inputs and dump tools. It refuses to overwrite existing archive entries
-and archives the current files without inferring their perturbative order.
+Closure generation and fitting use **NNLO DIS and Drell–Yan**, including NNLO
+PDF evolution in the full suites and **`fonll_c`** for tagged heavy-flavour DIS.
+Full-suite lattice pseudo-ITD matching remains **NLO**; the small fixtures retain
+their unevolved lattice and DY PDF-field approximations.
+
+NNLO Drell–Yan requires the ReDY v0.3 archive or extracted source tree. The default
+is `~/Downloads/ReDY.tgz`; set `PIXEL_CLOSURE_DY_NNLO_SOURCE` to use another path.
+Regenerate existing NLO pseudodata and kernels before fitting with these defaults:
+
+```bash
+./run_closure.sh --Q 2 --remake-data --remake-kernels
+```
+
+To preserve old inputs first, run `python3 tools/archive_nlo_data.py` once before
+generating NNLO data (`--dry-run` previews the moves). It moves each suite's
+existing generated data and caches into `<suite>/NLO_RUNS/data/`, preserving
+LHAPDF inputs and dump tools. It refuses to overwrite existing archive entries.
+The helper archives the current files without inferring their perturbative order.
+
+On a remote checkout, update both `pixel_closure` and the sibling PIXEL checkout
+(the latter must support NNLO Drell–Yan and native FONLL-C). Archive the old inputs
+once, and make ReDY available on compute nodes:
+
+```bash
+export PIXEL_CLOSURE_DY_NNLO_SOURCE=/path/on/remote/ReDY.tgz
+python3 tools/archive_nlo_data.py
+sbatch submit_closure.sh
+# Or the existing prior variants:
+# sbatch submit_closure_ln10.sh
+# sbatch submit_closure_ln10_shaped_mean.sh 0.3
+```
+
+The production submit scripts generate missing data/kernels, prepare the MAP,
+and launch the streams in that order. New default outputs live under
+`campaign/NNLO_RUNS/`; existing output-root environment overrides still apply.
+ReDY's adapter needs a C++ compiler on the compute node (`CXX` can select it).
 
 The two dataset selections are the published analyses' own lists, restricted to what
 this closure can build:
@@ -86,12 +117,11 @@ the same fields, priors and constraints:
 | `exp` | DIS + DY | the discriminating mode -- see below |
 | `both` | lattice + DIS + DY | everything at once |
 
-**`exp` and `both` are the modes that matter for feasibility.** `dy` is LO
-Drell-Yan in the `_small` suites and has **no gluon channel**, so it is
-structurally blind to anything entering through the DIS gluon coefficient
-function. Scanning a config knob on `dy` and concluding it is safe has given a
-wrong answer at least twice: the constraint floor was set to `1e-6` on the
-strength of a `dy` scan, and every `exp`/`both` fit then failed.
+**`exp` and `both` are the modes that matter for feasibility.** Historical
+`_small` runs used LO Drell-Yan without a gluon channel; the defaults now use
+NNLO with all partonic channels. Scanning a config knob on the old `dy` mode
+and concluding it was safe gave a wrong answer at least twice: the constraint
+floor was set to `1e-6` on the strength of a `dy` scan, and every `exp`/`both` fit then failed.
 
 Physics constraints (section 4) are added in **every** mode.
 

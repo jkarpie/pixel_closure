@@ -209,6 +209,7 @@ def build_drell_yan(rec, path, fields, cache):
         fields_A=fields_A, fields_B=fields_B,
         order=cfg.DY_ORDER, alpha_s=cfg.DY_ALPHA_S, nf=cfg.DY_NF,
         alpha_em=alpha_em, channels=cfg.DY_CHANNELS,
+        nnlo_source=cfg.DY_NNLO_SOURCE if cfg.DY_ORDER == "NNLO" else None,
         electroweak=electroweak,
         evolution_A=None, evolution_B=None,
         source=rec.get("classification", "closure"),

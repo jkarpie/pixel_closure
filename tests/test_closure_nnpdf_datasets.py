@@ -128,6 +128,9 @@ def test_heavy_builder_reads_the_public_manifest_file(suite, tmp_path, monkeypat
         np.testing.assert_array_equal(mean, [1.0, 2.0])
         np.testing.assert_array_equal(cov, [[0.2, 0.0], [0.0, 0.3]])
         assert kwargs["y"] == rec["y"]
+        assert kwargs["variant"] == "fonll_c"
+        assert kwargs["flavour_mode"] == "vfns"
+        assert kwargs["nf"] == 4
         called.append(source)
         return sentinel
 

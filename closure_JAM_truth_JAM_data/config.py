@@ -219,7 +219,7 @@ MB = 4.18
 Q0 = MC                  # input / parameterization / generation scale
 Q0_2 = Q0 * Q0
 NF = 4                   # active flavors at the input scale (u,d,s,c)
-ORDER = "NLO"
+ORDER = "NNLO"
 MODE = "truncated"
 ALPHAS_MZ = 0.118
 
@@ -481,6 +481,7 @@ PITD_EVOLVE = True
 #: Order of the short-distance matching coefficients.  ``"NLO"`` is the
 #: ``O(alpha_s)`` matching: ``C_F [ ln(lam^2 e^{2 gamma_E + 1}/4) B(N) + L(N) ]``,
 #: i.e. the Altarelli-Parisi log *and* the finite matching constant ``L``.
+#: Lattice matching remains NLO independently of the NNLO DIS/DY kernels.
 PITD_MATCHING_ORDER = "NLO"
 
 #: Lattice pseudo-ITDs in this closure are reduced ratios, with short-distance
@@ -667,8 +668,8 @@ NUISANCE_GP_SIGMA = 1.0
 # directory) and keeps the full retained kinematic coverage -- no subsample --
 # so the fake data have the exact real (x, Q2) coverage.  F2 (p/n/d) and NC
 # sigma_r (p/n/d) and HERA CC sigma_r are modelled directly.  The HERA CC rows
-# use the massless NLO W2/WL/W3 operator validated against Fitpack; this closure
-# remains distinct from the gated NNLO FONLL-C/TMC NNPDF-theory-200 campaign.
+# use the massless NNLO W2/WL/W3 operator. This closure remains distinct
+# from an NNPDF-theory-200 parity comparison, including its TMC prescription.
 
 class ExpSpec:
     """A DIS-table kind/label hint for a specific table index.
@@ -809,38 +810,13 @@ DY_Q2_MIN = Q0_2
 #: for an explicitly thinned run.
 DY_MAX_ROWS = None
 
-#: DY hard-kernel scheme.  **NLO as of 2026-08-14** (was ``"LO"``).  The reason
-#: LO stood -- that NLO off-scale corrections overshoot (large/negative at edge
-#: kinematics) -- was an artefact of evaluating the hard kernel at ``Q^2`` while
-#: the fields sat unevolved at ``mc``, and those logarithms are what
-#: :data:`DY_EVOLVE` now resums, so the objection no longer applies in this suite.
-#: (It still applies in ``closure_*_truth_small``, which run ``DY_EVOLVE = False``
-#: and are therefore left at LO.)  Both sides use this identically, so the closure
-#: stays self-consistent either way.
-#:
-#: Three consequences follow, none of which any test asserts, so they are recorded
-#: here rather than left to be rediscovered:
-#:
-#: * :data:`DY_CHANNELS` below now activates the gluon-initiated channels, and
-#:   ``Cqg2`` is a known open defect: **+82% on the channel total, 1.8-4.3% on the
-#:   observable** (``plans/drell_yan_qg_bug.md``), shared with fitpack so the usual
-#:   oracle cannot see it.  A closure test still *closes* -- generation and fit use
-#:   the identical wrong kernel -- but the generated truth stops being physical at
-#:   that level, and any statement about DY absolute normalization inherits it.
-#: * **Cost: the DY bilinear tensor is ~14x dearer.**  Measured 2026-08-14 on the
-#:   kernel path, 3 rows on a 7-node quadratic basis at ``quad_n=20``: LO 0.001 s,
-#:   NLO 0.632 s.  At LO the node count was both free and bitwise irrelevant
-#:   (identical tensor at ``quad_n`` 5/20/40); neither holds at NLO, where 5 -> 20
-#:   moves the tensor by ``3.9e-02``.
-#: * **Accuracy: ``z_integration`` starts to matter, and is deliberately not
-#:   changed here.**  The shipped ``legacy_linear`` at ``quad_n=20`` carries
-#:   ``~5e-2`` on the finite-element tensor at NLO and does not converge in
-#:   ``quad_n`` (still ``6.2e-3`` at 96); ``z_integration="element_aligned"`` with
-#:   ``quad_n=8`` reaches ``9.2e-4`` at the same wall cost
-#:   (``plans/dy_quad_n_convergence.md`` section 7).  That switch is opt-in because
-#:   fitpack parity and the E866 goldens are pinned to ``legacy_linear``; at LO it
-#:   changed nothing, at NLO it is the dominant quadrature choice.
-DY_ORDER = "NLO"
+#: NNLO hard scattering uses ReDY's coherent sum of all partonic channels.
+#: Supply the ReDY v0.3 archive/tree with PIXEL_CLOSURE_DY_NNLO_SOURCE;
+#: the default uses the user's downloaded archive without copying its sources.
+DY_ORDER = "NNLO"
+DY_NNLO_SOURCE = Path(os.environ.get(
+    "PIXEL_CLOSURE_DY_NNLO_SOURCE", str(Path.home() / "Downloads" / "ReDY.tgz")
+)).expanduser()
 #: Fixed couplings for the photon-only fixed-target arm (E866, E605).  Collider records
 #: are gamma*/Z and take running couplings instead -- ``datasets.collider_exchange``
 #: (owner decision D8, 2026-09-11) -- so these two do not reach them.
@@ -856,12 +832,7 @@ DY_ALPHA_S = 0.20                                 # fixed alpha_s; fixed-target 
 #: on by default.  Turning it off restores the historical fixed-scale operator.
 DY_EVOLVE = True
 
-#: Perturbative order/mode of the *evolution* operator.  Independent of
-#: :data:`DY_ORDER`, which is the hard-kernel order.  The two are now both NLO,
-#: but they are still separate knobs: the off-scale NLO hard corrections that
-#: once motivated ``DY_ORDER = "LO"`` were an artefact of *not* evolving, so it
-#: is :data:`DY_EVOLVE` -- not this constant -- that made NLO hard matching the
-#: consistent choice here.
+#: Use the same NNLO order for PDF evolution and DY hard scattering.
 DY_EVOLUTION_ORDER = ORDER
 DY_EVOLUTION_MODE = MODE
 
@@ -871,8 +842,9 @@ DY_EVOLUTION_MODE = MODE
 #: fields stay in their Nf=4 input basis.  ``datasets`` asserts the projection
 #: agrees with this before building.
 DY_NF = 5 if DY_EVOLVE else 4
-DY_CHANNELS = (("qA,qbB", "qbA,qB") if DY_ORDER == "LO" else
-               ("qA,qbB", "qbA,qB", "qA,gB", "gA,qB"))
+DY_CHANNELS = (("nnlo_full",) if DY_ORDER == "NNLO" else
+               (("qA,qbB", "qbA,qB") if DY_ORDER == "LO" else
+                ("qA,qbB", "qbA,qB", "qA,gB", "gA,qB")))
 
 
 def dy_low_x_completions():
@@ -1453,8 +1425,8 @@ _CHORUS_SPECS = {
     },
 }
 
-#: Heavy-flavour-tagged NC reduced cross section (HERACOMB_SIGMARED_B), FONLL-A at this
-#: closure's NLO; see ``datasets.build_sigma_r_heavy``.
+#: Heavy-flavour-tagged NC reduced cross section (HERACOMB_SIGMARED_B), FONLL-C at this
+#: closure's NNLO; see ``datasets.build_sigma_r_heavy``.
 HEAVY_DIS_SPECS = {
     "dis.heracomb_bottom": {
         "label": "heracomb_bottom_sigmar", "kind": "sigma_r_heavy",

@@ -9,7 +9,10 @@
 #SBATCH --ntasks=1
 
 
-echo "Batch job finished"
+set -euo pipefail
+cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")}"
+
+echo "Batch job started"
 export PIXEL_PROGRESS=1 
 
 for Q in mc 2 3 

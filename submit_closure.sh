@@ -20,7 +20,7 @@ case "$Q" in
 esac
 # The small-closure-matched prior differs from earlier *_prod campaigns. Use a
 # separate output root so neither completed streams nor checkpoints are mixed.
-production_root="${PIXEL_PRODUCTION_ROOT:-campaign/${truth}_Q${Q}_${dataset}_prod_smallprior}"
+production_root="${PIXEL_PRODUCTION_ROOT:-campaign/NNLO_RUNS/${truth}_Q${Q}_${dataset}_prod_smallprior}"
 python_bin=../pixel/venv/bin/python
 if [[ "$production_root" = /* ]]; then
   export PIXEL_Q_MAP_CACHE_ROOT="$production_root/_q_map_cache"

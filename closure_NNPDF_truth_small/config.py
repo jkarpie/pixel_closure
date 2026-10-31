@@ -7,7 +7,7 @@ physics narrative and ``closure_NNPDF_truth_small/README.md`` for usage.
 Truth
 -----
 The truth is the real ``NNPDF40_nnlo_as_01180_1000`` global-analysis result
-(NNLO LHAPDF grid, used with PIXEL's NLO closure kernels).  We read NNPDF at
+(NNLO LHAPDF grid, used with PIXEL's NNLO closure kernels).  We read NNPDF at
 several *original* scales ``Q`` and treat each
 resulting curve as the truth at the common input scale ``Q0 = mc`` -- the scale
 at which the closure distributions are parameterized and the fake data are
@@ -190,7 +190,7 @@ MB = 4.18
 Q0 = MC                  # input / parameterization / generation scale
 Q0_2 = Q0 * Q0
 NF = 4                   # active flavors at the input scale (u,d,s,c)
-ORDER = "NLO"
+ORDER = "NNLO"
 MODE = "truncated"
 ALPHAS_MZ = 0.118
 
@@ -498,7 +498,7 @@ def itd_rel_error(p: float) -> float:
 
 # -- DIS experimental preset -------------------------------------------------
 # Real fitpack tables supplying kinematics + statistical precision.  F2, NC
-# sigma_r, and the massless NLO HERA CC reduced cross sections are modelled
+# sigma_r, and the massless NNLO HERA CC reduced cross sections are modelled
 # directly; small differs only by its common per-table row cap.
 
 class ExpSpec:
@@ -611,16 +611,19 @@ DY_Q2_MIN = Q0_2
 #: spread).  Set to None for the full ~180-row coverage (needs a large machine).
 DY_MAX_ROWS = 6
 
-#: DY hard-kernel scheme.  LO (Born luminosity) is positive-definite and stable;
-#: at the closure's no-evolution mc scale the NLO off-scale corrections overshoot
-#: (large/negative at edge kinematics), so LO is the clean closure choice.  Both
-#: sides use it identically, so the closure stays self-consistent.
-DY_ORDER = "LO"
+#: NNLO hard scattering uses ReDY's coherent sum of all partonic channels.
+#: Supply the ReDY v0.3 archive/tree with PIXEL_CLOSURE_DY_NNLO_SOURCE;
+#: the default uses the user's downloaded archive without copying its sources.
+DY_ORDER = "NNLO"
+DY_NNLO_SOURCE = Path(os.environ.get(
+    "PIXEL_CLOSURE_DY_NNLO_SOURCE", str(Path.home() / "Downloads" / "ReDY.tgz")
+)).expanduser()
 DY_ALPHA_EM = 1.0 / 137.035999
 DY_ALPHA_S = 0.20                                 # fixed alpha_s at the DY scale; this suite has no collider route, so it governs every DY row
 DY_NF = 4                                         # active flavors (u,d,s,c)
-DY_CHANNELS = (("qA,qbB", "qbA,qB") if DY_ORDER == "LO" else
-               ("qA,qbB", "qbA,qB", "qA,gB", "gA,qB"))
+DY_CHANNELS = (("nnlo_full",) if DY_ORDER == "NNLO" else
+               (("qA,qbB", "qbA,qB") if DY_ORDER == "LO" else
+                ("qA,qbB", "qbA,qB", "qA,gB", "gA,qB")))
 
 #: Documented closure approximation: the DY hard tensor uses per-row muF^2 = Q^2
 #: but no PDF evolution matrix is composed (fields stay at Q0 = mc).  Generation

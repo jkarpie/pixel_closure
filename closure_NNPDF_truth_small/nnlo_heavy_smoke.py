@@ -7,7 +7,7 @@ NNLO replica ensemble through Pixel's fixed-``nf=3`` FFNS
 pseudo-data.  The light-flavour combinations needed by the two-loop massive
 coefficients are reconstructed exactly from the suite's ``nf=4`` canonical
 basis at ``Q0=mc`` before fixed-flavour evolution. The same two kinematic rows
-also close the complete order-``alpha_s`` S-ACOT-chi and FONLL-A
+also close the complete order-``alpha_s`` S-ACOT-chi and NNLO FONLL-C
 ``sigma_r^ccbar`` builders, including their independently assembled ``F2`` and
 ``FL`` components and the exact active-charm basis identity.
 
@@ -120,7 +120,7 @@ def _gm_dataset(builder, points, *, mean=None, cov=None):
     n_rows = np.asarray(points["x"]).size
     kwargs = {}
     if builder is data.HeavyNCSigmaRFONLL:
-        kwargs.update(variant="fonll_a", damping="standard")
+        kwargs.update(variant="fonll_c", damping="standard")
     else:
         kwargs.update(evolution_order="NLO", mode="truncated")
     return builder.from_arrays(
@@ -229,7 +229,7 @@ def run() -> dict:
     result["s_acot_chi"] = _gm_closure(
         data.HeavyNCSigmaRSACOTChi, points, fields, ensemble
     )
-    result["fonll_a"] = _gm_closure(
+    result["fonll_c"] = _gm_closure(
         data.HeavyNCSigmaRFONLL, points, fields, ensemble
     )
     return result
