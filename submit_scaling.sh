@@ -12,7 +12,7 @@ set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")}"
 mkdir -p campaign/NNLO_RUNS
 
-echo "Batch job finished"
+echo "Batch job started"
 export PIXEL_PROGRESS=1 
 
 
@@ -45,7 +45,7 @@ nohup taskset -c 0-63 ../pixel/venv/bin/python \
   --parameterizations q --truths JAM --data union \
   --scales 2 --modes exp --stream-counts $N \
   --samples 500 > campaign/NNLO_RUNS/full_scale_core64_${N}.log
-echo $!
+echo "Completed scaling arm: $N streams"
 
 done
 
