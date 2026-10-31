@@ -15,6 +15,12 @@ and which dataset selection is fitted.
 | `closure_NNPDF_truth_NNPDF_data` | `NNPDF40_nnlo_as_01180_1000` | NNPDF_data | NNPDF4.0 (28) |
 | `closure_JAM_truth_NNPDF_data` | JAM | NNPDF_data | NNPDF4.0 (28) |
 
+Before generating NNLO data, preserve existing NLO inputs with
+`python3 tools/archive_nlo_data.py` (`--dry-run` previews the moves). This moves
+each suite's generated data and caches into `<suite>/NLO_RUNS/data/`, preserving
+LHAPDF inputs and dump tools. It refuses to overwrite existing archive entries
+and archives the current files without inferring their perturbative order.
+
 The two dataset selections are the published analyses' own lists, restricted to what
 this closure can build:
 
